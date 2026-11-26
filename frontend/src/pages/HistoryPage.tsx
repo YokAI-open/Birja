@@ -155,10 +155,17 @@ function OwnedHistory({ target }: { target: PortfolioTarget }) {
       target.isCurrent() &&
       button === intent.button &&
       (document.activeElement === document.body || document.activeElement === button)
-    )
+    ) {
       button.focus({ preventScroll: true });
+      if (isFetchNextPageError) {
+        const { top, bottom } = button.getBoundingClientRect();
+        if (top < 0 || bottom > window.innerHeight) {
+          button.scrollIntoView({ block: "nearest", inline: "nearest" });
+        }
+      }
+    }
     focusEnd.current = null;
-  }, [client, isFetching, hasNextPage, target]);
+  }, [client, isFetching, hasNextPage, isFetchNextPageError, target]);
 
   function refresh() {
     if (target.isCurrent() && !isFetching) void refetch({ cancelRefetch: false });
@@ -355,7 +362,7 @@ function OwnedHistory({ target }: { target: PortfolioTarget }) {
                 )}
                 <Button
                   ref={captureAppendButton}
-                  className="min-h-11 motion-reduce:transform-none motion-reduce:transition-none"
+                  className="min-h-11 scroll-my-2 motion-reduce:transform-none motion-reduce:transition-none"
                   disabled={isFetching}
                   onClick={() => void loadMore()}
                 >

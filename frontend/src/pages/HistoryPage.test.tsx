@@ -392,30 +392,51 @@ it("preserves append focus intent when a native disabled control blurs before fi
   expect(await screen.findByText("All events loaded.")).toHaveFocus();
 });
 
-it("restores the native-blurred retry control only after the failed append is rendered", async () => {
-  let finish: (value: Response) => void = () => {};
-  historyFetch(
-    vi
-      .fn()
-      .mockImplementationOnce(() => ok([item], cursor()))
-      .mockImplementationOnce(
-        () =>
-          new Promise<Response>((done) => {
-            finish = done;
-          }),
-      ),
-  );
-  const { user } = renderWithClient(<HistoryPage />);
-  const append = await screen.findByRole("button", { name: "Load more" });
-  await user.click(append);
-  document.body.tabIndex = -1;
-  document.body.focus();
-  document.body.removeAttribute("tabindex");
-  finish(new Response("unavailable", { status: 503 }));
-  const retry = await screen.findByRole("button", { name: "Try loading more" });
-  expect(retry).not.toBeDisabled();
-  await vi.waitFor(() => expect(retry).toHaveFocus());
-});
+it.each(["native blur", "retained focus", "moved focus"] as const)(
+  "keeps failed append focus usable after %s",
+  async (focus) => {
+    let finish: (value: Response) => void = () => {};
+    historyFetch(
+      vi
+        .fn()
+        .mockImplementationOnce(() => ok([item], cursor()))
+        .mockImplementationOnce(
+          () =>
+            new Promise<Response>((done) => {
+              finish = done;
+            }),
+        ),
+    );
+    const { user } = renderWithClient(<HistoryPage />);
+    const append = await screen.findByRole("button", { name: "Load more" });
+    const scrollIntoView = vi.fn();
+    append.scrollIntoView = scrollIntoView;
+    vi.spyOn(append, "getBoundingClientRect").mockReturnValue(
+      new DOMRect(0, window.innerHeight - 36.5, 144, 44),
+    );
+    const activity = screen.getByRole("combobox", { name: "Filter activity" });
+    await user.click(append);
+    if (focus === "native blur") {
+      document.body.tabIndex = -1;
+      document.body.focus();
+      document.body.removeAttribute("tabindex");
+    } else if (focus === "moved focus") {
+      activity.focus();
+    }
+    finish(new Response("unavailable", { status: 503 }));
+    const retry = await screen.findByRole("button", { name: "Try loading more" });
+    expect(retry).not.toBeDisabled();
+    await vi.waitFor(() => {
+      if (focus === "moved focus") {
+        expect(activity).toHaveFocus();
+        expect(scrollIntoView).not.toHaveBeenCalled();
+      } else {
+        expect(retry).toHaveFocus();
+        expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest", inline: "nearest" });
+      }
+    });
+  },
+);
 
 it("keeps focus on another control when append finishes and refresh announces the current count", async () => {
   let finish: (value: Response) => void = () => {};
