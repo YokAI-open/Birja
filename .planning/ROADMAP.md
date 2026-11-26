@@ -7,11 +7,11 @@
 - [x] **v1.2 Multiple Strategy Portfolios** · [Roadmap](milestones/v1.2-ROADMAP.md)
 - [x] **v1.3 Birja Interface Redesign** · [Roadmap](milestones/v1.3-ROADMAP.md) · [Audit](v1.3-MILESTONE-AUDIT.md)
 - [ ] **v1.4 Searchable Stock Trading** · Previous milestone. [Closeout handoff](milestones/v1.4-OPEN-HANDOFF.md)
-- [ ] **v1.5 Market Charts and Workspace Redesign** · The owner requested Phase 22 planning. The later phase outline is proposed. [Approved prototype](ui-reviews/v1.5/README.md)
+- [ ] **v1.5 Market Charts and Workspace Redesign** · Phase 22 is complete. [Approved prototype](ui-reviews/v1.5/README.md)
 
 ## Phases
 
-- [ ] **Phase 22: Adopt the market workspace**
+- [x] **Phase 22: Adopt the market workspace** (completed 2026-11-26)
 - [ ] **Phase 23: Show historical market prices**
 - [ ] **Phase 24: Compare portfolio performance**
 - [ ] **Phase 25: Finish the trading flows and verify the integrated app**
@@ -28,13 +28,13 @@
 2. The default stock list shows the original 20. Searching a name or symbol beyond the 20 uses the full catalog. Selecting a stock or crypto opens the correct detail and order context.
 3. Stocks retain verified closing prices and show the next-session countdown during ordinary closures and early-close or holiday cases. Crypto remains available while stock orders remain gated by existing checks.
 
-**Plans:** 3 plans across 3 waves
+**Plans:** 3/3 plans complete
 
-- [ ] 22-01 — Adopt the header and Markets discovery layout.
-- [ ] 22-02 — Bind portfolio selection, quote detail and the reopening countdown.
-- [ ] 22-03 — Verify the real app in the isolated browser stack.
+- [x] 22-01 — Adopt the header and Markets discovery layout.
+- [x] 22-02 — Bind portfolio selection, quote detail and the reopening countdown.
+- [x] 22-03 — Verify the real app in the isolated browser stack.
 
-[UI contract](phases/22-adopt-the-market-workspace/22-UI-SPEC.md) · [Validation strategy](phases/22-adopt-the-market-workspace/22-VALIDATION.md)
+[UI contract](phases/22-adopt-the-market-workspace/22-UI-SPEC.md) · [Validation strategy](phases/22-adopt-the-market-workspace/22-VALIDATION.md) · [Verification](phases/22-adopt-the-market-workspace/22-VERIFICATION.md)
 
 ### Phase 23: Show historical market prices
 
@@ -82,7 +82,7 @@
 
 | Phase | Plans complete | Status |
 |---|---|---|
-| 22. Adopt the market workspace | 0/3 | Planned |
+| 22. Adopt the market workspace | 3/3 | Complete 2026-11-26 |
 | 23. Show historical market prices | 0/TBD | Unplanned |
 | 24. Compare portfolio performance | 0/TBD | Unplanned |
 | 25. Finish the trading flows and verify the integrated app | 0/TBD | Unplanned |

@@ -16,7 +16,7 @@ brand image assets and Lucide are sufficient. Registry additions are empty.
 
 ## Layout and hierarchy
 
-- Header is one row at 320px, 390px, 768px and 1440px. Fox and Birja sit
+- At normal text size the header is one row at 320px, 390px, 768px and 1440px. Allow wrapping when enlarged text needs more room. Fox and Birja sit
   with Markets, Portfolios and History. The active destination uses the
   dark pill. A 44px account door target uses the existing Sign in or Sign
   out accessible name. The Markets h1 remains available to screen readers.

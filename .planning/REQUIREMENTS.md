@@ -4,10 +4,10 @@ Scope follows the [approved prototype](ui-reviews/v1.5/README.md).
 
 ## Markets workspace
 
-- [ ] **WS-01** — Navigation retains the existing Birja branding, one row of Markets, Portfolios and History, the door control and a single portfolio selector where needed. Users can reach the primary controls with a keyboard and on narrow screens.
-- [ ] **WS-02** — An empty US stocks search lists the original 20 stocks. Searching by ticker or name still reaches the supported NYSE and Nasdaq catalog. Crypto remains independently browsable.
-- [ ] **WS-03** — Selecting a row updates its price, market state, and trade entry beside the list on desktop and in a reachable detail section on mobile. The order opens for the selected portfolio and actual instrument.
-- [ ] **WS-04** — A closed stock keeps its last verified display price if one exists. It shows `Market closed` and a countdown to the actual next regular session, while the existing order rules prevent execution.
+- [x] **WS-01** — Navigation retains the existing Birja branding, one row of Markets, Portfolios and History, the door control and a single portfolio selector where needed. Users can reach the primary controls with a keyboard and on narrow screens.
+- [x] **WS-02** — An empty US stocks search lists the original 20 stocks. Searching by ticker or name still reaches the supported NYSE and Nasdaq catalog. Crypto remains independently browsable.
+- [x] **WS-03** — Selecting a row updates its price, market state, and trade entry beside the list on desktop and in a reachable detail section on mobile. The order opens for the selected portfolio and actual instrument.
+- [x] **WS-04** — A closed stock keeps its last verified display price if one exists. It shows `Market closed` and a countdown to the actual next regular session, while the existing order rules prevent execution.
 
 ## Market charts
 
@@ -42,10 +42,10 @@ order types are outside this milestone.
 
 | Requirement | Phase | Status |
 |---|---:|---|
-| WS-01 | 22 | Pending |
-| WS-02 | 22 | Pending |
-| WS-03 | 22 | Pending |
-| WS-04 | 22 | Pending |
+| WS-01 | 22 | Complete |
+| WS-02 | 22 | Complete |
+| WS-03 | 22 | Complete |
+| WS-04 | 22 | Complete |
 | CHART-01 | 23 | Pending |
 | CHART-02 | 23 | Pending |
 | CHART-03 | 23 | Pending |

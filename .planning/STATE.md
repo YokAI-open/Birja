@@ -2,16 +2,17 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Market Charts and Workspace Redesign
-current_phase: 22
-status: executing
-last_updated: "2026-11-26T09:08:04.015Z"
-last_activity: 2026-11-26 -- Phase 22 planning complete
+current_phase: 23
+status: ready_to_plan
+last_updated: 2026-11-26T10:24:17.386Z
+last_activity: 2026-11-26 -- Phase 22 passed local verification
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 3
-  completed_plans: 0
-  percent: 0
+  completed_plans: 3
+  percent: 25
+stopped_at: Phase 22 complete (3/3) — ready to discuss Phase 23
 ---
 
 # Project State
@@ -23,15 +24,19 @@ See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md),
 [approved design](ui-reviews/v1.5/README.md).
 
 Core value: correct virtual trade and valuation money.
-Current focus: Phase 22 Markets workspace execution. The three plans cover
-discovery and layout, portfolio routing and the countdown, then browser proof.
+Current focus: Phase 23 planning for historical stock and crypto price charts.
 
 ## Current Position
 
-Phase: 22 of 25 (Adopt the market workspace)
-Plan: 0 of 3 executed
-Status: Ready to execute
-Last activity: 2026-11-26 -- Phase 22 planning complete
+Phase: 23 of 25 (Show historical market prices)
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-11-26
+
+Phase 22 passed all four requirements. The final isolated run passed 105
+browser tests with the expected deployed-site CSP skip. All 1,376 frontend
+tests and the production frontend build passed.
+[Phase 22 verification](phases/22-adopt-the-market-workspace/22-VERIFICATION.md)
 
 ## Carried context
 

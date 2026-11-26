@@ -81,9 +81,13 @@ Making a trade at a real, recent market price and then seeing what it's worth no
   isolated live AAPL round trip, crypto control, and affected recovery.
   [Phase 18 verification](phases/18-make-simulated-stock-trades-work/18-VERIFICATION.md)
 
+- [x] Approved Markets workspace with stock-first discovery, selected-asset
+  details, owned portfolio routing, and server-provided reopening countdowns
+  (WS-01–WS-04). [Phase 22 verification](phases/22-adopt-the-market-workspace/22-VERIFICATION.md)
+
 ### Active
 
-- [ ] Adopt the approved Birja market and portfolio workspaces.
+- [ ] Adopt the approved portfolio workspace and strategy comparison.
 - [ ] Chart actual market prices for stocks and crypto and record daily
   values for private portfolio trends.
 - [ ] Bring the trade, History and sign-in screens into the approved design
@@ -120,6 +124,11 @@ the approved simulator rules. Preserve its [open closeout handoff](milestones/v1
 - The design system lives in `design-system/birja/MASTER.md`; existing Tailwind/shadcn components and Node 24 were established in Phase 1. Codex discovers maintained skills through `.agents/skills/`; shared project rules remain in CLAUDE.md.
 
 ## Current State
+
+Phase 22 completed locally on the v1.5 feature branch. The integrated app
+passed the full isolated browser suite and frontend checks. Phase 23 owns
+historical market price charts. The release history below records earlier
+milestones and environments.
 
 Production is verified online at main7d236e4/schema0023 (v0.6.2), with exact
 post-rollout encrypted recovery, original-data preservation and refreshed
@@ -399,4 +408,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-26 for the v1.5 milestone kickoff.*
+*Last updated: 2026-11-26 after local Phase 22 verification.*
