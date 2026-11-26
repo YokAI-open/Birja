@@ -5,12 +5,16 @@ import { QueryClient, QueryClientProvider, focusManager, useQuery } from "@tanst
 import type { ReactNode } from "react";
 import { useEventHistory } from "./useEventHistory";
 import type { EventDividend } from "@/api/eventHistory";
+import { DEFAULT_EVENT_HISTORY_FILTERS, type EventHistoryFilters } from "@/api/history";
 import { useTrade } from "./useTrade";
 import { useStockTrade } from "./useStockTrade";
 import { contextFixture, quoteFixture, fillFixture } from "@/test/stockTradeFixtures";
 
 const clients: QueryClient[] = [];
-function setup(email: string | null = "first@example.test") {
+function setup(
+  email: string | null = "first@example.test",
+  initialFilters: EventHistoryFilters = DEFAULT_EVENT_HISTORY_FILTERS,
+) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: Infinity } },
   });
@@ -22,7 +26,10 @@ function setup(email: string | null = "first@example.test") {
   return {
     client,
     wrapper,
-    ...renderHook(() => useEventHistory(portfolioTargetFixture(client)), { wrapper }),
+    ...renderHook((filters) => useEventHistory(portfolioTargetFixture(client), filters), {
+      wrapper,
+      initialProps: initialFilters,
+    }),
   };
 }
 afterEach(() => {
@@ -114,10 +121,37 @@ it("loads exact server order under an owner and epoch key without local money", 
       .getQueryCache()
       .findAll({ queryKey: ["eventHistory"] })
       .map((query) => query.queryKey),
-  ).toEqual([["eventHistory", "first@example.test", "1", 0]]);
+  ).toEqual([["eventHistory", "first@example.test", "1", 0, "all", "all"]]);
   expect(client.getQueryData(["me"])).toEqual({
     email: "first@example.test",
   });
+});
+
+it("ignores a late session refusal from a discarded filter query", async () => {
+  const old = pending();
+  const fetch = vi
+    .fn()
+    .mockReturnValueOnce(old.promise)
+    .mockResolvedValue(page(["9"]));
+  historyTransport(fetch);
+  const { result, client, rerender } = setup();
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+  act(() => {
+    result.current.discardPages();
+    rerender({ activity: "dividend", asset: "stock" });
+  });
+  await waitFor(() => expect(result.current.data?.pages[0].items[0].id).toBe("dividend:9"));
+  expect(fetch.mock.calls[1]?.[0]).toBe(
+    "/api/v2/portfolios/1/event-history?activity=dividend&asset=stock",
+  );
+  await act(async () => old.resolve(new Response("", { status: 401 })));
+  expect(client.getQueryData(["me"])).toEqual({ email: "first@example.test" });
+  expect(
+    client.getQueryData(["eventHistory", "first@example.test", "1", 0, "dividend", "stock"]),
+  ).toBeDefined();
+  expect(
+    client.getQueryData(["eventHistory", "first@example.test", "1", 0, "all", "all"]),
+  ).toBeUndefined();
 });
 
 it.each([null, "second@example.test"])(
@@ -127,7 +161,9 @@ it.each([null, "second@example.test"])(
     const { result, client } = setup();
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     act(() => client.setQueryData(["me"], email === null ? null : { email }));
-    expect(client.getQueryData(["eventHistory", "first@example.test", "1", 0])).toBeUndefined();
+    expect(
+      client.getQueryData(["eventHistory", "first@example.test", "1", 0, "all", "all"]),
+    ).toBeUndefined();
     expect(result.current.data).toBeUndefined();
   },
 );
@@ -147,7 +183,9 @@ it.each([null, "second@example.test"])(
     await act(async () => {
       old.resolve(page(["3"]));
     });
-    expect(client.getQueryData(["eventHistory", "first@example.test", "1", 0])).toBeUndefined();
+    expect(
+      client.getQueryData(["eventHistory", "first@example.test", "1", 0, "all", "all"]),
+    ).toBeUndefined();
     if (email === null) expect(result.current.data).toBeUndefined();
     else await waitFor(() => expect(result.current.data?.pages[0].items[0].id).toBe("dividend:9"));
   },
@@ -171,8 +209,12 @@ it("gives same-owner relogin a fresh epoch and cannot revive the old request", a
     old.resolve(page(["3"]));
   });
   expect(result.current.data?.pages[0].items[0].id).toBe("dividend:9");
-  expect(client.getQueryData(["eventHistory", "first@example.test", "1", 0])).toBeUndefined();
-  expect(client.getQueryData(["eventHistory", "first@example.test", "1", 2])).toBeDefined();
+  expect(
+    client.getQueryData(["eventHistory", "first@example.test", "1", 0, "all", "all"]),
+  ).toBeUndefined();
+  expect(
+    client.getQueryData(["eventHistory", "first@example.test", "1", 2, "all", "all"]),
+  ).toBeDefined();
 });
 
 it("deduplicates simultaneous appends without cancelling the active page", async () => {

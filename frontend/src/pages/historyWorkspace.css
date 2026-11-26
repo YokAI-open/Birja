@@ -1,0 +1,90 @@
+.history-workspace {
+  display: flex;
+  width: 100%;
+  max-width: 1360px;
+  min-width: 0;
+  flex-direction: column;
+  gap: 20px;
+  margin: 24px auto 0;
+  font-size: 1rem;
+}
+
+.history-toolbar,
+.history-portfolio-controls,
+.history-filters {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.history-toolbar {
+  justify-content: space-between;
+}
+
+.history-portfolio-picker {
+  width: min(220px, 100%);
+}
+
+.history-portfolio-picker select,
+.history-filters select {
+  height: auto;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 8px 12px;
+}
+
+.history-filters select {
+  width: 9rem;
+  min-width: 0;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-control);
+  background: var(--background);
+}
+
+.history-filters select:last-child {
+  width: 7.5rem;
+}
+
+.history-date-heading {
+  margin-bottom: 4px;
+  color: var(--muted-foreground);
+  font-weight: 600;
+}
+
+.history-event-summary {
+  display: grid;
+  min-height: 68px;
+  cursor: pointer;
+  list-style: none;
+  grid-template-columns: minmax(0, 1fr) fit-content(45%) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: var(--radius-card);
+}
+
+.history-event-summary::-webkit-details-marker {
+  display: none;
+}
+
+@media (min-width: 741px) {
+  .history-workspace {
+    margin-top: 46px;
+  }
+}
+
+@media (max-width: 740px) {
+  .history-filters {
+    flex-basis: 100%;
+  }
+
+  .history-filters select {
+    width: 8rem;
+  }
+
+  .history-filters select:last-child {
+    width: 7.25rem;
+  }
+}

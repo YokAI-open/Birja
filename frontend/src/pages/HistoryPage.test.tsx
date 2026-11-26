@@ -490,6 +490,101 @@ const held: EventDividendCorrection = {
   original: dividend,
 };
 
+it("starts a fresh filtered history while an append is pending", async () => {
+  let finishAppend!: (response: Response) => void;
+  const append = new Promise<Response>((resolve) => {
+    finishAppend = resolve;
+  });
+  const base = "/api/v2/portfolios/1/event-history";
+  const correction = { ...held, recorded_at: "2026-11-12T15:00:00.000002Z" };
+  const filteredCursor = btoa(
+    JSON.stringify({
+      v: 4,
+      portfolio_id: "1",
+      recorded_at: correction.recorded_at,
+      kind_rank: 1,
+      source_id: "2",
+      activity: "dividend",
+      asset: "all",
+    }),
+  )
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
+  const filteredAppend = `${base}?cursor=${filteredCursor}&activity=dividend`;
+  const fetch = vi.fn((input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url === filteredAppend) return ok([dividend]);
+    if (url.startsWith(`${base}?cursor=`)) return append;
+    if (url === `${base}?activity=dividend`)
+      return Promise.resolve(
+        new Response(JSON.stringify({ items: [correction], next_cursor: filteredCursor })),
+      );
+    return ok([item], "more");
+  });
+  historyFetch(fetch);
+  const { user } = renderWithClient(<HistoryPage />);
+  await user.click(await screen.findByRole("button", { name: "Load more" }));
+  const activity = screen.getByRole("combobox", { name: "Filter activity" });
+  activity.focus();
+  await user.selectOptions(activity, "dividend");
+  const rows = await screen.findByRole("list", { name: "Account activity" });
+  expect(rows).not.toHaveTextContent("BTC");
+  expect(activity).toHaveFocus();
+  expect(fetch.mock.calls.map(([url]) => url)).toEqual([
+    base,
+    `${base}?cursor=${cursor()}`,
+    `${base}?activity=dividend`,
+  ]);
+
+  await viewOriginal(user, rows);
+  const original = screen.getByRole("heading", { name: /^Original dividend/ });
+  expect(original).toHaveFocus();
+  await act(async () => {
+    finishAppend(
+      new Response(JSON.stringify({ items: [{ ...item, id: "trade:2" }], next_cursor: null })),
+    );
+  });
+  expect(original).toHaveFocus();
+  expect(screen.getByRole("status")).not.toHaveTextContent("more events loaded");
+
+  await user.click(screen.getByRole("button", { name: "Load more" }));
+  expect(await screen.findByText("All events loaded.")).toHaveFocus();
+  expect(fetch.mock.calls.at(-1)?.[0]).toBe(filteredAppend);
+  expect(within(rows).getAllByRole("listitem")).toHaveLength(2);
+
+  await user.selectOptions(activity, "all");
+  expect(await screen.findByText("BTC")).toBeVisible();
+  expect(fetch.mock.calls.at(-1)?.[0]).toBe(base);
+  expect(within(screen.getByRole("list")).getAllByRole("listitem")).toHaveLength(1);
+  expect(screen.queryByRole("heading", { name: /^Original dividend/ })).not.toBeInTheDocument();
+});
+
+it("clears both filters from the no-match state and restores focus to activity", async () => {
+  const base = "/api/v2/portfolios/1/event-history";
+  const fetch = vi.fn<typeof globalThis.fetch>(() => ok([]));
+  historyFetch(fetch);
+  const { user } = renderWithClient(<HistoryPage />);
+  expect(await screen.findByText("No activity yet")).toBeVisible();
+  const activity = screen.getByRole("combobox", { name: "Filter activity" });
+  const asset = screen.getByRole("combobox", { name: "Filter assets" });
+  await user.selectOptions(activity, "sell");
+  expect(await screen.findByText("No matching activity")).toBeVisible();
+  await user.selectOptions(asset, "stock");
+  expect(await screen.findByText("No matching activity")).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "Clear filters" }));
+  expect(await screen.findByText("No activity yet")).toBeVisible();
+  expect(activity).toHaveValue("all");
+  expect(asset).toHaveValue("all");
+  expect(activity).toHaveFocus();
+  expect(fetch.mock.calls.map(([url]) => url)).toEqual([
+    base,
+    `${base}?activity=sell`,
+    `${base}?activity=sell&asset=stock`,
+    base,
+  ]);
+});
+
 it("renders all mixed kinds in server order and opens a loaded original dividend", async () => {
   const crypto = { ...item, recorded_at: dividend.recorded_at, filled_at: dividend.recorded_at };
   const split = {
@@ -511,6 +606,7 @@ it("renders all mixed kinds in server order and opens a loaded original dividend
   historyFetch(() => ok([crypto, dividend, split, held]));
   const { user } = renderWithClient(<HistoryPage />);
   const table = await screen.findByRole("list");
+  expect(within(table).getAllByRole("heading", { level: 2 })).toHaveLength(1);
   const rows = within(table).getAllByRole("listitem");
   expect(rows.map((row) => row.id)).toEqual([
     expect.stringMatching(new RegExp(`^history-1-\\d+-${crypto.id}$`)),
