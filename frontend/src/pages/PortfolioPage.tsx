@@ -39,6 +39,7 @@ export default function PortfolioPage() {
     if (!isFetching) void refetch({ cancelRefetch: false });
   }
   const oldest = data ? oldestHoldingAge(data.holdings, elapsed) : null;
+  const freshnessTimestamp = (oldest !== null && data?.prices_as_of) || data?.valued_at;
   const liveStatus =
     data && oldest !== null
       ? freshnessStatus(oldest, data.fresh_seconds, data.stale_seconds)
@@ -73,8 +74,8 @@ export default function PortfolioPage() {
     >
       Update
       <span id={freshnessId} className="text-xs font-normal text-muted-foreground tabular-nums">
-        {data ? (
-          <time dateTime={data.valued_at} title={fullLocalTimestamp(data.valued_at)}>
+        {freshnessTimestamp ? (
+          <time dateTime={freshnessTimestamp} title={fullLocalTimestamp(freshnessTimestamp)}>
             {freshness}
           </time>
         ) : (

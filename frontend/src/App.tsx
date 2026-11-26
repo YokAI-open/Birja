@@ -55,6 +55,15 @@ export function PortfolioRoute() {
   const management = usePortfolioManagement(detail ? portfolioId : undefined);
   const editOpen = editingId !== undefined && editingId === portfolioId;
   useEffect(() => {
+    if (!updateSlot) return;
+    // React focus events follow the portal's logical tree. Use the slot's DOM event.
+    const recordUpdateFocus = (event: FocusEvent) => {
+      if (event.target instanceof HTMLElement) managementFocus.current = event.target;
+    };
+    updateSlot.addEventListener("focusin", recordUpdateFocus);
+    return () => updateSlot.removeEventListener("focusin", recordUpdateFocus);
+  }, [updateSlot]);
+  useEffect(() => {
     if (target.status === "loading" || target.status === "ready") return;
     if (
       managementFocus.current &&

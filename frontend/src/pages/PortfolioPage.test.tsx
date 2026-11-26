@@ -527,6 +527,9 @@ it("shows stock identity, quantity, value, return and the scoped trade action on
     "/portfolios/1/trade/stocks/AAPL",
   );
   expect(cards.querySelector("time")).toHaveAttribute("datetime", "2026-11-10T15:00:00Z");
+  expect(
+    screen.getByRole("button", { name: "Update portfolio" }).querySelector("time"),
+  ).toHaveAttribute("datetime", "2026-11-10T15:00:00Z");
   expect(screen.getByRole("note", { name: "Stock valuation price source" })).toHaveTextContent(
     "IEX prices",
   );

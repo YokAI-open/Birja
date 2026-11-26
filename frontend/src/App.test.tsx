@@ -138,11 +138,13 @@ function deletionApi({
   listFailure = false,
   metadata = () => ({ ...first, description: "Keep this strategy" }),
   rows = () => [first],
+  statement = () => privateJson(cashPortfolio()),
 }: {
   result?: () => Promise<Response>;
   listFailure?: boolean;
   metadata?: () => { id: string; name: string; description: string };
   rows?: () => { id: string; name: string }[];
+  statement?: () => Response;
 } = {}) {
   let closed = false;
   const fetch = vi.fn(async (path: string, init?: RequestInit) => {
@@ -158,7 +160,7 @@ function deletionApi({
       return closed
         ? privateJson({ detail: { code: "portfolio_unavailable" } }, 404)
         : privateJson(metadata());
-    if (path === "/api/v2/portfolios/1") return privateJson(cashPortfolio());
+    if (path === "/api/v2/portfolios/1") return statement();
     if (path === "/api/v2/portfolios")
       return closed && listFailure
         ? privateJson({}, 503)
@@ -557,6 +559,27 @@ it("uses one managed toolbar in chooser, Edit, Update and Remove tab order", asy
     expect(fetch.mock.calls.filter(([path]) => path === "/api/v2/portfolios/1")).toHaveLength(2),
   );
   expect(fetch.mock.calls.some(([path]) => path === "/api/v2/portfolios/2")).toBe(false);
+});
+
+it("focuses the unavailable heading when a focused Update loses portfolio access", async () => {
+  probes.actualPage = true;
+  let active = true;
+  deletionApi({
+    rows: () => (active ? [first] : []),
+    statement: () =>
+      active
+        ? privateJson(cashPortfolio())
+        : privateJson({ detail: { code: "portfolio_unavailable" } }, 404),
+  });
+  const { user } = setup("/portfolios/1");
+  await screen.findByRole("region", { name: "Cash" });
+  const update = screen.getByRole("button", { name: "Update portfolio" });
+  update.focus();
+  expect(update).toHaveFocus();
+  active = false;
+  await user.keyboard("{Enter}");
+  const heading = await screen.findByRole("heading", { name: "Portfolio unavailable" });
+  expect(heading).toHaveFocus();
 });
 
 it.each(["/portfolios/1", "/portfolios/1/"])(

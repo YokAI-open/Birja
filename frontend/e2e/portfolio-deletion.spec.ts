@@ -173,7 +173,7 @@ async function assertPrivate(response: APIResponse) {
 }
 test.beforeEach(() => stockFixture("fresh"));
 
-test("Phase14 keeping a portfolio is a no-op; holdings freeze, stale paths refuse and siblings trade", async ({
+test("Phase14 deletion named Keep portfolio is a no-op; holdings freeze, stale paths refuse and siblings trade", async ({
   page,
 }) => {
   test.setTimeout(120000);
