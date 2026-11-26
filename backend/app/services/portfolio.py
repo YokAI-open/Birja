@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, fields
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 from fastapi import HTTPException
-from sqlalchemy import and_, case, func, select, true
+from sqlalchemy import BigInteger, and_, case, cast, func, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import Settings
+from app.core.config import MarketValuationSettings, Settings
 from app.models.price import Coin, Price
 from app.models.stock import StockInstrument, StockQuote
 from app.models.stock_execution import StockFillFacts
@@ -87,6 +88,53 @@ async def load_portfolio_snapshots(
     settings: Settings,
     now: datetime | None = None,
 ) -> tuple[PortfolioSnapshot, ...]:
+    return await _load_portfolio_snapshots(
+        db,
+        owner_id=owner_id,
+        portfolio_ids=portfolio_ids,
+        settings=settings,
+        clock=lambda: now or datetime.now(UTC),
+        daily_root_locked=False,
+    )
+
+
+async def load_daily_portfolio_snapshot(
+    db: AsyncSession,
+    *,
+    owner_id: int,
+    portfolio_id: int,
+    settings: MarketValuationSettings,
+    clock: Callable[[], datetime],
+) -> PortfolioSnapshot | None:
+    """Hold the exact active root from the first financial read through append."""
+    if not await db.scalar(
+        select(
+            func.public.lock_portfolio_daily_value_root(
+                cast(owner_id, BigInteger), cast(portfolio_id, BigInteger)
+            )
+        )
+    ):
+        return None
+    (snapshot,) = await _load_portfolio_snapshots(
+        db,
+        owner_id=owner_id,
+        portfolio_ids=[portfolio_id],
+        settings=settings,
+        clock=clock,
+        daily_root_locked=True,
+    )
+    return snapshot
+
+
+async def _load_portfolio_snapshots(
+    db: AsyncSession,
+    *,
+    owner_id: int,
+    portfolio_ids: list[int] | None,
+    settings: MarketValuationSettings,
+    clock: Callable[[], datetime],
+    daily_root_locked: bool,
+) -> tuple[PortfolioSnapshot, ...]:
     """One financial snapshot and one shared final authority/ownership check.
 
     None selects every active root; explicit IDs must all remain available.
@@ -116,7 +164,7 @@ async def load_portfolio_snapshots(
     roots = root_query.order_by(Account.id).limit(11).cte("selected_portfolios")
     # Scalar columns prevent identity-map reuse or lazy reads. The positive-quantity
     # predicate stays in ON so a cash-only account still produces one row.
-    captured_at = now or datetime.now(UTC)
+    captured_at = clock()
     owned_positions = (
         select(Holding.coin_id)
         .join(roots, Holding.portfolio_id == roots.c.id)
@@ -209,10 +257,11 @@ async def load_portfolio_snapshots(
     # Retain shared root locks until the caller's read transaction ends. A
     # closer/owner writer cannot commit between the final await and response
     # serialization. No financial values are reread or changed by this check.
-    current_ids = (
-        root_query.order_by(Account.id).limit(11).with_for_update(read=True, of=Account).subquery()
-    )
-    current_at = now or datetime.now(UTC)
+    current_roots = root_query.order_by(Account.id).limit(11)
+    if not daily_root_locked:
+        current_roots = current_roots.with_for_update(read=True, of=Account)
+    current_ids = current_roots.subquery()
+    current_at = clock()
     original_catalog = {row["coin_id"]: row for row in rows[0].catalog_positions or []}
     current_query = execution_snapshot_query(current_at).add_columns(
         select(func.array_agg(current_ids.c.id)).scalar_subquery().label("active_ids")
@@ -224,7 +273,7 @@ async def load_portfolio_snapshots(
             )
         )
     current_raw = (await db.execute(current_query)).one()
-    valued_at = now or datetime.now(UTC)  # One advancing time after BOTH awaits.
+    valued_at = clock()  # One advancing time after BOTH awaits.
     if set(current_raw.active_ids or []) != set(grouped):
         raise HTTPException(404, detail={"code": "portfolio_unavailable"})
     original = executions_from_snapshot(rows[0], settings, now=valued_at)
@@ -246,7 +295,16 @@ async def load_portfolio_snapshots(
             for coin_id, row in original_catalog.items()
         }
     return tuple(
-        _assemble_snapshot(book, original, current, current_raw, catalog, settings, valued_at)
+        _assemble_snapshot(
+            book,
+            original,
+            current,
+            current_raw,
+            catalog,
+            settings,
+            valued_at,
+            durable_only=daily_root_locked,
+        )
         for book in grouped.values()
     )
 
@@ -257,8 +315,10 @@ def _assemble_snapshot(
     current: dict[int, Any],
     current_raw: Any,
     catalog: dict[int, CatalogHoldingValuation],
-    settings: Settings,
+    settings: MarketValuationSettings,
     valued_at: datetime,
+    *,
+    durable_only: bool,
 ) -> PortfolioSnapshot:
     positions = []
     marks = {}
@@ -290,6 +350,8 @@ def _assemble_snapshot(
             symbol, name, active = candidate.symbol, candidate.name, candidate.exchange is not None
         elif restricted:
             symbol, name, active = "STOCK", "Restricted stock", False
+        if stock is not None and durable_only and not stock.daily_aggregate_allowed:
+            stock = StockValuation(None, stock.mark)
         positions.append(
             PositionInput(
                 symbol,

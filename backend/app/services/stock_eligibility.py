@@ -9,7 +9,7 @@ from typing import cast as typecast
 from sqlalchemy import Table, Text, case, cast, exists, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import Settings
+from app.core.config import MarketValuationSettings, Settings
 from app.models.corporate_action import (
     StockActionEvent,
     StockActionRevision,
@@ -360,7 +360,7 @@ def _stamp(value: str | None) -> datetime | None:
 
 
 def executions_from_snapshot(
-    raw: Any, settings: Settings, *, now: datetime | None = None
+    raw: Any, settings: MarketValuationSettings, *, now: datetime | None = None
 ) -> dict[int, LoadedExecution]:
     """Pure projection of one fresh statement; source JSON is never a response."""
     checked = now or raw.checked_at
