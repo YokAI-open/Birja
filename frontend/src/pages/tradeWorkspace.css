@@ -35,6 +35,7 @@
 .trade-workspace-heading p {
   color: var(--muted-foreground);
   line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .trade-workspace-grid {
