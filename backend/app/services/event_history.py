@@ -26,12 +26,14 @@ from app.models.stock_catalog import StockCatalogListing
 from app.models.stock_catalog_finance import StockCatalogFillEvidence, StockCatalogInstrument
 from app.models.stock_execution import StockFillFacts
 from app.models.trade import Trade
-from app.schemas.event_history import EventDividend, EventHistoryPage
+from app.schemas.event_history import EventDividend, EventHistoryFilters, EventHistoryPage
 from app.services.history import validate_portfolio_read
 from app.services.portfolios import OwnedActivePortfolio
 
 MAX_ID = 9223372036854775807
 TIMESTAMP = re.compile(r"[1-9][0-9]{3}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z")
+DEFAULT_FILTERS = EventHistoryFilters()
+CURSOR_FIELDS = {"v", "recorded_at", "kind_rank", "source_id", "portfolio_id"}
 
 
 class InvalidCursor(ValueError):
@@ -44,6 +46,7 @@ class EventHistoryCursor:
     kind_rank: int
     source_id: int
     portfolio_id: int
+    filters: EventHistoryFilters = DEFAULT_FILTERS
 
 
 def encode_cursor(value: EventHistoryCursor) -> str:
@@ -52,7 +55,7 @@ def encode_cursor(value: EventHistoryCursor) -> str:
     if type(value.source_id) is not int:
         raise InvalidCursor()
     obj = {
-        "v": 3,
+        "v": 4 if value.filters.filtered else 3,
         "portfolio_id": str(value.portfolio_id),
         "recorded_at": value.recorded_at.astimezone(UTC)
         .isoformat(timespec="microseconds")
@@ -60,6 +63,8 @@ def encode_cursor(value: EventHistoryCursor) -> str:
         "kind_rank": value.kind_rank,
         "source_id": str(value.source_id),
     }
+    if value.filters.filtered:
+        obj.update(activity=value.filters.activity, asset=value.filters.asset)
     encoded = (
         base64.urlsafe_b64encode(json.dumps(obj, separators=(",", ":")).encode())
         .decode()
@@ -67,7 +72,7 @@ def encode_cursor(value: EventHistoryCursor) -> str:
     )
     if type(value.portfolio_id) is not int:
         raise InvalidCursor()
-    decode_cursor(encoded, expected_portfolio_id=value.portfolio_id)
+    decode_cursor(encoded, expected_portfolio_id=value.portfolio_id, expected_filters=value.filters)
     return encoded
 
 
@@ -80,7 +85,12 @@ def _object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return obj
 
 
-def decode_cursor(value: str, *, expected_portfolio_id: int) -> EventHistoryCursor:
+def decode_cursor(
+    value: str,
+    *,
+    expected_portfolio_id: int,
+    expected_filters: EventHistoryFilters = DEFAULT_FILTERS,
+) -> EventHistoryCursor:
     try:
         if (
             not isinstance(value, str)
@@ -93,17 +103,20 @@ def decode_cursor(value: str, *, expected_portfolio_id: int) -> EventHistoryCurs
             raise InvalidCursor()
         decoded = raw.decode("utf-8")
         obj = json.loads(decoded, object_pairs_hook=_object)
-        if not isinstance(obj, dict) or set(obj) != {
-            "v",
-            "recorded_at",
-            "kind_rank",
-            "source_id",
-            "portfolio_id",
-        }:
+        expected_fields = (
+            CURSOR_FIELDS | {"activity", "asset"} if expected_filters.filtered else CURSOR_FIELDS
+        )
+        expected_version = 4 if expected_filters.filtered else 3
+        if not isinstance(obj, dict) or set(obj) != expected_fields:
             raise InvalidCursor()
         if json.dumps(obj, separators=(",", ":"), ensure_ascii=True) != decoded:
             raise InvalidCursor()
-        if type(obj["v"]) is not int or obj["v"] != 3:
+        if type(obj["v"]) is not int or obj["v"] != expected_version:
+            raise InvalidCursor()
+        if expected_filters.filtered and (
+            obj["activity"],
+            obj["asset"],
+        ) != (expected_filters.activity, expected_filters.asset):
             raise InvalidCursor()
         portfolio_id = obj["portfolio_id"]
         if (
@@ -124,7 +137,11 @@ def decode_cursor(value: str, *, expected_portfolio_id: int) -> EventHistoryCurs
         if int(identifier) > MAX_ID:
             raise InvalidCursor()
         return EventHistoryCursor(
-            datetime.fromisoformat(stamp), rank, int(identifier), int(portfolio_id)
+            datetime.fromisoformat(stamp),
+            rank,
+            int(identifier),
+            int(portfolio_id),
+            expected_filters,
         )
     except (ValueError, TypeError, UnicodeError, binascii.Error) as exc:
         raise InvalidCursor() from exc
