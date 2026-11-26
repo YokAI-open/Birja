@@ -3,7 +3,7 @@ phase: 25-finish-the-trading-flows-and-verify-the-integrated-app
 reviewed: 2026-11-26
 depth: standard
 base_commit: 16f7763
-reviewed_through: 0087e99b80231e103eb70deceedc830475382b11
+reviewed_through: 8fc6ba8ec4f935f4ce18ec29f9800474c14161a7
 findings:
   critical: 0
   warning: 0
@@ -44,3 +44,14 @@ retained KO payment and split assertions, the guarded synthetic fixture scope
 and the focus and scope checks before scrolling. The complete frontend run
 passed 1,441 tests and the guarded Chromium replay passed all 18 cases.
 [Browser receipt](25-BROWSER-RECEIPT.md)
+
+## Hosted browser follow-up
+
+Independent review covered `622459e..8fc6ba8` after the first full hosted
+browser job failed. The live and chart locators address separate status
+containers. The portfolio checks retain exact cash and exclude the stale
+total after expiry, and the layout checks measure the approved 44px
+chooser and user interaction at each existing width. The catalog test
+waits for the destination chooser's accessible description. The runtime
+change is one CSS declaration that wraps the company name on narrow
+screens. All 113 runnable cases passed. [Corrective candidate](25-CANDIDATE.md)

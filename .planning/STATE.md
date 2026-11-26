@@ -4,15 +4,15 @@ milestone: v1.5
 milestone_name: Market Charts and Workspace Redesign
 current_phase: 25
 status: awaiting_approval
-last_updated: "2026-11-26T20:30:32Z"
-last_activity: 2026-11-26 -- Phase 25 local validation passed and the candidate is ready for hosted CI
+last_updated: "2026-11-26T21:25:33Z"
+last_activity: 2026-11-26 -- Phase 25 repaired all hosted browser failures and passed the full local suite
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 22
   completed_plans: 21
   percent: 50
-stopped_at: Phase 25 (6/7) — Awaiting candidate publication
+stopped_at: Phase 25 (6/7) — Awaiting corrected candidate push
 ---
 
 # Project State
@@ -24,19 +24,20 @@ See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md),
 [approved design](ui-reviews/v1.5/README.md).
 
 Core value: correct virtual trade and valuation money.
-Current focus: Publish the locally verified Phase 25 candidate for hosted CI.
+Current focus: Run hosted CI on the corrected Phase 25 candidate.
 
 ## Current Position
 
 Phase: 25 of 25 (Finish the trading flows and verify the integrated app)
 Plan: 6 of 7 executed
-Status: Awaiting candidate publication
-Last activity: 2026-11-26 -- Phase 25 local validation passed and the candidate is ready for hosted CI
+Status: Awaiting corrected candidate push
+Last activity: 2026-11-26 -- Phase 25 repaired all hosted browser failures and passed the full local suite
 
-The trade, History and sign-in workspaces passed scoped backend checks and
-1,441 frontend tests. All 18 guarded browser journeys and six comparison
-pairs passed review. The final plan awaits explicit approval to publish the
-exact candidate for all six hosted jobs and the authenticated recovery receipt.
+PR #55 passed the first hosted recovery, frontend and image jobs. Browser
+CI found 16 failures. The corrected candidate passed all 113 runnable cases
+in the full local suite and the frontend gate. The final plan awaits explicit
+approval to push the new head for all six hosted jobs and the matching
+authenticated recovery receipt.
 [Phase 25 validation](phases/25-finish-the-trading-flows-and-verify-the-integrated-app/25-VALIDATION.md)
 
 Phase 24 completed eight plans and verified all four portfolio trend

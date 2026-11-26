@@ -65,8 +65,12 @@ passed. The runtime evidence binds to commit
 | 25-07-01 | Review findings were repaired and rechecked. The recovery input comparison records what still applies from Phase 24. [Code review](25-REVIEW.md) |
 | 25-07-02 and 25-07-03 | Pending approval for the exact push and PR, followed by the six required hosted jobs and authenticated recovery receipt. |
 
-FLOW-04 and overall Phase 25 verification await the matching hosted run
-and receipt. The CHART-04 live-history qualification remains open.
+The first hosted browser job found 16 failures outside the selected
+local coverage. The repaired candidate passed the full unfiltered local
+suite with 113 passes and the expected deployed-site CSP skip. The first
+hosted run established recovery proof for its own source. FLOW-04 and
+Phase 25 still require all six checks and the receipt from one successful
+run on the corrective source. The CHART-04 live-history qualification remains open.
 
 ## Additional evidence
 

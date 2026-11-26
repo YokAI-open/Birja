@@ -1,7 +1,9 @@
 # Phase 25 integrated candidate
 
-Local checks passed on November 26, 2026. The remaining Phase 25 work is
-publication approval and hosted verification.
+The initial publication qualified recovery, frontend and images on
+November 26, 2026. The full hosted browser run found additional regressions.
+The corrected candidate passed the full browser suite locally and awaits
+renewed publication approval and hosted verification.
 
 | Identity | Value |
 |---|---|
@@ -12,10 +14,10 @@ publication approval and hosted verification.
 | Approved prototype SHA-256 | `5e361ad60eb0915add082791fd4a8bc2862ec607712b04e00a15d2c53f2b143e` |
 | Publication destination | `origin/feature/milestone-v1.5-market-charts`, pull request into `develop` |
 
-The publication checkpoint uses the commit and tree read from the clean
-branch after committing this record. Commits after the tested runtime carry
-only Phase 25 planning and evidence. The approved feature SHA and the
-actual hosted checkout SHA will both be recorded with the hosted result.
+The identities above describe the initial local proof. The initial PR
+publication and the corrective local candidate have separate identities
+below. The new publication checkpoint uses the commit and tree read from
+the clean branch after recording the corrective proof.
 
 ## Local evidence
 
@@ -55,14 +57,65 @@ timing. The verified hosted archive and seven authenticated stages must
 come from Phase 25's actual CI checkout, including the merge ref when the
 workflow runs on a pull request.
 
-## Hosted verification
+## Remaining hosted verification
 
-| Evidence | Status |
-|---|---|
-| Exact candidate push and pull request | Awaiting approval |
-| `backend`, `frontend`, `image`, `e2e`, `ops` and `ci-pass` | Pending hosted run |
-| Checked-out source and tree, verified archive and authenticated status | Pending hosted receipt |
+A successful run on the corrective candidate must cover all six jobs and
+provide the matching recovery archive and authenticated receipt.
 
 Historical feed rights, representative coverage and measured limits stay
 open under CHART-04. Release and deployment have their own authorization.
 [Phase 23 source qualification](../23-show-historical-market-prices/23-SOURCE-QUALIFICATION.md)
+
+## First publication
+
+The owner approved the exact candidate `622459e14271e20e357696e106566cf5e6654d3c`
+with tree `30abd60e9377f2dbb090620623529a158ec59d37` on November 26, 2026.
+The exact push opened [PR #55](https://github.com/YokAI-open/Birja/pull/55)
+into `develop`. GitHub tested the merge commit
+`bd2753a5e8823ecc8b757f194900bcc39480e060` with tree
+`1643b5c3ae49c9f1a4865b5ccee07a9909dad0b2` and first parent
+`e0338727633eac041893481d28084b8623ebf80d`. The updated base contributed
+four audit and scan files covering retirement of a withdrawn advisory.
+[First hosted run](https://github.com/YokAI-open/Birja/actions/runs/45892960908)
+
+The full browser run recorded 97 passes, 16 failures and one expected
+deployed-site CSP skip. Six stock tests matched both the chart and live
+status. Six portfolio layout tests expected a 48px chooser, while the
+approved and measured chooser is 44px. The expired-valuation test still
+looked for the previous card layout. Two narrow trade layouts overflowed
+with a long unbroken company name. One catalog test selected the old
+Markets control before the destination chooser mounted.
+
+The operations job finished the seven authenticated stages in 24m 04s.
+The downloaded archive passed the checksum and bundle verification.
+The receipt's complete stage sequence, tested commit, tree and backend
+image source matched the GitHub checkout. Archive SHA-256
+`a1d4ed7412599da160c7d8710de21adf85acd5d002201f912304f5dbedc40080`.
+Receipt SHA-256
+`175cc7850a7bd1fcd4a0028ddcf1361a9a5bc020923d7e992f281cb61a2cbca6`.
+This is recovery evidence from the first checkout. FLOW-04 requires all
+six checks and the authenticated receipt on the same successful run.
+[Verified artifact](https://github.com/YokAI-open/Birja/actions/runs/45892960908#artifacts)
+
+## Corrective candidate
+
+The repaired runtime commit is
+`8fc6ba8ec4f935f4ce18ec29f9800474c14161a7` with tree
+`d88aee9905ea1a632d5e250fb0c434d75ce4294e`.
+The only application change wraps the trade heading's company text in its
+available width. The other changes update the existing stock and portfolio
+tests. The exact economic, ownership, freshness, retained order and viewport
+checks still run. The independent recheck found no issues with the changes.
+
+Linter, formatting, TypeScript and production build passed. All 1,441
+frontend tests passed with 94.56% statement and 92.37% branch coverage.
+The exact unfiltered guarded Chromium suite ran 114 cases in 22m 05s.
+All 113 runnable cases passed, including the 16 hosted failures. The
+deployed-site CSP check kept its expected skip. Container, network and
+volume cleanup checks were empty. Browser log SHA-256
+`32d5c6535e3a9db3b772b179dfcb21a47354ac70d25c83249dc801df47298071`.
+Guard log SHA-256
+`3660cd457033031a1b3cf4e43343a20ccdc1c8c244cd99acba0c19a8012c9e7b`.
+
+The corrective publication uses the final documentation commit and
+requires approval of that exact new head. The original PR remains open.
