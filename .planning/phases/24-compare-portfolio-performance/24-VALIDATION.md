@@ -1,7 +1,7 @@
 ---
 phase: 24
 slug: compare-portfolio-performance
-status: planned
+status: in_progress
 nyquist_compliant: true
 wave_0_complete: true
 created: 2026-11-26
@@ -73,11 +73,35 @@ same candidate source for backup and verification. Restoring synthetic rows
 in isolation verifies the recovery path. Release-source and any applicable
 live current-mark conditions are tracked with the release acceptance.
 
-All results are planned until execution records them. Phase 23's live
-historical bars are independent of this proof.
+Phase 23's live historical bars are independent of this proof.
 
 The independent plan check passed the revised eight plans and 17 tasks on
 2026-11-26. All four TREND requirements and five decisions have planned
 evidence. The check confirmed the dependency order, parallel file ownership,
 schema admission, actual toolbar and keyboard order, and the single final
 encrypted recovery campaign.
+
+## Measured integration evidence
+
+| Requirement | Verified evidence |
+|---|---|
+| TREND-01 | Real browser cards open independent portfolios. The final creation card works, including the empty state and the ten-active-portfolio limit. The existing lifecycle and interrupted creation journeys passed. |
+| TREND-02 | The real owner route supplied separate 30-day histories. Chromium verified missing days, incomplete data, one observation, and a recoverable history error with current figures and navigation available throughout. |
+| TREND-03 | The guarded schema, capture and owner API checks passed. The authenticated seven-stage 0028 recovery restored exact rows and identities and verified owner reads and rollback. [Recovery receipt](24-RECOVERY-RECEIPT.md) |
+| TREND-04 | Chromium verified toolbar and keyboard order, refresh age, allocation, distinct positions, percentage-return sorting, incomplete valuation and scoped trade links. |
+
+All eight focused Chromium cases passed on the browser source `741c337`.
+Frontend lint, TypeScript, all 1,424 Vitest cases and the production build
+passed on the same runtime inputs. Vite reported its bundle-size warning.
+The app and approved ZIP were compared at 1440 × 1000 and 390 × 1000, with
+320px reflow and enlarged-text browser checks.
+
+The recovery preflight passed 148 checks. The serial proof and exact receipt
+verifier both passed on `74e852d`. The measured proof inputs remained identical
+through `741c337`. This includes backend, deploy tooling, Compose, workflow,
+the frontend Dockerfile and package lock. The intervening runtime change is
+one CSS declaration. The local serial time was 56m 19s with concurrent
+backend testing. Hosted CI timing remains to be measured against 45 minutes.
+
+The full guarded backend coverage collection is in progress. Ruff checks and
+format verification passed across 344 files. Mypy passed for 149 app files.
