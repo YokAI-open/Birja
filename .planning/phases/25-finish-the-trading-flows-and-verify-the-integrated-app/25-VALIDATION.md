@@ -1,7 +1,7 @@
 ---
 phase: 25
 slug: finish-the-trading-flows-and-verify-the-integrated-app
-status: local_verified
+status: verified
 nyquist_compliant: true
 wave_0_complete: true
 created: 2026-11-26
@@ -63,14 +63,15 @@ passed. The runtime evidence binds to commit
 | 25-05 | 108 guarded API cases and all 18 selected Chromium cases passed. Six app and prototype image pairs passed integrity checks. Narrow layouts and measured 200% CSS text enlargement passed. Native browser zoom was outside the local check. [Browser receipt](25-BROWSER-RECEIPT.md) |
 | 25-06 | 115 offline workflow checks passed. The recovery selector dry run returned all seven stages in order. |
 | 25-07-01 | Review findings were repaired and rechecked. The recovery input comparison records what still applies from Phase 24. [Code review](25-REVIEW.md) |
-| 25-07-02 and 25-07-03 | Pending approval for the exact push and PR, followed by the six required hosted jobs and authenticated recovery receipt. |
+| 25-07-02 and 25-07-03 | Approved exact corrective push, all six hosted jobs passed and the archive and seven-stage receipt matched the actual CI checkout. [Candidate evidence](25-CANDIDATE.md) |
 
 The first hosted browser job found 16 failures outside the selected
 local coverage. The repaired candidate passed the full unfiltered local
 suite with 113 passes and the expected deployed-site CSP skip. The first
-hosted run established recovery proof for its own source. FLOW-04 and
-Phase 25 still require all six checks and the receipt from one successful
-run on the corrective source. The CHART-04 live-history qualification remains open.
+hosted run established recovery proof for its own source. The replacement
+run met FLOW-04 with all six jobs green and the authenticated receipt from
+its actual tested merge checkout. CHART-04 live-history qualification
+remains open.
 
 ## Additional evidence
 

@@ -28,10 +28,10 @@ history depends on CHART-04.
 
 ## Trade, History, sign-in and acceptance
 
-- [ ] **FLOW-01** — The stock and crypto tickets retain cash, holdings, current execution context, preview and receipt in the approved layout. Existing stock quantity and crypto dollar/quantity inputs, fees, repricing and exact receipt recovery continue to work without duplicating the portfolio name.
-- [ ] **FLOW-02** — In the selected portfolio, users can filter History by activity and asset type, expand an event, and page through results with stable ordering. Existing financial event types and correction details remain accessible.
-- [ ] **FLOW-03** — Users can request and enter a real email OTP and sign out via the door control, with accessible loading, validation and failure handling.
-- [ ] **FLOW-04** — Code review and required CI cover the integrated screens, real API chart contracts, representative synthetic full-stack trading and portfolio flows, and snapshot migration and recovery. The integrated app matches the approved prototype at desktop and mobile widths.
+- [x] **FLOW-01** — The stock and crypto tickets retain cash, holdings, current execution context, preview and receipt in the approved layout. Existing stock quantity and crypto dollar/quantity inputs, fees, repricing and exact receipt recovery continue to work without duplicating the portfolio name.
+- [x] **FLOW-02** — In the selected portfolio, users can filter History by activity and asset type, expand an event, and page through results with stable ordering. Existing financial event types and correction details remain accessible.
+- [x] **FLOW-03** — Users can request and enter a real email OTP and sign out via the door control, with accessible loading, validation and failure handling.
+- [x] **FLOW-04** — Code review and required CI cover the integrated screens, real API chart contracts, representative synthetic full-stack trading and portfolio flows, and snapshot migration and recovery. The integrated app matches the approved prototype at desktop and mobile widths.
 
 ## Scope boundaries
 
@@ -57,7 +57,7 @@ order types are outside this milestone.
 | TREND-02 | 24 | Complete |
 | TREND-03 | 24 | Complete |
 | TREND-04 | 24 | Complete |
-| FLOW-01 | 25 | Pending |
-| FLOW-02 | 25 | Pending |
-| FLOW-03 | 25 | Pending |
-| FLOW-04 | 25 | Pending |
+| FLOW-01 | 25 | Complete |
+| FLOW-02 | 25 | Complete |
+| FLOW-03 | 25 | Complete |
+| FLOW-04 | 25 | Complete |

@@ -3,16 +3,16 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Market Charts and Workspace Redesign
 current_phase: 25
-status: awaiting_approval
-last_updated: "2026-11-26T21:25:33Z"
-last_activity: 2026-11-26 -- Phase 25 repaired all hosted browser failures and passed the full local suite
+status: phase_complete
+last_updated: 2026-11-26T22:52:04.321Z
+last_activity: 2026-11-26 -- Phase 25 passed hosted CI and independent verification
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 22
-  completed_plans: 21
-  percent: 50
-stopped_at: Phase 25 (6/7) — Awaiting corrected candidate push
+  completed_plans: 22
+  percent: 75
+stopped_at: Phase 25 complete (7/7) — Phase 23 live-history qualification remains open
 ---
 
 # Project State
@@ -24,28 +24,28 @@ See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md),
 [approved design](ui-reviews/v1.5/README.md).
 
 Core value: correct virtual trade and valuation money.
-Current focus: Run hosted CI on the corrected Phase 25 candidate.
+Current focus: Phase 23 live-history source qualification for v1.5.
 
 ## Current Position
 
 Phase: 25 of 25 (Finish the trading flows and verify the integrated app)
-Plan: 6 of 7 executed
-Status: Awaiting corrected candidate push
-Last activity: 2026-11-26 -- Phase 25 repaired all hosted browser failures and passed the full local suite
+Plan: 7 of 7 executed
+Status: Phase 25 complete
+Last activity: 2026-11-26 -- Phase 25 passed hosted CI and independent verification
 
-PR #55 passed the first hosted recovery, frontend and image jobs. Browser
-CI found 16 failures. The corrected candidate passed all 113 runnable cases
-in the full local suite and the frontend gate. The final plan awaits explicit
-approval to push the new head for all six hosted jobs and the matching
-authenticated recovery receipt.
-[Phase 25 validation](phases/25-finish-the-trading-flows-and-verify-the-integrated-app/25-VALIDATION.md)
+Phase 25 independently passed all 13 checks and four FLOW requirements.
+PR #55 head `a3b8464` passed all six hosted jobs. The authenticated
+seven-stage recovery receipt matches GitHub's actual checkout `da8ded9`.
+[Phase 25 verification](phases/25-finish-the-trading-flows-and-verify-the-integrated-app/25-VERIFICATION.md) ·
+[Hosted CI](https://github.com/YokAI-open/Birja/actions/runs/45900726488)
 
 Phase 24 completed eight plans and verified all four portfolio trend
 requirements. Portfolios show exact current figures and a private 30-day
 history from capture enablement. Chromium verified eight journeys and four
 matched app and reference pairs. All seven encrypted recovery stages and
-the exact receipt verifier passed locally. Hosted recovery timing and
-Phase 23's CHART-04 live qualification are recorded release checks.
+the exact receipt verifier passed locally. Phase 25 verified the same
+recovery contract in hosted CI. Phase 23's CHART-04 live qualification
+remains open.
 [Phase 24 verification](phases/24-compare-portfolio-performance/24-VERIFICATION.md)
 
 ## Prior phase evidence

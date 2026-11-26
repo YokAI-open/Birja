@@ -85,13 +85,15 @@ Making a trade at a real, recent market price and then seeing what it's worth no
   details, owned portfolio routing, and server-provided reopening countdowns
   (WS-01–WS-04). [Phase 22 verification](phases/22-adopt-the-market-workspace/22-VERIFICATION.md)
 
+- [x] Approved trade, History and sign-in workspaces, filtered private
+  ledger and exact hosted candidate verification (FLOW-01–FLOW-04).
+  [Phase 25 verification](phases/25-finish-the-trading-flows-and-verify-the-integrated-app/25-VERIFICATION.md)
+
 ### Active
 
 - [ ] Adopt the approved portfolio workspace and strategy comparison.
 - [ ] Chart actual market prices for stocks and crypto and record daily
   values for private portfolio trends.
-- [ ] Bring the trade, History and sign-in screens into the approved design
-  and verify the integrated app through the existing release gates.
 
 ### Carried Work Across Milestones
 
@@ -125,12 +127,12 @@ the approved simulator rules. Preserve its [open closeout handoff](milestones/v1
 
 ## Current State
 
-Phases 22 and 24 completed locally on the v1.5 feature branch. Portfolios
-now show independent trends and current values using the approved layout.
-Phase 24 passed the browser, backend coverage and encrypted recovery
-checks. Phase 23's local charts are verified, with live historical data
-qualification still open. The release history below records earlier
-milestones and environments. [Phase 24 verification](phases/24-compare-portfolio-performance/24-VERIFICATION.md)
+Phases 22, 24 and 25 are complete on the v1.5 feature branch. PR #55
+passed all six required jobs and the authenticated seven-stage recovery
+on its exact GitHub checkout. Phase 23's local charts are verified, with
+live historical data qualification still open under CHART-04.
+[Phase 25 verification](phases/25-finish-the-trading-flows-and-verify-the-integrated-app/25-VERIFICATION.md) ·
+[Phase 24 verification](phases/24-compare-portfolio-performance/24-VERIFICATION.md)
 
 Production is verified online at main7d236e4/schema0023 (v0.6.2), with exact
 post-rollout encrypted recovery, original-data preservation and refreshed
@@ -410,4 +412,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-26 after local Phase 24 verification.*
+*Last updated: 2026-11-26 after hosted Phase 25 verification.*

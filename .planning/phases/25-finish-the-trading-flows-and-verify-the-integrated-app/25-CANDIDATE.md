@@ -1,9 +1,8 @@
 # Phase 25 integrated candidate
 
-The initial publication qualified recovery, frontend and images on
-November 26, 2026. The full hosted browser run found additional regressions.
-The corrected candidate passed the full browser suite locally and awaits
-renewed publication approval and hosted verification.
+The initial publication found 16 browser failures. The corrected candidate
+passed the full browser suite locally and all six hosted jobs on 2026-11-26.
+[Successful hosted run](https://github.com/YokAI-open/Birja/actions/runs/45900726488)
 
 | Identity | Value |
 |---|---|
@@ -56,11 +55,6 @@ Reuse Phase 24's results for those unchanged recovery inputs and their local
 timing. The verified hosted archive and seven authenticated stages must
 come from Phase 25's actual CI checkout, including the merge ref when the
 workflow runs on a pull request.
-
-## Remaining hosted verification
-
-A successful run on the corrective candidate must cover all six jobs and
-provide the matching recovery archive and authenticated receipt.
 
 Historical feed rights, representative coverage and measured limits stay
 open under CHART-04. Release and deployment have their own authorization.
@@ -117,5 +111,38 @@ volume cleanup checks were empty. Browser log SHA-256
 Guard log SHA-256
 `3660cd457033031a1b3cf4e43343a20ccdc1c8c244cd99acba0c19a8012c9e7b`.
 
-The corrective publication uses the final documentation commit and
-requires approval of that exact new head. The original PR remains open.
+The owner approved continuation for the exact corrective head. The
+fast-forward updated PR #55 with `a3b84647735803cdcc392d2bcaf8141b5a83e64f`.
+
+## Successful hosted candidate
+
+| Evidence | Exact identity |
+|---|---|
+| Feature commit | `a3b84647735803cdcc392d2bcaf8141b5a83e64f` |
+| Feature tree | `51724c2be270bd92020f5afe77e0969823fe9237` |
+| Develop parent | `e0338727633eac041893481d28084b8623ebf80d` |
+| Actual CI checkout and receipt source | `da8ded9f08afd6e17cf46260ac7a036383dcc3f1` |
+| Actual CI tree | `aec41f80d7bfdeebb4a2c08bf497ab685fa77e02` |
+| Backend app tree | `f7574a4807f5447664d24202094f03bb7e77f7d0` |
+| Backend context SHA-256 | `d1d8e0b8acbaf890747498107f099408244cc1a437e4a1e81137a6a76f1f8b2e` |
+| Verified recovery archive SHA-256 | `a1d4ed7412599da160c7d8710de21adf85acd5d002201f912304f5dbedc40080` |
+| Verified recovery receipt SHA-256 | `fc91f736333a76b23b1fa6192876df14f98f07978e8412dffea532af72629bb8` |
+
+| Check | Conclusion | Run evidence |
+|---|---|---|
+| `backend` | Passed | [Job](https://github.com/YokAI-open/Birja/actions/runs/45900726488/job/140185557199) |
+| `frontend` | Passed | [Job](https://github.com/YokAI-open/Birja/actions/runs/45900726488/job/140185557034) |
+| `image` | Passed | [Job](https://github.com/YokAI-open/Birja/actions/runs/45900726488/job/140185556715) |
+| `e2e` | Passed | [Job](https://github.com/YokAI-open/Birja/actions/runs/45900726488/job/140185557011) |
+| `ops` | Passed | [Job](https://github.com/YokAI-open/Birja/actions/runs/45900726488/job/140185557047) |
+| `ci-pass` | Passed | [Job](https://github.com/YokAI-open/Birja/actions/runs/45900726488/job/140206017333) |
+
+The recovery artifact came from run `45900726488`, attempt
+`1`. The workflow finished in 58m 14s and the
+serial recovery ran in 25m 04s. The verified stage order was `image-transition`, `retained-roundtrip`, `current0028-cold`, `roles`, `tls-upgraded`, `tls-fresh`, `selected-rollback`.
+All seven stages were recorded as authenticated. The checksum, existing
+bundle verifier, merge parents, source and tree, backend context, and
+current image source binding passed. [Recovery artifact](https://github.com/YokAI-open/Birja/actions/runs/45900726488#artifacts)
+
+CHART-04 live historical data qualification remains open. Candidate
+qualification is evidence for the feature branch PR.

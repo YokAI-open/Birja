@@ -14,7 +14,7 @@
 - [x] **Phase 22: Adopt the market workspace** (completed 2026-11-26)
 - [ ] **Phase 23: Show historical market prices**
 - [x] **Phase 24: Compare portfolio performance** (completed 2026-11-26)
-- [ ] **Phase 25: Finish the trading flows and verify the integrated app**
+- [x] **Phase 25: Finish the trading flows and verify the integrated app** (completed 2026-11-26)
 
 ### Phase 22: Adopt the market workspace
 
@@ -120,7 +120,7 @@ Live Kraken and IEX history qualification remains open under CHART-04.
 2. Users can filter, expand and page through History and go through the real email-code and sign-out flows.
 3. Real-browser checks cover desktop and mobile reflow, chart states and the main financial journeys against an isolated stack. Review, release CI and applicable snapshot recovery gates pass on the candidate.
 
-**Plans:** 7 plans across 4 waves
+**Plans:** 7/7 plans complete
 
 **Wave 1**
 
@@ -139,7 +139,7 @@ Live Kraken and IEX history qualification remains open under CHART-04.
 
 **Wave 4** · Depends on 25-05 and 25-06
 
-- [ ] 25-07 — [Review the local candidate and qualify it in authorized hosted CI](phases/25-finish-the-trading-flows-and-verify-the-integrated-app/25-07-PLAN.md).
+- [x] 25-07 — [Review the local candidate and qualify it in authorized hosted CI](phases/25-finish-the-trading-flows-and-verify-the-integrated-app/25-07-PLAN.md).
 
 [Research](phases/25-finish-the-trading-flows-and-verify-the-integrated-app/25-RESEARCH.md) · [UI contract](phases/25-finish-the-trading-flows-and-verify-the-integrated-app/25-UI-SPEC.md) · [Validation](phases/25-finish-the-trading-flows-and-verify-the-integrated-app/25-VALIDATION.md)
 
@@ -150,7 +150,7 @@ Live Kraken and IEX history qualification remains open under CHART-04.
 | 22. Adopt the market workspace | 3/3 | Complete 2026-11-26 |
 | 23. Show historical market prices | 4/4 | Local checks passed. Live qualification pending. |
 | 24. Compare portfolio performance | 8/8 | Complete 2026-11-26 |
-| 25. Finish the trading flows and verify the integrated app | 6/7 | Awaiting corrected candidate push |
+| 25. Finish the trading flows and verify the integrated app | 7/7 | Complete 2026-11-26 |
 
 All 16 requirements map once in [REQUIREMENTS.md](REQUIREMENTS.md).
 [Research](research/v1.5/SUMMARY.md) · [Design reference](ui-reviews/v1.5/README.md)
