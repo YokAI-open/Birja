@@ -75,7 +75,7 @@ def image_policy(image, aggregate):
 
 
 def recovery_policy(ops, runner_source=None):
-    runner = "python3 deploy/tests/run-portfolio-validation.py --phase 21 --suite recovery-successor"
+    runner = "python3 deploy/tests/run-portfolio-validation.py --phase 24 --suite recovery-successor"
     command = "run: sudo -- " + runner
     if sum(line.strip() == command for line in ops.splitlines()) != 1:
         raise ValueError("missing exact serial runner")
@@ -91,21 +91,29 @@ def recovery_policy(ops, runner_source=None):
         raise ValueError("missing or reordered serial stage")
     successor = expected[:2] + ("current0027-cold",) + expected[3:]
     if ast.literal_eval(constants["SUCCESSOR_STAGES"]) != successor:
-        raise ValueError("missing or reordered successor stage")
+        raise ValueError("missing or reordered retained successor stage")
+    expected_graph = '(*SUCCESSOR_STAGES[:2], "current0028-cold", *SUCCESSOR_STAGES[3:])'
+    expected_profiles = '{21: (SUCCESSOR_PROFILE, 7, "0027", SUCCESSOR_STAGES), ' \
+                        '24: ("deploy-recovery-v9", 8, "0028", DAILY_VALUE_STAGES)}'
+    for constant, value in (("DAILY_VALUE_STAGES", expected_graph), ("SUCCESSORS", expected_profiles)):
+        if ast.dump(constants[constant]) != ast.dump(ast.parse(value, mode="eval").body):
+            raise ValueError("wrong current recovery graph or profile: " + constant)
     for required in (
-        "ops.package_current_archive(archive)", "ops.package_current_archive(archive, successor=True)",
+        "ops.package_current_archive(archive)", "ops.package_current_archive(archive, successor=True, phase=phase)",
         "ops.r.bundle_verify(archive, expected",
         "ops.bind_source_archive(archive, expected)", "ops.roundtrip(archive)",
         "cold=True", "ops.roles", "fresh_bootstrap=fresh", "--recovery-bundle",
         "authenticate(ops, archive, expected, source, image_records)", "verify_archive_binding(archive, expected)",
         "retained.extractfile(name).read() != (ROOT / name).read_bytes()",
         "source != {name: ops.r.digest(ROOT / name) for name in source}",
-        "verify_image(binding, inspect)", "PORTFOLIO_PAYLOAD_V4", "PORTFOLIO_PAYLOAD_V7",
-        "RETAINED_CLOSURE_SOURCE_PAYLOADS", "successor_source_identity(sources)",
-        "current0027-image-binding.json", "successor_identity=identity",
+        "verify_image(binding, inspect)", 'getattr(recovery, "PORTFOLIO_PAYLOAD_V" + str(version))',
+        "ops.r.retained_closure_sources(profile[1])", "successor_source_identity(sources)",
+        'records.get("current" + profile[2] + "-image-binding.json")',
+        "portfolio0027-image-binding.json", "successor_identity=identity, phase=phase",
         "execute_stages(selected, guard, stages=stages)", "recovery-successor",
         "Path(\"/tmp/birja-phase14-proof/recovery.tar.gz\")",
         "Path(\"/tmp/birja-backup-test-phase21-proof/recovery.tar.gz\")",
+        "Path(\"/tmp/birja-backup-test-phase24-proof/recovery.tar.gz\")",
     ):
         if required not in source:
             raise ValueError("missing source-frozen graph: " + required)
@@ -113,8 +121,14 @@ def recovery_policy(ops, runner_source=None):
                     "python3 deploy/tests/test-selected-cutover-contracts.py"):
         if command not in ops:
             raise ValueError("missing selected compatibility contract")
-    if f'{runner} --verify-successor-receipt "$GITHUB_SHA"' not in ops:
-        raise ValueError("missing exact hosted receipt verification")
+    stage = ops.split("- name: Stage verified recovery tooling", 1)[1].split(
+        "- name: Upload verified recovery tooling", 1,
+    )[0]
+    selector = "recovery_archive=/tmp/birja-backup-test-phase24-proof/recovery.tar.gz"
+    verify = f'verification=$(sudo -- {runner} --verify-successor-receipt "$GITHUB_SHA")'
+    if ("if: success()" not in stage or selector not in stage or verify not in stage
+            or stage.index(verify) >= stage.index("sudo -- install")):
+        raise ValueError("missing exact hosted archive and receipt verification before staging")
 
 
 def postgres_stack_policy(ops):
@@ -552,7 +566,7 @@ class CI(unittest.TestCase):
         recovery_policy(ops)
         source = (ROOT / "deploy/tests/run-portfolio-validation.py").read_text()
         for old in (
-            "ops.package_current_archive(archive)", "ops.package_current_archive(archive, successor=True)",
+            "ops.package_current_archive(archive)", "ops.package_current_archive(archive, successor=True, phase=phase)",
             "ops.roundtrip(archive)", "execute_stages(selected, guard, stages=stages)",
             "cold=True", "fresh_bootstrap=fresh", "--recovery-bundle",
             "verify_archive_binding(archive, expected)", "verify_image(binding, inspect)",
@@ -567,10 +581,16 @@ class CI(unittest.TestCase):
             recovery_policy(ops.replace("--suite recovery-successor", "--suite recovery-current"))
         with self.assertRaises(ValueError):
             recovery_policy(ops, source.replace("\"roles\", \"tls-upgraded\"", "\"tls-upgraded\", \"roles\"", 1))
-        with self.assertRaises(ValueError):
-            recovery_policy(ops, source.replace('"current0027-cold"', '"current0023-cold"', 1))
-        with self.assertRaises(ValueError):
-            recovery_policy(ops.replace(' --verify-successor-receipt "$GITHUB_SHA"', ""))
+        for mutation in (source.replace('"current0027-cold"', '"current0023-cold"', 1),
+                         source.replace('"current0028-cold"', '"current0027-cold"', 1),
+                         source.replace('"deploy-recovery-v9", 8, "0028"', '"deploy-recovery-v8", 7, "0027"')):
+            with self.assertRaises(ValueError):
+                recovery_policy(ops, mutation)
+        for mutation in (ops.replace(' --verify-successor-receipt "$GITHUB_SHA"', ""),
+                         ops.replace("--phase 24", "--phase 21"),
+                         ops.replace("phase24-proof/recovery.tar.gz", "phase21-proof/recovery.tar.gz")):
+            with self.assertRaises(ValueError):
+                recovery_policy(mutation)
         for old in ("bash deploy/tests/test-deploy-compatibility.sh", "python3 deploy/tests/test-selected-cutover-contracts.py"):
             with self.assertRaises(ValueError):
                 recovery_policy(ops.replace(old, "omitted_stage"))
@@ -815,11 +835,12 @@ class CI(unittest.TestCase):
             ],
         )
         script = textwrap.dedent(preparation.split("run: |\n", 1)[1])
-        canonical = "/tmp/birja-backup-test-phase21-proof"
+        canonical = "/tmp/birja-backup-test-phase24-proof"
         self.assertIn(canonical + "/recovery.tar.gz", script)
         payload = b"public recovery tooling fixture\n"
-        receipt = b'{"synthetic":true}\n'
-        for case in ("matching", "modified", "missing", "modified-receipt", "unverified"):
+        receipt = b'{"phase":24,"revision":"0028","synthetic":true}\n'
+        retained_receipt = b'{"phase":21,"revision":"0027","synthetic":true}\n'
+        for case in ("matching", "modified", "missing", "retained-receipt", "unverified"):
             with self.subTest(case=case), tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp)
                 source, runner, tools = root / "source", root / "runner", root / "bin"
@@ -829,7 +850,7 @@ class CI(unittest.TestCase):
                     (source / "recovery.tar.gz").write_bytes(
                         payload + (b"modified" if case == "modified" else b"")
                     )
-                (source / "status.json").write_bytes(receipt + (b"modified" if case == "modified-receipt" else b""))
+                (source / "status.json").write_bytes(retained_receipt if case == "retained-receipt" else receipt)
                 # The real snippet operates only on owned test files here.
                 sudo = tools / "sudo"
                 sudo.write_text('#!/bin/sh\n[ "$1" != -- ] || shift\nexec "$@"\n')
@@ -837,7 +858,7 @@ class CI(unittest.TestCase):
                 python = tools / "python3"
                 python.write_text(
                     '#!/bin/sh\n'
-                    '[ "$*" = "deploy/tests/run-portfolio-validation.py --phase 21 --suite recovery-successor'
+                    '[ "$*" = "deploy/tests/run-portfolio-validation.py --phase 24 --suite recovery-successor'
                     ' --verify-successor-receipt $GITHUB_SHA" ] && [ "$VERIFIED" = 1 ] || exit 1\n'
                     'printf "%s %s\\n" "$ARCHIVE_DIGEST" "$RECEIPT_DIGEST"\n'
                 )
@@ -872,7 +893,7 @@ class CI(unittest.TestCase):
         self.assertRegex(
             ops, r"(?m)^          sudo -- bash deploy/check-nginx-config\.sh$"
         )
-        self.assertIn("run: sudo -- python3 deploy/tests/run-portfolio-validation.py --phase 21 --suite recovery-successor", ops)
+        self.assertIn("run: sudo -- python3 deploy/tests/run-portfolio-validation.py --phase 24 --suite recovery-successor", ops)
         recovery_policy(ops)
         self.assertNotIn("sudo -- bash deploy/tests/test-db-config.sh", ops)
         for forbidden in ["sudo -E", "safe.directory=*", "git config --global"]:
@@ -1060,6 +1081,11 @@ class PortfolioValidation(unittest.TestCase):
         self.assertEqual(events, [runner.STAGES[0]])
 
     def test_actual_authentication_rejects_archive_source_payload_and_image_mutations(self):
+        for daily_values in (False, True):
+            with self.subTest(daily_values=daily_values):
+                self.check_archive_authentication(daily_values)
+
+    def check_archive_authentication(self, daily_values):
         import hashlib
         import io
         import tarfile
@@ -1074,13 +1100,30 @@ class PortfolioValidation(unittest.TestCase):
             inspect = [{"Id": "sha256:" + "a" * 64, "Config": {"Labels": {"org.opencontainers.image.revision": "b" * 40}},
                         "RootFS": {"Type": "layers", "Layers": ["sha256:" + "c" * 64]}}]
             binding = sources.image_binding(inspect, source_commit="b" * 40, app_tree="d" * 40, context_sha256="e" * 64)
-            (root / "current0023-image-binding.json").write_text(json.dumps(binding))
-            (root / "current0023-image-binding.json").chmod(0o400)
+            record = root / ("current0028-image-binding.json" if daily_values else "current0023-image-binding.json")
+            record.write_text(json.dumps(binding))
+            record.chmod(0o400)
+            identity = {"tested_source": binding["source_commit"], "app_tree": binding["app_tree"],
+                        "context_sha256": binding["context_sha256"]}
+            selection = {"successor_identity": identity, "phase": 24} if daily_values else {}
+            retained = {"sources/retained.tar": b"fixed-retained"}
+            if daily_values:
+                retained["sources/portfolio0027.tar"] = b"exact retained 0027 source"
+            source_hashes = {name: hashlib.sha256(data).hexdigest() for name, data in retained.items()}
             for mutation in (None, "outer", "source", "packaged", "retained", "inventory", "image"):
                 (root / "current.py").write_bytes(b"current-app")
-                content = {"current.py": b"changed" if mutation == "packaged" else b"current-app",
-                           "sources/retained.tar": b"changed" if mutation == "retained" else b"fixed-retained",
-                           "INVENTORY.json": json.dumps({"portfolio_payload": {"version": 3 if mutation == "inventory" else 4, "revision": "0024"}, "recovery_profile": "deploy-recovery-v5"}).encode()}
+                profile, version, revision = (("deploy-recovery-v9", 8, "0028") if daily_values else
+                                              ("deploy-recovery-v5", 4, "0024"))
+                if mutation == "inventory":
+                    profile, version, revision = (("deploy-recovery-v8", 7, "0027") if daily_values else
+                                                  ("deploy-recovery-v4", 3, "0023"))
+                content = {**retained, "current.py": b"changed" if mutation == "packaged" else b"current-app",
+                           "INVENTORY.json": json.dumps({
+                               "portfolio_payload": {"version": version, "revision": revision},
+                               "recovery_profile": profile,
+                           }).encode()}
+                if mutation == "retained":
+                    content["sources/portfolio0027.tar" if daily_values else "sources/retained.tar"] = b"changed"
                 with tarfile.open(archive, "w") as tar:
                     for name, data in content.items():
                         info = tarfile.TarInfo(name)
@@ -1094,26 +1137,26 @@ class PortfolioValidation(unittest.TestCase):
                 if mutation == "source":
                     (root / "current.py").write_bytes(b"changed")
                 actual_image = inspect if mutation != "image" else [{**inspect[0], "RootFS": {"Type": "layers", "Layers": []}}]
-                fake_r = SimpleNamespace(CORE=["current.py"], UNITS=[], PORTFOLIO_PAYLOAD_V4=[],
-                    RETAINED_CLOSURE_SOURCE_PAYLOADS={"sources/retained.tar": hashlib.sha256(b"fixed-retained").hexdigest()},
+                fake_r = SimpleNamespace(CORE=["current.py"], UNITS=[], PORTFOLIO_PAYLOAD_V4=[], PORTFOLIO_PAYLOAD_V8=[],
+                    retained_closure_sources=lambda version: source_hashes,
                     digest=r.digest, sha_bytes=r.sha_bytes, private=r.private, call=lambda argv: json.dumps(actual_image))
                 ops = SimpleNamespace(r=fake_r, portfolio_sources=lambda: sources)
-                with patch.object(runner, "ROOT", root), patch.object(sources, "validate_matrix"):
+                with patch.object(runner, "ROOT", root), patch.object(sources, "validate_matrix"), \
+                     patch.object(runner, "successor_source_identity", return_value=identity):
                     if mutation:
                         with self.assertRaises(ValueError, msg=mutation):
-                            runner.authenticate(ops, archive, expected, source)
+                            runner.authenticate(ops, archive, expected, source, **selection)
                     else:
                         known = {}
-                        runner.authenticate(ops, archive, expected, source, known)
-                        record = root / "current0023-image-binding.json"
+                        runner.authenticate(ops, archive, expected, source, known, **selection)
                         original = record.read_bytes()
                         record.chmod(0o600)
                         record.write_text(json.dumps({**binding, "context_sha256": "f" * 64}))
                         with self.assertRaisesRegex(ValueError, "disappeared/changed"):
-                            runner.authenticate(ops, archive, expected, source, known)
+                            runner.authenticate(ops, archive, expected, source, known, **selection)
                         record.unlink()
                         with self.assertRaisesRegex(ValueError, "disappeared/changed"):
-                            runner.authenticate(ops, archive, expected, source, known)
+                            runner.authenticate(ops, archive, expected, source, known, **selection)
                         record.write_bytes(original)
                         record.chmod(0o400)
 

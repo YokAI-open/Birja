@@ -334,7 +334,7 @@ jobs:
         with:
           node-version-file: frontend/.nvmrc
       - name: Bounded current-source recovery preflight
-        run: python3 deploy/tests/run-portfolio-validation.py --phase 21 --suite recovery-successor --preflight
+        run: python3 deploy/tests/run-portfolio-validation.py --phase 24 --suite recovery-successor --preflight
       - name: Wait for the archived recovery fixture clock window
         timeout-minutes: 106
         run: |
@@ -354,7 +354,7 @@ jobs:
           PY
       - name: Serial real PostgreSQL recovery roles TLS and old-image rollback
         timeout-minutes: 45
-        run: sudo -- python3 deploy/tests/run-portfolio-validation.py --phase 21 --suite recovery-successor
+        run: sudo -- python3 deploy/tests/run-portfolio-validation.py --phase 24 --suite recovery-successor
       - name: Stage verified recovery tooling
         if: success()
         run: |
@@ -362,8 +362,8 @@ jobs:
           umask 077
           recovery_stage="$RUNNER_TEMP/birja-verified-recovery"
           mkdir "$recovery_stage"
-          recovery_archive=/tmp/birja-backup-test-phase21-proof/recovery.tar.gz
-          verification=$(sudo -- python3 deploy/tests/run-portfolio-validation.py --phase 21 --suite recovery-successor --verify-successor-receipt "$GITHUB_SHA")
+          recovery_archive=/tmp/birja-backup-test-phase24-proof/recovery.tar.gz
+          verification=$(sudo -- python3 deploy/tests/run-portfolio-validation.py --phase 24 --suite recovery-successor --verify-successor-receipt "$GITHUB_SHA")
           read -r recovery_sha receipt_sha <<< "$verification"
           [[ "$recovery_sha" =~ ^[0-9a-f]{64}$ ]]
           [[ "$receipt_sha" =~ ^[0-9a-f]{64}$ ]]
