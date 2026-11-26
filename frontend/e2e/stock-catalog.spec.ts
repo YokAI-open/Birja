@@ -325,7 +325,9 @@ test("catalog preserves a permitted closed mark in the selected owned portfolio"
   const link = page.getByRole("link", { name: "View details FQXA" });
   await expect(link).toHaveAttribute("href", new RegExp("/trade/catalog/" + item.catalog_id + "$"));
   await link.click();
-  await page.getByRole("combobox", { name: "Trading portfolio" }).selectOption(owned);
+  const tradeChooser = page.getByRole("combobox", { name: "Trading portfolio", exact: true });
+  await expect(tradeChooser).toHaveAccessibleDescription("Selecting a portfolio opens it.");
+  await tradeChooser.selectOption(owned);
   await expect(page).toHaveURL("/portfolios/" + owned + "/trade/catalog/" + item.catalog_id);
   await expect(page.getByRole("heading", { name: quartz, level: 1 })).toBeVisible();
   await expect(page.getByText("$18.00", { exact: true })).toBeVisible();
