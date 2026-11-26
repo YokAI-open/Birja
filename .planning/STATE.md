@@ -3,16 +3,16 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Market Charts and Workspace Redesign
 current_phase: 25
-status: ready_to_execute
-last_updated: "2026-11-26T18:04:46.571Z"
-last_activity: 2026-11-26 -- Phase 25 planning complete
+status: executing
+last_updated: "2026-11-26T19:36:18Z"
+last_activity: 2026-11-26 -- Phase 25 History API, sign-in and recovery CI timing verified
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 22
-  completed_plans: 15
+  completed_plans: 18
   percent: 50
-stopped_at: Phase 25 planned (0/7 executed)
+stopped_at: Phase 25 (3/7) — Executing wave 2
 ---
 
 # Project State
@@ -29,9 +29,9 @@ Current focus: Execute Phase 25 trade, History, sign-in and integrated acceptanc
 ## Current Position
 
 Phase: 25 of 25 (Finish the trading flows and verify the integrated app)
-Plan: 0 of 7 executed
-Status: Ready to execute
-Last activity: 2026-11-26 -- Phase 25 planning complete
+Plan: 3 of 7 executed
+Status: Executing wave 2
+Last activity: 2026-11-26 -- Phase 25 History API, sign-in and recovery CI timing verified
 
 Seven independently checked plans cover all four FLOW requirements across
 four waves. Wave 1 covers the History API, sign-in and bounded CI timing.

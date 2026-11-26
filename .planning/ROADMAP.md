@@ -124,9 +124,9 @@ Live Kraken and IEX history qualification remains open under CHART-04.
 
 **Wave 1**
 
-- [ ] 25-02 — [Filter private mixed History before pagination](phases/25-finish-the-trading-flows-and-verify-the-integrated-app/25-02-PLAN.md).
-- [ ] 25-03 — [Adopt the sign-in layout and verify the email-code flow](phases/25-finish-the-trading-flows-and-verify-the-integrated-app/25-03-PLAN.md).
-- [ ] 25-06 — [Adjust CI recovery timing within the UTC fixture window](phases/25-finish-the-trading-flows-and-verify-the-integrated-app/25-06-PLAN.md).
+- [x] 25-02 — [Filter private mixed History before pagination](phases/25-finish-the-trading-flows-and-verify-the-integrated-app/25-02-PLAN.md).
+- [x] 25-03 — [Adopt the sign-in layout and verify the email-code flow](phases/25-finish-the-trading-flows-and-verify-the-integrated-app/25-03-PLAN.md).
+- [x] 25-06 — [Adjust CI recovery timing within the UTC fixture window](phases/25-finish-the-trading-flows-and-verify-the-integrated-app/25-06-PLAN.md).
 
 **Wave 2** · Depends on 25-02 and 25-03
 
@@ -150,7 +150,7 @@ Live Kraken and IEX history qualification remains open under CHART-04.
 | 22. Adopt the market workspace | 3/3 | Complete 2026-11-26 |
 | 23. Show historical market prices | 4/4 | Local checks passed. Live qualification pending. |
 | 24. Compare portfolio performance | 8/8 | Complete 2026-11-26 |
-| 25. Finish the trading flows and verify the integrated app | 0/7 | Ready to execute |
+| 25. Finish the trading flows and verify the integrated app | 3/7 | Executing wave 2 |
 
 All 16 requirements map once in [REQUIREMENTS.md](REQUIREMENTS.md).
 [Research](research/v1.5/SUMMARY.md) · [Design reference](ui-reviews/v1.5/README.md)
