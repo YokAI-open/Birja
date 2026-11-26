@@ -1,7 +1,7 @@
 ---
 phase: 24
 slug: compare-portfolio-performance
-status: in_progress
+status: verified
 nyquist_compliant: true
 wave_0_complete: true
 created: 2026-11-26
@@ -94,7 +94,7 @@ All eight focused Chromium cases passed on the browser source `741c337`.
 Frontend lint, TypeScript, all 1,424 Vitest cases and the production build
 passed on the same runtime inputs. Vite reported its bundle-size warning.
 The app and approved ZIP were compared at 1440 × 1000 and 390 × 1000, with
-320px reflow and enlarged-text browser checks.
+320px reflow and enlarged-text browser checks. [Browser receipt](24-BROWSER-RECEIPT.md)
 
 The recovery preflight passed 148 checks. The serial proof and exact receipt
 verifier both passed on `74e852d`. The measured proof inputs remained identical
@@ -103,5 +103,26 @@ the frontend Dockerfile and package lock. The intervening runtime change is
 one CSS declaration. The local serial time was 56m 19s with concurrent
 backend testing. Hosted CI timing remains to be measured against 45 minutes.
 
-The full guarded backend coverage collection is in progress. Ruff checks and
-format verification passed across 344 files. Mypy passed for 149 app files.
+The full guarded backend collection ran 4,172 cases and reached 93.19%
+branch-aware coverage. It reported 4,171 passing cases and one failure in
+the expected route inventory. The inventory omitted the approved market and
+portfolio history routes. Test-only commit `7025837` lists both routes
+explicitly. All 57 cases in the guarded routes and daily API replay then
+passed. The full collection and focused replay use identical app code.
+
+All eight critical modules listed in the plan measured 100% line and branch
+coverage (1,015 statements and 296 branches). The entire CI critical roster
+also measured 100% (6,437 statements and 2,100 branches). Ruff checks and
+format verification passed across 344 files, and mypy passed for 149 app files.
+
+| Verification log | Local path |
+|---|---|
+| Full backend collection | `/tmp/birja-phase24-backend-full.log` |
+| Guarded replay on the corrected route inventory | `/tmp/birja-phase24-route-replay.log` |
+| Critical modules for Phase 24 | `/tmp/birja-phase24-critical-coverage.log` |
+| Full existing CI critical roster | `/tmp/birja-phase24-ci-critical-coverage.log` |
+| Frontend checks | `/tmp/birja-phase24-frontend-741c337.log` |
+
+The later route test adjustment leaves the recovery runtime unchanged. The
+exact authenticated recovery receipt identifies its frozen test source
+`74e852d`. [Code review](24-REVIEW.md)

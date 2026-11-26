@@ -46,3 +46,8 @@ browser and typography adjustments leave backend, deployment, CI and
 recovery fixture inputs byte-for-byte identical. The local rehearsal
 passed in 56m 19s while the backend suite was running. Hosted CI must
 confirm the existing 45-minute budget.
+
+The full backend replay exposed a stale route inventory. `7025837` adds
+the approved market-history and value-history routes to the exact expected
+set. All 57 affected routes and private daily API tests passed after this
+test-only change. The existing full critical coverage roster measured 100%.
