@@ -118,7 +118,7 @@ async def ledger(api, root):
 
 @pytest_asyncio.fixture
 async def current_stock_authority_case(strategy_books, engine):
-    """Retained accounting assertions on the current schema (0027)."""
+    """Retained accounting assertions on the current schema (0028)."""
     api, roots, cid, now = strategy_books
     closed = (await post(api, "Retained closed")).json()["id"]
     foreign = (await post(api, "Foreign", client=api.other)).json()["id"]
@@ -132,7 +132,7 @@ async def current_stock_authority_case(strategy_books, engine):
         tx = await conn.begin()
         assert (
             await conn.execute(text("SELECT version_num FROM alembic_version"))
-        ).scalar_one() == "0027"
+        ).scalar_one() == "0028"
         await conn.execute(
             text(
                 "SELECT pg_advisory_xact_lock(hashtextextended("

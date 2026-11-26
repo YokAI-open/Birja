@@ -168,7 +168,7 @@ async def _check_connection(
         ).scalar_one()
     else:
         revision = await require_migrator(conn)
-    allowed = ("0026", "0027") if for_finance else ("0025", "0026", "0027")
+    allowed = ("0026", "0027", "0028") if for_finance else ("0025", "0026", "0027", "0028")
     if revision not in allowed:
         raise CatalogPublishError("Catalog import requires the admitted catalog migration")
 
