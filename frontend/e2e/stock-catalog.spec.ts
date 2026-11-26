@@ -124,14 +124,19 @@ test.beforeEach(() => {
 
 test("catalog searches names, classes and aliases and prices only a keyboard selection", async ({
   page,
-}) => {
+}, testInfo) => {
   test.setTimeout(60000);
   await openStocks(page);
+  const initial = await portfolioId(page);
+  const owned = await addPortfolio(page);
+  await page.reload();
   await searchFor(page, "Quartz Fixture");
   await expect(stock(page, /FQXA · NASDAQ · Class A/)).toBeVisible();
   await expect(stock(page, /FQXB · NASDAQ · Class B/)).toBeVisible();
   expect(observedQuotes()).toEqual([]);
+  const [exact] = await searchFor(page, "FQXA");
   const [item] = await searchFor(page, "FQOLD");
+  expect(item).toEqual(exact);
   expect(item.company_name).toBe(quartz);
   expect(observedQuotes()).toEqual([]);
 
@@ -154,9 +159,29 @@ test("catalog searches names, classes and aliases and prices only a keyboard sel
 
   await page.getByRole("button", { name: "Back to results" }).click();
   await expect(row).toBeFocused();
-  await expect(page.getByRole("searchbox", { name: "Search stocks" })).toHaveValue("FQOLD");
+  const search = page.getByRole("searchbox", { name: "Search stocks" });
+  await expect(search).toHaveValue("FQOLD");
+  const picker = page.getByRole("combobox", { name: "Trading portfolio" });
+  const link = page.getByRole("link", { name: "View details FQXA" });
+  await picker.selectOption(initial);
+  await expect(link).toHaveAttribute(
+    "href",
+    `/portfolios/${initial}/trade/catalog/${item.catalog_id}`,
+  );
+  await picker.selectOption(owned);
+  await expect(link).toHaveAttribute(
+    "href",
+    `/portfolios/${owned}/trade/catalog/${item.catalog_id}`,
+  );
+  await expect(search).toHaveValue("FQOLD");
+  expect(observedQuotes()).toEqual([["FQXA"]]);
+  await row.press("Enter");
+  await expect(page.getByRole("heading", { name: quartz, exact: true })).toBeFocused();
+  await page.screenshot({ path: testInfo.outputPath("markets-mobile-detail.png"), fullPage: true });
   await page.setViewportSize({ width: 640, height: 500 });
   await noOverflow(page);
+  await link.click();
+  await expect(page).toHaveURL(`/portfolios/${owned}/trade/catalog/${item.catalog_id}`);
 });
 
 test("catalog preserves a permitted closed mark in the selected owned portfolio", async ({
@@ -167,6 +192,8 @@ test("catalog preserves a permitted closed mark in the selected owned portfolio"
   await openStocks(page);
   const original = await portfolioId(page);
   const owned = await addPortfolio(page);
+  // Portfolio setup uses a direct API request, outside the app query cache.
+  await page.reload();
   const [item] = await searchFor(page, "FQXA");
   const displayed = selectedQuote(page);
   await stock(page, /FQXA/).click();
@@ -241,7 +268,17 @@ test("catalog provider outage leaves search, curated stocks and crypto available
   expect(observedQuotes()).toEqual([["FQXB"]]);
   await searchFor(page, "FQOLD");
   await expect(stock(page, /FQXA/)).toBeVisible();
-  await page.getByRole("searchbox", { name: "Search stocks" }).clear();
+  await page.route(`**${searchPath}?*`, (route) =>
+    route.fulfill({ status: 503, json: { detail: "unavailable" } }),
+  );
+  const search = page.getByRole("searchbox", { name: "Search stocks" });
+  await search.fill("AAPL");
+  await expect(
+    page.getByText("Catalog search is unavailable. The original stocks are still available."),
+  ).toBeVisible();
+  await expect(stock(page, /AAPL/)).toBeVisible();
+  await search.clear();
+  await expect(page.getByRole("list", { name: "US stocks" }).getByRole("button")).toHaveCount(20);
   await stock(page, /AAPL/).click();
   await expect(page.getByRole("link", { name: "Trade AAPL" })).toHaveAttribute(
     "href",
