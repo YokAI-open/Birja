@@ -120,6 +120,29 @@ Live Kraken and IEX history qualification remains open under CHART-04.
 2. Users can filter, expand and page through History and go through the real email-code and sign-out flows.
 3. Real-browser checks cover desktop and mobile reflow, chart states and the main financial journeys against an isolated stack. Review, release CI and applicable snapshot recovery gates pass on the candidate.
 
+**Plans:** 7 plans across 4 waves
+
+**Wave 1**
+
+- [ ] 25-02 — [Filter private mixed History before pagination](phases/25-finish-the-trading-flows-and-verify-the-integrated-app/25-02-PLAN.md).
+- [ ] 25-03 — [Adopt the sign-in layout and verify the email-code flow](phases/25-finish-the-trading-flows-and-verify-the-integrated-app/25-03-PLAN.md).
+- [ ] 25-06 — [Adjust CI recovery timing within the UTC fixture window](phases/25-finish-the-trading-flows-and-verify-the-integrated-app/25-06-PLAN.md).
+
+**Wave 2** · Depends on 25-02 and 25-03
+
+- [ ] 25-01 — [Adopt the crypto, curated-stock and catalog trade layouts](phases/25-finish-the-trading-flows-and-verify-the-integrated-app/25-01-PLAN.md).
+- [ ] 25-04 — [Connect the History toolbar, disclosures and paging](phases/25-finish-the-trading-flows-and-verify-the-integrated-app/25-04-PLAN.md).
+
+**Wave 3** · Depends on 25-01 and 25-04
+
+- [ ] 25-05 — [Verify real app flows and compare with the approved prototype](phases/25-finish-the-trading-flows-and-verify-the-integrated-app/25-05-PLAN.md).
+
+**Wave 4** · Depends on 25-05 and 25-06
+
+- [ ] 25-07 — [Review the local candidate and qualify it in authorized hosted CI](phases/25-finish-the-trading-flows-and-verify-the-integrated-app/25-07-PLAN.md).
+
+[Research](phases/25-finish-the-trading-flows-and-verify-the-integrated-app/25-RESEARCH.md) · [UI contract](phases/25-finish-the-trading-flows-and-verify-the-integrated-app/25-UI-SPEC.md) · [Validation](phases/25-finish-the-trading-flows-and-verify-the-integrated-app/25-VALIDATION.md)
+
 ## Progress
 
 | Phase | Plans complete | Status |
@@ -127,7 +150,7 @@ Live Kraken and IEX history qualification remains open under CHART-04.
 | 22. Adopt the market workspace | 3/3 | Complete 2026-11-26 |
 | 23. Show historical market prices | 4/4 | Local checks passed. Live qualification pending. |
 | 24. Compare portfolio performance | 8/8 | Complete 2026-11-26 |
-| 25. Finish the trading flows and verify the integrated app | 0/TBD | Unplanned |
+| 25. Finish the trading flows and verify the integrated app | 0/7 | Ready to execute |
 
 All 16 requirements map once in [REQUIREMENTS.md](REQUIREMENTS.md).
 [Research](research/v1.5/SUMMARY.md) · [Design reference](ui-reviews/v1.5/README.md)

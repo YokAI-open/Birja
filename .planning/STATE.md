@@ -3,16 +3,16 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Market Charts and Workspace Redesign
 current_phase: 25
-status: ready_to_plan
-last_updated: "2026-11-26T16:34:05Z"
-last_activity: 2026-11-26 -- Phase 24 passed independent verification
+status: ready_to_execute
+last_updated: "2026-11-26T18:04:46.571Z"
+last_activity: 2026-11-26 -- Phase 25 planning complete
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 15
+  total_plans: 22
   completed_plans: 15
   percent: 50
-stopped_at: Phase 24 complete (8/8) — Phase 25 ready to plan
+stopped_at: Phase 25 planned (0/7 executed)
 ---
 
 # Project State
@@ -24,14 +24,19 @@ See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md),
 [approved design](ui-reviews/v1.5/README.md).
 
 Core value: correct virtual trade and valuation money.
-Current focus: Plan Phase 25 trade, History, sign-in and integrated acceptance.
+Current focus: Execute Phase 25 trade, History, sign-in and integrated acceptance.
 
 ## Current Position
 
 Phase: 25 of 25 (Finish the trading flows and verify the integrated app)
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-11-26 -- Phase 24 passed independent verification
+Plan: 0 of 7 executed
+Status: Ready to execute
+Last activity: 2026-11-26 -- Phase 25 planning complete
+
+Seven independently checked plans cover all four FLOW requirements across
+four waves. Wave 1 covers the History API, sign-in and bounded CI timing.
+The final plan ties hosted CI to the exact authorized candidate.
+[Phase 25 validation](phases/25-finish-the-trading-flows-and-verify-the-integrated-app/25-VALIDATION.md)
 
 Phase 24 completed eight plans and verified all four portfolio trend
 requirements. Portfolios show exact current figures and a private 30-day
