@@ -526,6 +526,12 @@ class PortfolioRecoveryContracts(unittest.TestCase):
         cls.addClassCleanup(directory.cleanup)
         cls.retained_0025 = Path(directory.name)
         retained_catalog(cls.retained_0025)
+        directory = tempfile.TemporaryDirectory(prefix='birja-retained-0027-')
+        cls.addClassCleanup(directory.cleanup)
+        cls.retained_0027 = Path(directory.name)
+        sources = load('tests/portfolio-sources')
+        with tarfile.open(fileobj=io.BytesIO(sources.source_archive('portfolio0027'))) as archive:
+            archive.extractall(cls.retained_0027, filter='data')
 
     def test_ops_archive_family_is_authenticated_and_finite(self):
         spec=importlib.util.spec_from_file_location('ops_contracts',ROOT/'deploy/tests/ops-fixtures.py')
@@ -676,7 +682,8 @@ class PortfolioRecoveryContracts(unittest.TestCase):
         historical = load('backup-snapshot', self.retained_0025)
         profiles = (
             ('0025', self.retained_0025, historical, current.CATALOG_SOURCE_SHA256),
-            ('0027', ROOT, current, current.CATALOG_NYSE_SOURCE_SHA256),
+            ('0027', self.retained_0027, current, current.CATALOG_NYSE_SOURCE_SHA256),
+            ('0028', ROOT, current, current.DAILY_VALUE_SOURCE_SHA256),
         )
         for revision, source, producer, pins in profiles:
             with tempfile.TemporaryDirectory(prefix='birja-closure-source-') as tmp:
