@@ -134,7 +134,12 @@ async def test_halted_old_mark_uses_original_source_and_current_independent_leas
         )
     async with factory.begin() as db:
         await db.execute(text("UPDATE stock_status_evidence SET state='halted'"))
-        await db.execute(text("UPDATE stock_quotes SET event_at=collected_at-interval '5 minutes'"))
+        await db.execute(
+            text(
+                "UPDATE stock_quotes SET event_at=collected_at-interval '5 minutes', "
+                "session_date=((collected_at-interval '5 minutes') AT TIME ZONE 'UTC')::date"
+            )
+        )
     before = await financial_snapshot(factory)
     async with factory() as db:
         p = await get_portfolio(
@@ -265,7 +270,12 @@ async def test_verified_closed_mark_is_dated_and_never_executes(
             text("UPDATE stock_sessions SET closes_at=:close WHERE session_date=:date"),
             {"close": close, "date": now.date()},
         )
-        await db.execute(text("UPDATE stock_quotes SET event_at=collected_at-interval '5 minutes'"))
+        await db.execute(
+            text(
+                "UPDATE stock_quotes SET event_at=collected_at-interval '5 minutes', "
+                "session_date=((collected_at-interval '5 minutes') AT TIME ZONE 'UTC')::date"
+            )
+        )
     async with factory() as db:
         p = await get_portfolio(
             db, portfolio=await synthetic_owned_portfolio(db, uid), settings=settings

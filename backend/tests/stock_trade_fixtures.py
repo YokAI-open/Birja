@@ -112,7 +112,10 @@ async def stock_trade_case(status_case, ownership, monkeypatch, request):
             day = date.fromisoformat(day)
             if day == now.date():
                 hours = 1 if getattr(request, "param", "open") == "closed" else -1
-                return Stamp(now + timedelta(hours=hours))
+                # A session's opening and its identifier share a UTC date.
+                # Keep the real database clock even in the first hour of the day.
+                midnight = datetime.combine(day, time.min, UTC)
+                return Stamp(max(midnight, now + timedelta(hours=hours)))
             return Stamp(datetime.combine(day, time(14), UTC))
 
         def session_close(self, day):
