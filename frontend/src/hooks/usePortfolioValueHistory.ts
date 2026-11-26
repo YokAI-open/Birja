@@ -36,7 +36,7 @@ export function usePortfolioValueHistory(
   const generation = portfolioDeletionAuthorityGeneration(client);
   const ids = active?.map(({ id }) => id);
   const current = () => {
-    if (!ids?.length || email === null || revision !== lifecycle.current) return false;
+    if (!ids?.length || email === null) return false;
     const session = eventHistorySession(client);
     if (
       session.email !== email ||
@@ -58,6 +58,7 @@ export function usePortfolioValueHistory(
     );
   };
   const enabled = current();
+  const isCurrent = () => revision === lifecycle.current && current();
   const query = useQuery({
     queryKey: ["portfolioValueHistory", email, epoch, generation, revision, ids ?? []],
     enabled,
@@ -65,17 +66,19 @@ export function usePortfolioValueHistory(
     gcTime: 0,
     staleTime: 5 * 60_000,
     queryFn: async ({ signal }) => {
-      if (!ids || !current()) throw new DOMException("Request context unavailable", "AbortError");
-      return fetchPortfolioValueHistory(ids, signal, current);
+      if (!ids || !isCurrent()) throw new DOMException("Request context unavailable", "AbortError");
+      return fetchPortfolioValueHistory(ids, signal, isCurrent);
     },
   });
 
+  const data = enabled && !query.isError ? query.data : undefined;
   return {
-    data: enabled && !query.isError ? query.data : undefined,
-    loading: !!ids?.length && (!enabled || (query.isPending && query.isFetching)),
+    data,
+    loading: !!ids?.length && (!enabled || (query.isFetching && !data)),
     failed: enabled && query.isError && !query.isFetching,
+    retrying: enabled && query.isFetching && query.errorUpdateCount > 0 && !data,
     retry: () => {
-      if (current()) void query.refetch({ cancelRefetch: false });
+      if (isCurrent()) void query.refetch({ cancelRefetch: false });
     },
   };
 }

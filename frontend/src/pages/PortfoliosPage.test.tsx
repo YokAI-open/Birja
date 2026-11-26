@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, expect, it, vi } from "vitest";
 import PortfoliosPage from "./PortfoliosPage";
@@ -7,11 +7,26 @@ import { usePortfolioManagement } from "@/hooks/usePortfolioManagement";
 import { cashPortfolio } from "@/test/portfolioFixtures";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { usePortfolioDeletion } from "@/hooks/usePortfolioDeletion";
+import { usePortfolioValueHistory } from "@/hooks/usePortfolioValueHistory";
 vi.mock("@/hooks/usePortfolioOverview");
 vi.mock("@/hooks/usePortfolioManagement");
 vi.mock("@/hooks/usePortfolioDeletion");
+vi.mock("@/hooks/usePortfolioValueHistory");
 const refetch = vi.fn();
-function show(data: unknown, extra = {}) {
+const retry = vi.fn();
+function show(
+  data: unknown,
+  extra = {},
+  trend: Partial<ReturnType<typeof usePortfolioValueHistory>> = {},
+) {
+  vi.mocked(usePortfolioValueHistory).mockReturnValue({
+    data: undefined,
+    failed: false,
+    loading: false,
+    retrying: false,
+    retry,
+    ...trend,
+  });
   vi.mocked(usePortfolioDeletion).mockReturnValue({
     ready: true,
     deletion: { phase: "idle", attempt: null },
@@ -36,6 +51,59 @@ function show(data: unknown, extra = {}) {
     </QueryClientProvider>,
   );
 }
+it("keeps card membership, current values and exact dated observations paired through gaps", () => {
+  const current = [
+    { ...cashPortfolio(), id: "2", name: "Dividends", description: "Income" },
+    { ...cashPortfolio(), id: "10", name: "Growth", description: "Long horizon" },
+  ];
+  show(
+    current,
+    {},
+    {
+      data: {
+        start_day: "2026-10-01",
+        end_day: "2026-10-30",
+        portfolios: [
+          {
+            portfolio_id: "2",
+            points: [
+              {
+                utc_day: "2026-10-10",
+                captured_at: "2026-10-10T22:00:00Z",
+                total_value: "1234.56",
+                valuation_complete: true,
+              },
+            ],
+          },
+          { portfolio_id: "10", points: [] },
+        ],
+      },
+    },
+  );
+  expect(usePortfolioValueHistory).toHaveBeenCalledWith(current);
+  const dividends = screen.getByRole("link", { name: "Dividends" });
+  expect(dividends).toHaveAccessibleDescription(
+    /One recorded value \(UTC\) on Oct 10, 2026, \$1,234.56/,
+  );
+  expect(dividends).toHaveTextContent("$10,000.00 cash");
+  expect(screen.getByRole("link", { name: "Growth" })).toHaveAccessibleDescription(
+    "Collecting daily values",
+  );
+  expect(
+    within(screen.getAllByRole("listitem").at(-1)!).getByRole("button", { name: "New portfolio" }),
+  ).toBeEnabled();
+});
+it("exposes one history retry outside fully usable cards and keeps current figures visible", () => {
+  show([{ ...cashPortfolio(), id: "2", name: "Dividends", description: "" }], {}, { failed: true });
+  const link = screen.getByRole("link", { name: "Dividends" });
+  expect(link).toHaveAccessibleDescription("Value history unavailable");
+  expect(link).toHaveTextContent("$10,000.00 cash");
+  const button = screen.getByRole("button", { name: "Retry value history" });
+  expect(link).not.toContainElement(button);
+  fireEvent.click(button);
+  expect(retry).toHaveBeenCalledOnce();
+  expect(refetch).not.toHaveBeenCalled();
+});
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -185,7 +253,8 @@ it("keeps unknown creation notice after close and allows original retry at cap",
   fireEvent.click(screen.getByRole("button", { name: "Review original creation" }));
   fireEvent.click(screen.getByRole("button", { name: "Close creation" }));
   expect(screen.getByText(/An original creation request is unresolved/)).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "New portfolio" })).toHaveFocus();
+  expect(screen.getByRole("button", { name: "New portfolio" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Review original creation" })).toHaveFocus();
   fireEvent.click(screen.getByRole("button", { name: "Review original creation" }));
   fireEvent.click(screen.getByRole("button", { name: "Retry creation" }));
   expect(retry).toHaveBeenCalledOnce();

@@ -60,10 +60,11 @@ afterEach(() => {
 });
 
 it("keeps current values through a malformed history response and retries only history", async () => {
+  const next = deferred();
   let attempt = 0;
   const fetch = vi.fn(async (url: string) => {
     if (url === overviewPath) return Response.json(rows("1", "2"));
-    return attempt++ === 0 ? history("1", "3") : history("1", "2");
+    return attempt++ === 0 ? history("1", "3") : next.promise;
   });
   vi.stubGlobal("fetch", fetch);
   const { hook } = setup();
@@ -73,6 +74,9 @@ it("keeps current values through a malformed history response and retries only h
     "10000.00",
   ]);
   act(() => hook.result.current.trend.retry());
+  await waitFor(() => expect(hook.result.current.trend.retrying).toBe(true));
+  expect(hook.result.current.trend.loading).toBe(true);
+  await act(async () => next.resolve(history("1", "2")));
   await waitFor(() => expect(hook.result.current.trend.data?.portfolios).toHaveLength(2));
   expect(fetch.mock.calls.map(([url]) => url)).toEqual([overviewPath, historyPath, historyPath]);
 });
@@ -80,7 +84,8 @@ it("keeps current values through a malformed history response and retries only h
 it("discards a late response across sign-out and an owner change even when the IDs match", async () => {
   const old = deferred();
   let calls = 0;
-  const fetch = vi.fn((url: string, _init?: RequestInit) => {
+  const fetch = vi.fn((url: string, init?: RequestInit) => {
+    void init;
     if (url === overviewPath) return Promise.resolve(Response.json(rows("1")));
     return calls++ === 0 ? old.promise : Promise.resolve(history("1"));
   });
