@@ -1,19 +1,23 @@
 .markets {
-  --market-paper: #faf9f6;
-  --market-ink: #201f1d;
-  --market-muted: #625e53;
-  --market-line: #dedad0;
-  --market-input: #9d988c;
-  --market-accent: #a52317;
-  --market-selection: #f2ede7;
+  --market-ink: var(--foreground);
+  --market-muted: var(--muted-foreground);
+  --market-input: var(--input);
+  --market-accent: var(--brand);
+  --market-selection: var(--accent);
   color: var(--market-ink);
-}
-body:has(.markets) {
-  background-color: #faf9f6;
 }
 .markets :focus-visible {
   outline: 2px solid var(--market-accent);
   outline-offset: 2px;
+}
+@media (width >= 48rem) {
+  .market-workspace {
+    grid-template-columns: minmax(0, 42fr) minmax(0, 58fr);
+  }
+}
+.market-list {
+  max-height: min(32rem, 55vh);
+  overflow-y: auto;
 }
 .market-tab {
   min-height: 52px;
@@ -30,10 +34,16 @@ body:has(.markets) {
 .market-row[aria-current="true"] {
   background: var(--market-selection);
 }
+.market-row[aria-current="true"] {
+  box-shadow: inset 2px 0 var(--market-accent);
+}
+.markets .market-row:focus-visible {
+  outline-offset: -2px;
+}
 .market-action {
-  background: var(--market-ink);
-  color: var(--market-paper);
+  background: var(--primary);
+  color: var(--primary-foreground);
 }
 .market-action:hover {
-  background: #444037;
+  background: color-mix(in srgb, var(--primary) 88%, var(--muted-foreground));
 }

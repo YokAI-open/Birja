@@ -45,13 +45,12 @@ const stockRestrictions: Record<StockItem["execution_reason"], string> = {
 };
 
 export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
-  const [market, setMarket] = useState<Market>("crypto");
+  const [market, setMarket] = useState<Market>("stock");
   const [search, setSearch] = useState("");
   const [composing, setComposing] = useState(false);
   const [submittedSearch, setSubmittedSearch] = useState("");
   const [catalogIntent, setCatalogIntent] = useState<StockCatalogItem | null>(null);
   const [selection, setSelection] = useState<string>();
-  const [showAsset, setShowAsset] = useState(false);
   const assetHeading = useRef<HTMLHeadingElement>(null);
   const selectedRow = useRef<HTMLButtonElement>(null);
   const searchField = useRef<HTMLInputElement>(null);
@@ -193,13 +192,11 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
     setComposing(false);
     setCatalogIntent(null);
     setSelection(undefined);
-    setShowAsset(false);
   }
 
   function pickAsset(item: MarketRow) {
     setCatalogIntent(item.listing ?? null);
     setSelection(item.key);
-    setShowAsset(true);
     if (window.matchMedia?.("(max-width: 767px)").matches) {
       requestAnimationFrame(() => assetHeading.current?.focus());
     }
@@ -208,33 +205,28 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
   return (
     <div className="markets mx-auto my-7 max-w-[1280px] md:my-12 lg:my-16">
       <h1 className="sr-only">Markets</h1>
-      <div className="grid min-w-0 grid-cols-1 gap-8 md:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] md:gap-10 lg:gap-16">
-        <section
-          aria-label="Find an asset"
-          className={showAsset && asset ? "hidden md:block" : undefined}
-        >
-          <div
-            role="group"
-            aria-label="Asset class"
-            className="mb-5 flex gap-7 border-b md:gap-9 border-[var(--market-line)]"
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+        <div role="group" aria-label="Asset class" className="flex gap-6 md:gap-8">
+          <button
+            type="button"
+            aria-pressed={stockMarket}
+            className="market-tab"
+            onClick={() => selectMarket("stock")}
           >
-            <button
-              type="button"
-              aria-pressed={!stockMarket}
-              className="market-tab"
-              onClick={() => selectMarket("crypto")}
-            >
-              Crypto
-            </button>
-            <button
-              type="button"
-              aria-pressed={stockMarket}
-              className="market-tab"
-              onClick={() => selectMarket("stock")}
-            >
-              US stocks
-            </button>
-          </div>
+            US stocks
+          </button>
+          <button
+            type="button"
+            aria-pressed={!stockMarket}
+            className="market-tab"
+            onClick={() => selectMarket("crypto")}
+          >
+            Crypto
+          </button>
+        </div>
+      </div>
+      <div className="market-workspace grid min-w-0 grid-cols-1 items-start gap-6 md:gap-8">
+        <section aria-label="Find an asset" className="min-w-0">
           <label
             htmlFor="market-search"
             className={stockMarket ? "mb-2 block font-medium" : "sr-only"}
@@ -258,7 +250,6 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
               setSearch(event.target.value);
               setSubmittedSearch("");
               setCatalogIntent(null);
-              setShowAsset(false);
             }}
           />
           {waitingForCatalog && <p role="status">Searching stocks…</p>}
@@ -330,7 +321,7 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
           {results.length > 0 ? (
             <ul
               aria-label={stockMarket ? "US stocks" : "Crypto"}
-              className="border-t border-[var(--market-ink)]"
+              className="market-list border-y border-border"
             >
               {results.map((item) => {
                 const { key, symbol, name, price: value, listing } = item;
@@ -343,23 +334,23 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
                       )
                     : undefined;
                 return (
-                  <li key={key} className="border-b border-[var(--market-line)]">
+                  <li key={key} className="border-b border-border last:border-b-0">
                     <button
                       type="button"
                       ref={asset?.key === key ? selectedRow : undefined}
                       aria-current={asset?.key === key ? true : undefined}
-                      className="market-row grid min-h-17 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-3 py-3 text-left md:min-h-20 md:px-5 md:text-lg"
+                      className="market-row grid min-h-16 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-3 py-2 text-left"
                       onClick={() => pickAsset(item)}
                     >
-                      <span className="min-w-0 wrap-anywhere">
-                        <span className="block font-semibold">{name}</span>{" "}
+                      <span className="flex min-w-0 flex-col wrap-anywhere">
                         {(listing || symbol !== name) && (
-                          <span className="block text-sm text-[var(--market-muted)]">
-                            {symbol}
-                            {listing && ` · ${listing.listing_exchange}`}
-                            {listing?.share_class && ` · Class ${listing.share_class}`}
-                          </span>
-                        )}
+                          <span className="order-2 text-sm text-muted-foreground">{name}</span>
+                        )}{" "}
+                        <span className="font-semibold">
+                          {symbol}
+                          {listing && ` · ${listing.listing_exchange}`}
+                          {listing?.share_class && ` · Class ${listing.share_class}`}
+                        </span>
                       </span>
                       {value && (
                         <>
@@ -395,23 +386,22 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
         {asset && (
           <section
             aria-labelledby="market-asset"
-            className={`${showAsset ? "" : "hidden md:block"} min-w-0 border-t border-[var(--market-line)] pt-5 md:sticky md:top-8 md:self-start md:border-t-0 md:border-l md:pt-6 md:pl-9 lg:pl-12`}
+            className="min-w-0 rounded-card border border-border bg-card p-5 md:p-7"
           >
             <button
               type="button"
               className="mb-3 min-h-11 underline md:hidden"
               onClick={() => {
-                setShowAsset(false);
                 requestAnimationFrame(() => (selectedRow.current ?? searchField.current)?.focus());
               }}
             >
-              All assets
+              Back to results
             </button>
             <h2
               id="market-asset"
               ref={assetHeading}
               tabIndex={-1}
-              className="text-3xl font-semibold tracking-tight wrap-anywhere lg:text-4xl"
+              className="scroll-mt-4 text-2xl font-semibold tracking-tight wrap-anywhere"
             >
               {asset.name}
             </h2>
@@ -420,7 +410,7 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
               {catalogListing?.listing_exchange ?? stock?.listing_exchange ?? "USD"}
               {catalogListing?.share_class && ` · Class ${catalogListing.share_class}`}
             </p>
-            <div className="my-7 border-y border-[var(--market-line)] py-5 md:py-7">
+            <div className="my-5 border-y border-border py-5 md:my-6 md:py-6">
               {price && (
                 <p
                   className="text-[clamp(2rem,4vw,3.25rem)] leading-tight font-semibold tracking-tight wrap-anywhere tabular-nums"
@@ -470,7 +460,6 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
                   className="min-h-11 underline"
                   onClick={() => {
                     setCatalogIntent(null);
-                    setShowAsset(false);
                     void catalog.refetch();
                     requestAnimationFrame(() => searchField.current?.focus());
                   }}
@@ -519,7 +508,7 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
               !missingListing &&
               (!catalogListing || !selectedQuote.isFetching) && (
                 <Link
-                  className="market-action inline-flex min-h-13 w-full items-center justify-center rounded-sm px-8 py-3 font-semibold md:w-auto"
+                  className="market-action inline-flex min-h-11 items-center justify-center rounded-pill px-5 py-2 font-semibold"
                   to={
                     catalogListing
                       ? `${prefix}/trade/catalog/${catalogListing.catalog_id}`
@@ -535,6 +524,14 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
                 {stocks.data.attribution.required_text}
               </p>
             )}
+          </section>
+        )}
+        {!asset && catalogData && results.length > 0 && (
+          <section
+            aria-label="Asset details"
+            className="hidden rounded-card border border-border bg-card p-7 text-muted-foreground md:block"
+          >
+            Select a stock to see its price.
           </section>
         )}
       </div>

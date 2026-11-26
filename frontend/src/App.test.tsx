@@ -614,7 +614,7 @@ it("keeps a trailing-slash inaccessible index generic even if stale metadata is 
 
 it("keeps the sign-out door beside three responsive primary destinations", async () => {
   api();
-  setup();
+  const { user } = setup();
   const nav = await screen.findByRole("navigation", { name: "Main" });
   expect(nav.querySelectorAll("a")).toHaveLength(3);
   expect(nav).not.toContainElement(screen.getByRole("button", { name: "Sign out" }));
@@ -623,6 +623,7 @@ it("keeps the sign-out door beside three responsive primary destinations", async
   expect(header).toContainElement(screen.getByText("Birja"));
   expect(header).toContainElement(screen.getByRole("button", { name: "Sign out" }));
   expect(screen.getByRole("heading", { name: "Markets", level: 1 })).toHaveClass("sr-only");
+  await user.click(screen.getByRole("button", { name: "Crypto" }));
   expect(await screen.findByRole("button", { name: /Bitcoin BTC.*81,042.35/ })).toBeVisible();
   expect(screen.getByRole("link", { name: "Trade BTC" })).toHaveAttribute("href", "/trade/BTC");
   expect(screen.getAllByRole("link", { name: "Portfolios" })[0]).toHaveAttribute(
@@ -729,6 +730,7 @@ it("retains verified root through nav, global Markets and trade links", async ()
   await screen.findByRole("heading", { name: "History page" });
   await user.click(screen.getByRole("link", { name: "Markets" }));
   expect(await screen.findByRole("heading", { name: "Markets" })).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "Crypto" }));
   expect(await screen.findByRole("link", { name: "Trade BTC" })).toHaveAttribute(
     "href",
     "/portfolios/2/trade/BTC",
