@@ -89,7 +89,7 @@ Live Kraken and IEX history qualification remains open under CHART-04.
 
 **Wave 3**
 
-- [ ] 24-04 — [Capture daily valuations and serve private 30-day trends](phases/24-compare-portfolio-performance/24-04-PLAN.md).
+- [x] 24-04 — [Capture daily valuations and serve private 30-day trends](phases/24-compare-portfolio-performance/24-04-PLAN.md).
 
 **Wave 4**
 
@@ -126,7 +126,7 @@ Live Kraken and IEX history qualification remains open under CHART-04.
 |---|---|---|
 | 22. Adopt the market workspace | 3/3 | Complete 2026-11-26 |
 | 23. Show historical market prices | 4/4 | Local checks passed. Live qualification pending. |
-| 24. Compare portfolio performance | 3/8 | Executing wave 3 |
+| 24. Compare portfolio performance | 4/8 | Executing wave 4 |
 | 25. Finish the trading flows and verify the integrated app | 0/TBD | Unplanned |
 
 All 16 requirements map once in [REQUIREMENTS.md](REQUIREMENTS.md).

@@ -4,13 +4,13 @@ milestone: v1.5
 milestone_name: Market Charts and Workspace Redesign
 current_phase: 24
 status: executing
-last_updated: "2026-11-26T13:24:42Z"
-last_activity: 2026-11-26 -- Phase 24 fresh and upgraded 0028 finance paths passed
+last_updated: "2026-11-26T13:48:15Z"
+last_activity: 2026-11-26 -- Phase 24 scheduler and private daily value API passed
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 15
-  completed_plans: 10
+  completed_plans: 11
   percent: 25
 ---
 
@@ -28,9 +28,9 @@ Current focus: Implement Phase 24 portfolio performance and recovery.
 ## Current Position
 
 Phase: 24 of 25 (Compare portfolio performance)
-Plan: 3 of 8 executed
-Status: Executing wave 3
-Last activity: 2026-11-26 -- Phase 24 fresh and upgraded 0028 finance paths passed
+Plan: 4 of 8 executed
+Status: Executing wave 4
+Last activity: 2026-11-26 -- Phase 24 scheduler and private daily value API passed
 
 Eight plans across six waves cover TREND-01 through TREND-04 and all five
 design decisions. The plan uses a 30-day display window and collects one
