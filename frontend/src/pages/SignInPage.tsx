@@ -1,9 +1,10 @@
-import { useState, type FormEvent, type Ref } from "react";
+import { useRef, useState, type FormEvent, type Ref } from "react";
 import { ApiError } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useRequestCode, useVerifyCode } from "@/hooks/useAuthMutations";
+import "./signInWorkspace.css";
 
 function waitText(seconds: number): string {
   if (seconds < 60) {
@@ -38,41 +39,58 @@ function errorMessage(error: unknown, step: "email" | "code"): string {
   return "Something went wrong. Try again.";
 }
 
-const LABEL = "text-[13px] leading-[18px] font-medium text-muted-foreground";
-
 function SignInPage({ inputRef }: { inputRef?: Ref<HTMLInputElement> }) {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [sentTo, setSentTo] = useState<string | null>(null);
+  const [focusEmailOnReturn, setFocusEmailOnReturn] = useState(false);
   const requestCode = useRequestCode();
   const verifyCode = useVerifyCode();
+  const actionInFlight = useRef(false);
+  const pending = requestCode.isPending || verifyCode.isPending;
+
+  function startAction() {
+    if (actionInFlight.current || pending) return false;
+    actionInFlight.current = true;
+    return true;
+  }
+
+  function finishAction() {
+    actionInFlight.current = false;
+  }
 
   const onSendCode = (event: FormEvent) => {
     event.preventDefault();
     const trimmed = email.trim();
-    if (!trimmed) return;
+    if (!trimmed || !startAction()) return;
     requestCode.mutate(trimmed, {
       onSuccess: () => {
         setSentTo(trimmed);
         setCode("");
         verifyCode.reset();
       },
+      onSettled: finishAction,
     });
   };
 
   const onResend = () => {
-    if (sentTo === null) return;
+    if (sentTo === null || !startAction()) return;
     verifyCode.reset();
-    requestCode.mutate(sentTo);
+    requestCode.mutate(sentTo, {
+      onSuccess: () => setCode(""),
+      onSettled: finishAction,
+    });
   };
 
   const onVerify = (event: FormEvent) => {
     event.preventDefault();
-    if (sentTo === null || code.length !== 6) return;
-    verifyCode.mutate({ email: sentTo, code });
+    if (sentTo === null || code.length !== 6 || !startAction()) return;
+    verifyCode.mutate({ email: sentTo, code }, { onSettled: finishAction });
   };
 
   const onChangeEmail = () => {
+    if (actionInFlight.current || pending) return;
+    setFocusEmailOnReturn(true);
     setSentTo(null);
     setCode("");
     requestCode.reset();
@@ -82,41 +100,34 @@ function SignInPage({ inputRef }: { inputRef?: Ref<HTMLInputElement> }) {
   if (sentTo === null) {
     const error = requestCode.isError ? errorMessage(requestCode.error, "email") : null;
     const empty = email.trim() === "";
-    const describedBy = error ? "email-error" : empty ? "email-help" : undefined;
     return (
-      <Card className="mx-auto my-10 w-full max-w-lg md:my-20">
-        <CardContent className="gap-6">
-          <h1 className="app-heading">Sign in</h1>
-          <p className="wrap-anywhere text-muted-foreground">
-            Enter your email and we will send you a one-time code. No password needed.
-          </p>
-          <form onSubmit={onSendCode} className="flex flex-col gap-4" noValidate>
-            <label htmlFor="email" className={LABEL}>
-              Email
-            </label>
-            <Input
-              ref={inputRef}
-              id="email"
-              type="email"
-              autoComplete="email"
-              inputMode="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              aria-invalid={error ? true : undefined}
-              aria-describedby={describedBy}
-            />
-            {error ? (
+      <Card className="sign-in-workspace">
+        <CardContent>
+          <h1 className="sign-in-title">Sign in</h1>
+          <form key="email" onSubmit={onSendCode} className="sign-in-form" noValidate>
+            <div className="sign-in-field">
+              <label htmlFor="email">Email</label>
+              <Input
+                ref={inputRef}
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                autoFocus={focusEmailOnReturn}
+                inputMode="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? "email-error" : undefined}
+              />
+            </div>
+            {error && (
               <p id="email-error" role="alert" className="text-sm text-loss-text">
                 {error}
               </p>
-            ) : (
-              empty && (
-                <p id="email-help" className="text-sm text-muted-foreground">
-                  Enter your email to get a code.
-                </p>
-              )
             )}
-            <Button type="submit" disabled={empty || requestCode.isPending}>
+            <Button size="lg" type="submit" disabled={empty || pending}>
               {requestCode.isPending ? "Sending…" : "Send code"}
             </Button>
           </form>
@@ -131,43 +142,51 @@ function SignInPage({ inputRef }: { inputRef?: Ref<HTMLInputElement> }) {
       ? errorMessage(requestCode.error, "code")
       : null;
   return (
-    <Card className="mx-auto my-10 w-full max-w-lg md:my-20">
-      <CardContent className="gap-6">
-        <h1 className="app-heading">Enter your code</h1>
-        <p className="wrap-anywhere text-muted-foreground">
+    <Card className="sign-in-workspace">
+      <CardContent>
+        <h1 className="sign-in-title">Enter your code</h1>
+        <p id="code-delivery" className="wrap-anywhere text-muted-foreground">
           We sent a code to {sentTo}. It expires in 10 minutes.
         </p>
-        <form onSubmit={onVerify} className="flex flex-col gap-4" noValidate>
-          <label htmlFor="code" className={LABEL}>
-            6-digit code
-          </label>
-          <Input
-            ref={inputRef}
-            id="code"
-            type="text"
-            autoComplete="one-time-code"
-            inputMode="numeric"
-            maxLength={6}
-            className="tabular-nums"
-            value={code}
-            onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))}
-            aria-invalid={error ? true : undefined}
-            aria-describedby={error ? "code-error" : undefined}
-          />
+        <form key="code" onSubmit={onVerify} className="sign-in-form" noValidate>
+          <div className="sign-in-field">
+            <label htmlFor="code">6-digit code</label>
+            <Input
+              ref={inputRef}
+              id="code"
+              name="code"
+              type="text"
+              autoComplete="one-time-code"
+              autoFocus
+              inputMode="numeric"
+              maxLength={6}
+              className="tabular-nums"
+              value={code}
+              onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))}
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? "code-error" : "code-delivery"}
+            />
+          </div>
           {error && (
             <p id="code-error" role="alert" className="text-sm text-loss-text">
               {error}
             </p>
           )}
-          <Button type="submit" disabled={code.length !== 6 || verifyCode.isPending}>
+          <Button size="lg" type="submit" disabled={code.length !== 6 || pending}>
             {verifyCode.isPending ? "Signing in…" : "Sign in"}
           </Button>
         </form>
         <div className="flex flex-wrap gap-2">
-          <Button variant="ghost" size="sm" onClick={onResend} disabled={requestCode.isPending}>
-            Send a new code
+          <Button type="button" variant="ghost" size="sm" onClick={onResend} disabled={pending}>
+            {requestCode.isPending ? "Sending…" : "Send a new code"}
           </Button>
-          <Button variant="ghost" size="sm" onClick={onChangeEmail}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onChangeEmail}
+            disabled={pending}
+          >
             Use a different email
           </Button>
         </div>
