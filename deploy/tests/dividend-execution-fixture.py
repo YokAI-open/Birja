@@ -630,19 +630,31 @@ async def browser_main(operation: str, email: str, symbol: str = "AMD") -> None:
             from app.services.corporate_action_rules import NormalizedAction
             from app.services.alpaca_actions import ActionBatch, ActionObservation
             from app.services.corporate_actions import persist_action_batch, apply_due_actions
+            from app.services.stock_sessions import build_sessions
 
             now = await owner.fetchval("SELECT clock_timestamp()")
+            exchange = await owner.fetchval(
+                "SELECT listing_exchange FROM stock_instruments WHERE coin_id=$1", cid
+            )
+            session = max(
+                (
+                    row
+                    for row in build_sessions(now, helper["admission"]("calendar"))
+                    if row.exchange == exchange and row.opens_at is not None and row.opens_at <= now
+                ),
+                key=lambda row: row.session_date,
+            )
             action = NormalizedAction(
                 provider_event_id=str(uuid.uuid4()),
                 coin_id=cid,
                 symbol=symbol,
                 event_type="forward_split",
-                process_date=now.date(),
+                process_date=session.session_date,
                 observed_at=now,
-                economic_at=now - timedelta(hours=1),
-                ex_date=now.date(),
-                record_date=now.date(),
-                payable_date=now.date(),
+                economic_at=session.opens_at,
+                ex_date=session.session_date,
+                record_date=session.session_date,
+                payable_date=session.session_date,
                 currency="USD",
                 new_rate=Decimal("1.5"),
                 old_rate=Decimal(1),

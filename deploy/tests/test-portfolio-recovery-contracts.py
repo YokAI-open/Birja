@@ -238,7 +238,7 @@ def catalog_cache_absent(stage, revision, canary):
 async def catalog_economics(mode, receipt_path):
     """Use the production services and restricted TLS roles on the owned clone."""
     from dataclasses import asdict, replace
-    from datetime import timedelta
+    from datetime import UTC, datetime, time, timedelta
     from decimal import Decimal
     from types import SimpleNamespace
     from urllib.parse import urlsplit, urlunsplit
@@ -373,7 +373,8 @@ async def catalog_economics(mode, receipt_path):
         async with owner_sessions.begin() as db:
             await db.execute(delete(StockDataAdmission).where(StockDataAdmission.product == 'calendar'))
             await db.execute(delete(StockSession))
-        market = await execution_market.__wrapped__(owner_sessions)
+        day = timedelta(days=1)
+        market = await execution_market.__wrapped__(owner_sessions, catalog_age=2 * day)
         # The shared trade fixture creates already-initialized legacy roots.
         # The archive also requires their owner initialization lineage.
         async with owner_sessions.begin() as db:
@@ -387,9 +388,17 @@ async def catalog_economics(mode, receipt_path):
                 ) SELECT count(*) FROM added
             '''))
             assert initialized == 3
-        day = timedelta(days=1)
         today, opens, end, now = (market[key] for key in ('session', 'opens', 'end', 'now'))
-        bounds = ((today, opens, end), (today + day, opens + day, end + day))
+        # A previous session's cash dividend is due even when the current UTC
+        # session date is still ahead of New York's payment date.
+        dividend_day = today - day
+        dividend_open = datetime.combine(dividend_day, time(14, 30), UTC)
+        dividend_origin = dividend_open - timedelta(minutes=5)
+        bounds = (
+            (dividend_day, dividend_open, dividend_open + timedelta(hours=6, minutes=30)),
+            (today, opens, end),
+            (today + day, opens + day, end + day),
+        )
         stock_sessions._calendar_bounds = lambda *args: bounds
         reviewed = evidence(now)
         reviewed = replace(
@@ -421,9 +430,11 @@ async def catalog_economics(mode, receipt_path):
         async with owner_sessions() as db:
             generation = await db.scalar(text('SELECT id FROM stock_catalog_generations WHERE is_active'))
         listing = await _listing(owner_sessions, generation, 'FQN')
-        grant = await _reviewed_grant(owner_sessions, listing, OTHER_ASSET, market['origin'])
-        binding = await _promote(owner_sessions, listing, grant, market['origin'])
-        case = SimpleNamespace(binding=binding, listing=listing, now=now, cutoff=opens)
+        grant = await _reviewed_grant(
+            owner_sessions, listing, OTHER_ASSET, dividend_origin, asset_valid_until=end,
+        )
+        binding = await _promote(owner_sessions, listing, grant, dividend_origin)
+        case = SimpleNamespace(binding=binding, listing=listing, now=now, cutoff=dividend_open)
         async with owner_sessions.begin() as db:
             await lock_catalog_action_scope(db)
             await acquire_stock_gate(db, binding.coin_id)
@@ -438,10 +449,11 @@ async def catalog_economics(mode, receipt_path):
                   (artifact,reference,reviewed_at,valid_until,fields,scope,is_fixture)
                 VALUES ('catalog_actions','Disposable action recovery review',:origin,:end,
                         CAST(:fields AS jsonb),CAST(:scope AS jsonb),true) RETURNING id
-            '''), {'origin': market['origin'], 'end': end, 'fields': json.dumps(ACTION_FIELDS),
+            '''), {'origin': dividend_origin, 'end': end, 'fields': json.dumps(ACTION_FIELDS),
                    'scope': json.dumps(scope)})
             values = market | {'c': binding.coin_id, 'catalog': binding.catalog_id,
-                               'listing': binding.listing_id, 'actions': grant}
+                               'listing': binding.listing_id, 'actions': grant,
+                               'origin': dividend_origin}
             for query in (
                 '''INSERT INTO stock_catalog_action_coverage
                    (coin_id,catalog_id,listing_id,admission_id,journal_origin,coverage_start,
@@ -468,6 +480,7 @@ async def catalog_economics(mode, receipt_path):
             result = await pay(work)
             assert result['outcome'] == outcome
             payments.append((work, result))
+        case.cutoff = opens
         split = _dividend(case, event_type='forward_split', rate=None, units='pre_split',
                           economic_at=opens, new_rate=Decimal(2), old_rate=Decimal(1))
         async with scheduler_sessions.begin() as db:

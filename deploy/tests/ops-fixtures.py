@@ -2180,7 +2180,7 @@ async def scenario_authority(db):
   'rest_symbols':sorted(CURATED_SYMBOLS),'all_us_replay_ingress':True,'replay_region':'us',
   'durable_accounting':True,'backup_restore':True,'retention_mode':'durable-accounting'}},
   allowed_fields=['provider_event_id','symbol','event_type','process_date'])
- calendar=ProductAdmission(product='calendar',**common,
+ calendar=ProductAdmission(product='calendar',**{**common,'reviewed_at':now},
   allowed_fields=['exchange','session_date','opens_at','closes_at'],
   calendar={'exchanges':['XNYS','XNAS'],'version':'exchange-calendars-4.13.2/official-2026',
    'sources':['https://www.nyse.com/trade/hours-calendars','https://www.nasdaq.com/market-activity/stock-market-holiday-schedule'],
