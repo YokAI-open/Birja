@@ -85,8 +85,8 @@ async function ticket(page: Page) {
   await link.click();
   await expect(page.getByLabel("Whole-share quantity")).toBeVisible();
   await expect(page.getByRole("button", { name: "Buy max" })).toBeEnabled();
-  const chooser = page.getByRole("combobox", { name: "Trading portfolio" });
-  await expect(chooser).toHaveCount(1);
+  const chooser = page.getByRole("combobox", { name: "Open portfolio", exact: true });
+  await expect(page.getByRole("combobox")).toHaveCount(1);
   await expect(chooser).toHaveValue(await portfolioId(page));
   const order = page.getByRole("region", { name: "Trade ticket" });
   await expect(order).toContainText("Cash available $10,000.00");

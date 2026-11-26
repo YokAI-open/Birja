@@ -454,7 +454,7 @@ async def browser_main(operation: str, email: str, symbol: str = "AMD") -> None:
         raise ValueError("Unknown browser evidence operation")
     if re.fullmatch(r"e2e-[a-z0-9-]+@example\.com", email) is None:
         raise ValueError("Requires disposable synthetic browser owner")
-    if symbol not in {"AMD", "MSFT", "NVDA"}:
+    if symbol not in {"AMD", "COST", "MSFT", "NVDA"}:
         raise ValueError("Unsupported browser evidence symbol")
     raw = urlsplit(os.environ["DATABASE_URL"])
     owner = await asyncpg.connect(urlunsplit(raw._replace(scheme="postgresql")))

@@ -101,7 +101,7 @@ test("Phase 25 crypto draft matches the reference and a quantity fill reconciles
   await signInNewUser(page);
   const id = await portfolioId(page);
   await page.goto(`/portfolios/${id}/trade/BTC`);
-  const chooser = page.getByRole("combobox", { name: "Trading portfolio" });
+  const chooser = page.getByRole("combobox", { name: "Open portfolio", exact: true });
   await expect(page.getByRole("combobox")).toHaveCount(1);
   await expect(chooser).toHaveValue(id);
   const portfolioName = await chooser.locator("option:checked").innerText();
@@ -112,7 +112,12 @@ test("Phase 25 crypto draft matches the reference and a quantity fill reconciles
   await expect(ticket).not.toContainText(portfolioName);
   await expect(preview).not.toContainText(portfolioName);
   await capturePhase25(page, info, "trade");
-  await testPhase25Reflow(page, chooser, ticket.getByRole("radio", { name: "Buy", exact: true }));
+  await testPhase25Reflow(
+    page,
+    chooser,
+    ticket.getByRole("radio", { name: "Buy", exact: true }),
+    ticket.getByText("Cash available $10,000.00", { exact: true }),
+  );
 
   const quantityMode = ticket.getByRole("button", { name: "Quantity", exact: true });
   await quantityMode.click();

@@ -96,9 +96,10 @@ test("Phase 25 History filters the server ledger before paging and resets on por
 }, info) => {
   test.setTimeout(180000);
   const email = await signInNewUser(page);
-  stockFixture("long-name", "MSFT");
-  evidence("bulk", email, "MSFT");
-  evidence("up", email, "MSFT");
+  // Keep batch prep separate from the retained mixed History journey's MSFT holdings.
+  stockFixture("long-name", "COST");
+  evidence("bulk", email, "COST");
+  evidence("up", email, "COST");
   const fill = await cryptoFill(page, "buy", "1");
   const id = await portfolioId(page);
   const endpoint = `/api/v2/portfolios/${id}/event-history`;
@@ -131,7 +132,12 @@ test("Phase 25 History filters the server ledger before paging and resets on por
   await capturePhase25(page, info, "history");
   const activityFilter = page.getByRole("combobox", { name: "Filter activity", exact: true });
   const assetFilter = page.getByRole("combobox", { name: "Filter assets", exact: true });
-  await testPhase25Reflow(page, activityFilter, assetFilter);
+  await testPhase25Reflow(
+    page,
+    activityFilter,
+    assetFilter,
+    activity(page).getByText("BTC", { exact: true }),
+  );
 
   await activityFilter.focus();
   await activityFilter.selectOption("buy");

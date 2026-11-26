@@ -71,7 +71,7 @@ test("Phase 25 email panel matches the reference and a generated code signs in a
   await capturePhase25(page, info, "sign-in");
 
   await emailField.fill("invalid-email");
-  await testPhase25Reflow(page, emailField, send);
+  await testPhase25Reflow(page, emailField, send, page.getByText("Email", { exact: true }));
   const requestCode = () =>
     page.waitForResponse(
       (response) =>

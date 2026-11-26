@@ -10,6 +10,7 @@ const anchors = {
   },
   history: {
     chooser: ".history-portfolio-picker select",
+    update: 'button[aria-label="Update history"]',
     filters: ".history-filters",
     firstEvent: ".history-event-summary",
   },
@@ -34,6 +35,13 @@ export async function capturePhase25(page: Page, info: TestInfo, surface: keyof 
         }),
       ),
     );
+    if (surface === "history") {
+      const { chooser, update } = layout;
+      if (!chooser || !update) throw new Error("Expected measured History toolbar controls");
+      expect(update.y).toBeCloseTo(chooser.y, 1);
+      expect(update.x - (chooser.x + chooser.width)).toBeCloseTo(8, 1);
+      expect(update.height).toBeCloseTo(44, 1);
+    }
     await page.screenshot({
       path: info.outputPath(`${surface}-${width}.png`),
       animations: "disabled",
@@ -45,11 +53,39 @@ export async function capturePhase25(page: Page, info: TestInfo, surface: keyof 
   }
 }
 
-export async function testPhase25Reflow(page: Page, first: Locator, next: Locator) {
+export async function testPhase25Reflow(page: Page, first: Locator, next: Locator, text: Locator) {
   await page.setViewportSize({ width: 320, height: 1000 });
-  const style = await page.addStyleTag({ content: "html { font-size: 200%; }" });
+  const fitsViewport = () =>
+    page.evaluate<boolean>("document.documentElement.scrollWidth <= innerWidth");
+  expect(await fitsViewport()).toBe(true);
+  const styledSizes = await page.evaluate<number[]>(`Array.from(document.querySelectorAll('body *'))
+    .filter(element => element instanceof HTMLElement && element.getClientRects().length && (
+      element.matches('input, select, textarea, button') ||
+      Array.from(element.childNodes).some(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim())
+    )).map((element, index) => {
+      element.setAttribute('data-phase25-font', String(index));
+      return parseFloat(getComputedStyle(element).fontSize);
+    })`);
+  const representatives = [first, next, text];
+  const sizes = await Promise.all(
+    representatives.map(async (locator) => {
+      const index = await locator.getAttribute("data-phase25-font");
+      if (index === null) throw new Error("Expected a visible text enlargement target");
+      return styledSizes[Number(index)];
+    }),
+  );
+  const style = await page.addStyleTag({
+    content: styledSizes
+      .map(
+        (size, index) => `[data-phase25-font="${index}"] { font-size: ${size * 2}px !important; }`,
+      )
+      .join("\n"),
+  });
   try {
-    expect(await page.evaluate("document.documentElement.scrollWidth <= innerWidth")).toBe(true);
+    expect(await fitsViewport()).toBe(true);
+    for (let index = 0; index < sizes.length; index++) {
+      await expect(representatives[index]).toHaveCSS("font-size", `${sizes[index] * 2}px`);
+    }
     await first.focus();
     await expect(first).toBeFocused();
     await page.keyboard.press("Tab");
@@ -57,6 +93,9 @@ export async function testPhase25Reflow(page: Page, first: Locator, next: Locato
     await expect(next).toBeInViewport();
   } finally {
     await style.evaluate((element) => element.remove());
+    await page.evaluate(`document.querySelectorAll('[data-phase25-font]').forEach(
+      element => element.removeAttribute('data-phase25-font')
+    )`);
   }
 }
 
