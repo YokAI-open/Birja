@@ -12,7 +12,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Literal
 
-from pydantic import AwareDatetime, Field, SecretStr, TypeAdapter
+from pydantic import AwareDatetime, Field, SecretStr, StrictBool, TypeAdapter
 from sqlalchemy import select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import SQLAlchemyError
@@ -114,6 +114,11 @@ class _ExactListingScope(CatalogModel):
     symbols_per_request: int = Field(default=1, ge=1, le=8)
 
 
+class _CatalogMarkScope(_ExactListingScope):
+    durable_derived_use: StrictBool = True
+    durable_derived_backup: StrictBool = True
+
+
 class _CatalogActionsScope(_ExactListingScope):
     all_us_replay_ingress: Literal[True]
     replay_region: Literal["us"]
@@ -125,6 +130,12 @@ class _CatalogActionsScope(_ExactListingScope):
     requests_per_minute: int = Field(ge=1, le=200)
     symbols_per_request: int = Field(ge=1, le=8)
     max_response_bytes: int = Field(ge=1, le=262144)
+
+
+_LISTING_SCOPES: dict[str, type[_ExactListingScope]] = {
+    "catalog_mark": _CatalogMarkScope,
+    "catalog_actions": _CatalogActionsScope,
+}
 
 
 @dataclass(frozen=True, slots=True, repr=False)
@@ -357,7 +368,7 @@ async def _check_asset_scope(db: AsyncSession, row: _Admission, now: datetime) -
 async def _check_listing_scope(
     db: AsyncSession, row: _Admission, generation: int, now: datetime
 ) -> None:
-    scope_type = _CatalogActionsScope if row.artifact == "catalog_actions" else _ExactListingScope
+    scope_type = _LISTING_SCOPES.get(row.artifact, _ExactListingScope)
     scope = scope_type.model_validate(row.scope)
     _check_account(scope.account, scope.server)
     catalog_id, listing_id = int(scope.catalog_id), int(scope.listing_id)

@@ -22,7 +22,7 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Literal
 
-from pydantic import AwareDatetime, Field, TypeAdapter, ValidationError
+from pydantic import AwareDatetime, Field, StrictBool, TypeAdapter, ValidationError
 from sqlalchemy import false, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -100,6 +100,11 @@ class _TradingLimits(CatalogModel):
     symbols_per_request: int = Field(ge=1, le=8)
 
 
+class _MarkLimits(_TradingLimits):
+    durable_derived_use: StrictBool = True
+    durable_derived_backup: StrictBool = True
+
+
 class _ActionPolicy(CatalogModel):
     all_us_replay_ingress: Literal[True]
     replay_region: Literal["us"]
@@ -132,7 +137,7 @@ class _Scope(CatalogModel):
     halt: _Evidence
     actions: _Evidence
     execution_limits: _TradingLimits
-    mark_limits: _TradingLimits
+    mark_limits: _MarkLimits
     halt_limits: _TradingLimits
     action_policy: _ActionPolicy
     replace_bulk_grants: bool = False
@@ -678,7 +683,7 @@ async def _apply_candidate(
     common_scope = _finance_identity(listing, scope, asset)
     specifications = (
         ("catalog_execution", scope.execution, scope.execution_limits.model_dump()),
-        ("catalog_mark", scope.mark, scope.mark_limits.model_dump()),
+        ("catalog_mark", scope.mark, scope.mark_limits.model_dump(exclude_unset=True)),
         ("catalog_halt", scope.halt, scope.halt_limits.model_dump()),
         (
             "catalog_actions",

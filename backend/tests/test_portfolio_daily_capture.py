@@ -1,40 +1,43 @@
 """Durable valuations against the isolated PostgreSQL runtime roles."""
 
 import asyncio
+import hashlib
+import json
+from dataclasses import asdict, replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import text, update
+from pydantic import ValidationError
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.config import SchedulerSettings
 from app.services.portfolio import load_portfolio_snapshots
 from app.services.portfolio_daily_values import capture_portfolio_daily_value
 from app.tasks import portfolio_daily_values as daily_task
+from app.tasks import stock_catalog_import
 from app.tasks.scheduler import CycleResult
+from app.tasks.stock_catalog_enroll import _execute_batch, _inputs
 from tests.helpers import coin_id, put_price
 from tests.portfolio_fixtures import close_empty_test_root, seed_portfolio_world
 from tests.stock_action_fixtures import synthetic_owned_portfolio
 from tests.stock_trade_fixtures import ownership, status_case, stock_trade_case
 from tests.test_migrations import install_current_test_grants, run_test_migration
 from tests.test_portfolio_daily_schema import authorize_dev, run_migration, scratch_database
-from tests.test_stock_catalog_valuation import (
-    catalog_book,
-    finance_0025,
-    finance_0026,
-    financial_market,
-)
+from tests.test_stock_catalog_enroll import ACCOUNT, SERVER, _files, _private
+from tests.test_stock_catalog_finance_migration import finance_0025
+from tests.test_stock_catalog_promotion import finance_0026
+from tests.test_stock_catalog_publish import NOW, _manifest, _publish, _rights
+from tests.test_stock_sessions import evidence
 from tests.test_stock_trading_service import trade_order
 
 __all__ = [
     "scratch_database",
-    "catalog_book",
     "finance_0025",
     "finance_0026",
-    "financial_market",
     "ownership",
     "status_case",
     "stock_trade_case",
@@ -234,49 +237,211 @@ async def test_featured_and_crypto_daily_value_matches_current_statement(
     "scope", ["permitted", "derived_restricted", "backup_restricted", "revoked"]
 )
 async def test_catalog_daily_aggregate_respects_current_mark_and_durable_rights(
-    catalog_book, engine, scope
+    finance_0026, engine, settings, scope, tmp_path, monkeypatch
 ):
     from app.models.corporate_action import StockActionState
-    from app.models.stock_catalog import StockCatalogAdmission
+    from app.models.stock import StockDataAdmission, StockSession
+    from app.models.stock_catalog import StockCatalogAdmission, StockCatalogListing
     from app.models.stock_catalog_finance import (
         StockCatalogActionCoverage,
         StockCatalogFinancialQuote,
+        StockCatalogInstrument,
     )
+    from app.models.trade import Holding
+    from app.services.stock_sessions import build_sessions
 
-    market, settings = catalog_book
+    monkeypatch.setenv("STOCK_DATA_ACCOUNT", ACCOUNT)
+    monkeypatch.setenv("STOCK_DATA_SERVER", SERVER)
+    monkeypatch.setenv("ALPACA_ASSET_ENVIRONMENT", "paper")
     await asyncio.to_thread(run_test_migration, "0028")
     await install_current_test_grants()
-    bound = market.instruments[0]
-    at = market.now.replace(hour=22, minute=0)
+    at = NOW.replace(hour=22, minute=0)
     deadline = at + timedelta(hours=1)
-    first, owner = market.world.first, market.world.owner
-    # Leases are synthetic and span the daily observation after the real session
-    # closes. The current mark still comes through the recorded authority checks.
-    async with market.factory.begin() as db:
-        quote = await db.get(StockCatalogFinancialQuote, bound.coin_id)
-        mark = await db.get(StockCatalogAdmission, quote.mark_admission_id)
-        quote.valid_until = mark.valid_until = deadline
-        if scope == "derived_restricted":
-            mark.scope = {**mark.scope, "durable_derived_use": False}
-        elif scope == "backup_restricted":
-            mark.scope = {**mark.scope, "durable_derived_backup": False}
-        elif scope == "revoked":
-            mark.revoked_at = at
-        state = await db.get(StockActionState, bound.coin_id)
-        actions = await db.get(StockCatalogAdmission, state.admission_generation)
-        state.valid_until = actions.valid_until = deadline
-        await db.execute(
-            update(StockCatalogActionCoverage)
-            .where(StockCatalogActionCoverage.coin_id == bound.coin_id)
-            .values(valid_until=deadline)
+    rights = _rights()
+    async with finance_0026.begin() as db:
+        db.add_all(
+            StockCatalogAdmission(**right.model_dump(), scope={}, is_fixture=False)
+            for right in rights
         )
+    publication = await _publish(finance_0026, _manifest(rights=rights), None)
+    packet, files = _files(tmp_path, publication.generation_id, publication.digest)
+    for product in ("assets", "units", "execution", "mark", "halt", "actions"):
+        packet[product]["valid_until"] = deadline.isoformat()
+    if scope == "derived_restricted":
+        packet["mark_limits"] = {**packet["mark_limits"], "durable_derived_use": False}
+    _private(files[0], json.dumps(packet).encode())
+    inputs = _inputs(*files)
+    async with finance_0026.begin() as db:
+        reviewed = await _execute_batch(db, inputs, now=NOW, after=0, limit=100)
+        applied = await _execute_batch(
+            db, inputs, now=NOW, after=0, limit=100, expected_sha=reviewed["batch_sha256"]
+        )
+        assert applied["outcomes"] == {"enroll": 2}
+        listing = await db.scalar(
+            select(StockCatalogListing).where(StockCatalogListing.ticker == "FQA")
+        )
+        bound = await db.get(StockCatalogInstrument, listing.security_id)
+        grants = {
+            grant.artifact: grant
+            for grant in await db.scalars(
+                select(StockCatalogAdmission).where(
+                    StockCatalogAdmission.scope.contains({"listing_id": str(listing.id)})
+                )
+            )
+        }
+        mark, actions = grants["catalog_mark"], grants["catalog_actions"]
+    assert mark.scope == {
+        **packet["mark_limits"],
+        "account": ACCOUNT,
+        "server": SERVER,
+        "catalog_id": str(bound.catalog_id),
+        "listing_id": str(listing.id),
+        "provider_asset_id": listing.provider_asset_id,
+        "feed": "iex",
+    }
+
+    if scope in {"backup_restricted", "revoked"}:
+
+        class ReviewClock(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return NOW + timedelta(minutes=1)
+
+        monkeypatch.setattr(stock_catalog_import, "datetime", ReviewClock)
+        async with engine.begin() as conn:
+            await conn.execute(text("ALTER SCHEMA public OWNER TO pg_database_owner"))
+        exact_scope = {**mark.scope, "durable_derived_backup": False}
+        exact_packet = tmp_path / "exact-mark.json"
+        row = {
+            "artifact": "catalog_mark",
+            "reference": "Synthetic reviewed closed market mark",
+            "reviewed_at": mark.reviewed_at.isoformat(),
+            "valid_until": deadline.isoformat(),
+            "fields": mark.fields,
+            "scope": exact_scope,
+        }
+        args = ["admit", str(exact_packet), "--expect-generation", str(publication.generation_id)]
+        migrator = finance_0026.kw["bind"]
+        if scope == "backup_restricted":
+            for invalid in ("false", None, 0):
+                raw = json.dumps(
+                    {
+                        "version": 1,
+                        "admissions": [
+                            {**row, "scope": {**exact_scope, "durable_derived_backup": invalid}}
+                        ],
+                        "revoke_ids": [mark.id],
+                    }
+                )
+                _private(exact_packet, raw.encode())
+                with pytest.raises(ValidationError, match="durable_derived_backup"):
+                    await stock_catalog_import._admit(migrator, stock_catalog_import._args(args))
+            forbidden = {
+                **row,
+                "artifact": "catalog_execution",
+                "fields": stock_catalog_import._FINANCIAL_FIELDS["catalog_execution"],
+            }
+            _private(exact_packet, json.dumps({"version": 1, "admissions": [forbidden]}).encode())
+            with pytest.raises(ValidationError, match="durable_derived_backup"):
+                await stock_catalog_import._admit(migrator, stock_catalog_import._args(args))
+        raw = json.dumps({"version": 1, "admissions": [row], "revoke_ids": [mark.id]})
+        _private(exact_packet, raw.encode())
+        review = await stock_catalog_import._admit(migrator, stock_catalog_import._args(args))
+        digest = hashlib.sha256(raw.encode()).hexdigest()
+        assert review["packet_sha256"] == digest
+        replacement = await stock_catalog_import._admit(
+            migrator,
+            stock_catalog_import._args(
+                [
+                    *args,
+                    "--apply",
+                    "--expected-packet-sha",
+                    digest,
+                ]
+            ),
+        )
+        async with finance_0026() as db:
+            new_mark = await db.get(StockCatalogAdmission, int(replacement["admission_ids"][0]))
+            assert new_mark.scope == exact_scope
+        if scope == "backup_restricted":
+            mark = new_mark
+
+    # Synthetic prices and action completeness let the actual reviewed mark apply
+    # after the exchange closes. Quote evidence references the grant writer's ID.
+    observed = at - timedelta(hours=1, minutes=1)
+    calendar = evidence(observed)
+    calendar = replace(calendar, scope={**calendar.scope, "account": ACCOUNT, "server": SERVER})
+    sessions = build_sessions(observed, calendar, account=ACCOUNT, server=SERVER)
+    session = next(
+        row for row in sessions if row.exchange == "NASDAQ" and row.session_date == at.date()
+    )
+    async with finance_0026.begin() as db:
+        world = await seed_portfolio_world(await db.connection())
+        first, owner = world.first, world.owner
+        db.add(StockDataAdmission(**asdict(calendar)))
+        db.add_all(StockSession(**asdict(row)) for row in sessions)
+        db.add(
+            Holding(
+                coin_id=bound.coin_id,
+                portfolio_id=first,
+                user_id=owner,
+                quantity=Decimal(2),
+                cost_basis=Decimal("198.50"),
+            )
+        )
+        db.add(
+            StockCatalogFinancialQuote(
+                coin_id=bound.coin_id,
+                catalog_id=bound.catalog_id,
+                listing_id=listing.id,
+                provider_asset_id=listing.provider_asset_id,
+                provider_admission_id=listing.provider_admission_id,
+                mark_admission_id=mark.id,
+                bid=Decimal(101),
+                ask=Decimal(103),
+                unit_epoch=0,
+                event_at=observed,
+                collected_at=observed,
+                observed_at=observed,
+                session_date=session.session_date,
+                opens_at=session.opens_at,
+                closes_at=session.closes_at,
+                calendar_generation=session.calendar_admission_generation,
+                valid_until=deadline,
+            )
+        )
+        state = await db.get(StockActionState, bound.coin_id)
+        state.health, state.checked_at, state.valid_until = "current", observed, deadline
+        state.journal_start_at = state.complete_from = state.coverage_start = bound.promoted_at
+        state.covered_until, state.admission_generation = observed, actions.id
+        db.add(
+            StockCatalogActionCoverage(
+                coin_id=bound.coin_id,
+                catalog_id=bound.catalog_id,
+                listing_id=listing.id,
+                admission_id=actions.id,
+                journal_origin=bound.promoted_at,
+                coverage_start=bound.promoted_at,
+                covered_until=observed,
+                observed_at=observed,
+                valid_until=deadline,
+            )
+        )
+        await db.execute(
+            text("INSERT INTO prices(coin_id,mid,as_of,source) VALUES (:coin,100,:at,'fake')"),
+            {"coin": world.crypto, "at": observed},
+        )
+    scope_settings = {"stock_data_account": ACCOUNT, "stock_data_server": SERVER}
+    settings = settings.model_copy(update=scope_settings)
     factory = async_sessionmaker(engine)
     async with factory.begin() as db:
         await db.execute(text("SET LOCAL ROLE birja_app"))
         (current,) = await load_portfolio_snapshots(
             db, owner_id=owner, portfolio_ids=[first], settings=settings, now=at
         )
-    assert current.total_value == (None if scope == "revoked" else Decimal("1448.56"))
+    assert current.total_value == (None if scope == "revoked" else Decimal("1448.56")), [
+        (holding.symbol, holding.stock_mark) for holding in current.holdings
+    ]
     async with factory.begin() as db:
         await db.execute(text("SET LOCAL ROLE birja_scheduler"))
         assert await capture_portfolio_daily_value(
@@ -284,7 +449,7 @@ async def test_catalog_daily_aggregate_respects_current_mark_and_durable_rights(
             owner_id=owner,
             portfolio_id=first,
             expected_day=at.date(),
-            settings=market.settings,
+            settings=SchedulerSettings(**scope_settings),
             clock=lambda: at,
         )
     rows = await readings(factory)
