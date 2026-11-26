@@ -4,15 +4,15 @@ milestone: v1.5
 milestone_name: Market Charts and Workspace Redesign
 current_phase: 25
 status: executing
-last_updated: "2026-11-26T19:36:18Z"
-last_activity: 2026-11-26 -- Phase 25 History API, sign-in and recovery CI timing verified
+last_updated: "2026-11-26T19:51:12Z"
+last_activity: 2026-11-26 -- Phase 25 trade tickets and filtered History UI verified
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 22
-  completed_plans: 18
+  completed_plans: 20
   percent: 50
-stopped_at: Phase 25 (3/7) — Executing wave 2
+stopped_at: Phase 25 (5/7) — Executing wave 3
 ---
 
 # Project State
@@ -29,9 +29,9 @@ Current focus: Execute Phase 25 trade, History, sign-in and integrated acceptanc
 ## Current Position
 
 Phase: 25 of 25 (Finish the trading flows and verify the integrated app)
-Plan: 3 of 7 executed
-Status: Executing wave 2
-Last activity: 2026-11-26 -- Phase 25 History API, sign-in and recovery CI timing verified
+Plan: 5 of 7 executed
+Status: Executing wave 3
+Last activity: 2026-11-26 -- Phase 25 trade tickets and filtered History UI verified
 
 Seven independently checked plans cover all four FLOW requirements across
 four waves. Wave 1 covers the History API, sign-in and bounded CI timing.
