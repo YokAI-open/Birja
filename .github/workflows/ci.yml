@@ -214,7 +214,7 @@ jobs:
 
   ops:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 165
     steps:
       - uses: actions/checkout@v7
         with:
@@ -335,7 +335,25 @@ jobs:
           node-version-file: frontend/.nvmrc
       - name: Bounded current-source recovery preflight
         run: python3 deploy/tests/run-portfolio-validation.py --phase 21 --suite recovery-successor --preflight
+      - name: Wait for the archived recovery fixture clock window
+        timeout-minutes: 106
+        run: |
+          python3 - <<'PY'
+          from datetime import UTC, datetime, timedelta
+          from time import sleep
+
+          # The immutable historical test inputs derive the review date from
+          # an hour before the real database clock. Preserve their exact code.
+          now = datetime.now(UTC)
+          end = now + timedelta(minutes=45)
+          if now.hour == 0 or end.date() != now.date():
+              start = end.replace(hour=1, minute=0, second=0, microsecond=0)
+              print(f"Archived recovery fixtures will start at {start.isoformat()}", flush=True)
+              while (remaining := (start - datetime.now(UTC)).total_seconds()) > 0:
+                  sleep(min(remaining, 20))
+          PY
       - name: Serial real PostgreSQL recovery roles TLS and old-image rollback
+        timeout-minutes: 45
         run: sudo -- python3 deploy/tests/run-portfolio-validation.py --phase 21 --suite recovery-successor
       - name: Stage verified recovery tooling
         if: success()
