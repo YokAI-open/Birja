@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import SchedulerSettings, Settings
 from app.models.price import Coin
 from app.models.stock import StockDataAdmission, StockInstrument
-from app.models.stock_catalog import StockCatalogAdmission, StockCatalogGeneration
+from app.models.stock_catalog import StockCatalogGeneration
 from app.schemas.market_history import (
     CatalogHistoryInstrument,
     CryptoHistoryInstrument,
@@ -21,7 +21,7 @@ from app.schemas.market_history import (
 )
 from app.services.market_history import HistoryWindow, crypto_history_window, equity_history_window
 from app.services.stock_admission import ProductAdmission, evaluate_admission
-from app.services.stock_catalog_quotes import load_catalog_asset_mapping
+from app.services.stock_catalog_quotes import _live_source_expiry, load_catalog_asset_mapping
 from app.services.stock_catalog_search import get_catalog_listing
 from app.services.stock_sessions import build_sessions
 
@@ -188,28 +188,22 @@ async def _equity(
         mapping = await load_catalog_asset_mapping(
             db, listing, now, account=settings.stock_data_account, server=settings.stock_data_server
         )
-        generation = await db.get(
-            StockCatalogGeneration, listing.generation_id, populate_existing=True
-        )
-        if mapping is None or generation is None or not generation.is_active:
+        table = StockCatalogGeneration
+        generation = (
+            await db.execute(
+                select(table.mode, table.valid_until).where(
+                    table.id == listing.generation_id,
+                    table.is_active,
+                    table.valid_until > now,
+                )
+            )
+        ).one_or_none()
+        if mapping is None or generation is None:
             return None
         mapping_evidence, mapping_until = mapping
         deadline = min(deadline, mapping_until, generation.valid_until)
         if generation.mode == "live":
-            rights_until = await db.scalar(
-                select(StockCatalogAdmission.valid_until)
-                .where(
-                    StockCatalogAdmission.id.in_(
-                        (
-                            listing.directory_admission_id,
-                            listing.name_admission_id,
-                            listing.classification_admission_id,
-                        )
-                    )
-                )
-                .order_by(StockCatalogAdmission.valid_until)
-                .limit(1)
-            )
+            rights_until = await _live_source_expiry(db, listing, now)
             if rights_until is None:
                 return None
             deadline = min(deadline, rights_until)

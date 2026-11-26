@@ -47,19 +47,13 @@ _RELEASE_LUA = (
 logger = logging.getLogger(__name__)
 
 
-async def reserve_account_attempt(
-    redis: Redis,
+def account_request_ceiling(
     settings: SchedulerSettings,
     evidence: dict[str, ProductAdmission],
-    *,
-    at: datetime | None = None,
-    cap: int | None = None,
-) -> bool:
+    now: datetime,
+) -> int:
     # Ignore denied/unrelated rows; an enable flag cannot make them authority.
-    now = at or datetime.now(UTC)
     limits = [settings.stock_account_requests_per_minute]
-    if cap is not None:
-        limits.append(cap)
     for product in ("quotes", "actions"):
         row = evidence.get(product)
         decision = evaluate_admission(
@@ -73,7 +67,20 @@ async def reserve_account_attempt(
         )
         if decision.allowed and row is not None:
             limits.append(int(row.quota["requests_per_minute"]))
-    limit = min(limits)
+    return min(limits)
+
+
+async def reserve_account_attempt(
+    redis: Redis,
+    settings: SchedulerSettings,
+    evidence: dict[str, ProductAdmission],
+    *,
+    at: datetime | None = None,
+    cap: int | None = None,
+) -> bool:
+    limit = account_request_ceiling(settings, evidence, at or datetime.now(UTC))
+    if cap is not None:
+        limit = min(limit, cap)
     key = ACCOUNT_WINDOW_PREFIX + sha256(settings.stock_data_account.encode()).hexdigest()
     return bool(await redis.eval(_ACCOUNT_LUA, 1, key, limit, secrets.token_hex(16)) == 1)
 
