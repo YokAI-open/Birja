@@ -35,6 +35,7 @@ SUCCESSOR_STAGES = ("image-transition", "retained-roundtrip", "current0027-cold"
                     "roles", "tls-upgraded", "tls-fresh", "selected-rollback")
 SUCCESSOR_PROFILE = "deploy-recovery-v8"
 DAILY_VALUE_STAGES = (*SUCCESSOR_STAGES[:2], "current0028-cold", *SUCCESSOR_STAGES[3:])
+DAILY_VALUE_PREDECESSOR_BINDING = "portfolio0027-image-binding.json"
 SUCCESSORS = {
     21: (SUCCESSOR_PROFILE, 7, "0027", SUCCESSOR_STAGES),
     24: ("deploy-recovery-v9", 8, "0028", DAILY_VALUE_STAGES),
@@ -564,7 +565,7 @@ def successor_recovery_operations(ops, archive, expected, *, phase=21):
         "current" + revision + "-cold": lambda: catalog(
             "cold", requires=(f"cold_encrypted_{revision}_exact=true fresh_restore_server=true",
                               *(("daily_value_upgrade_empty=true", "daily_value_capture_exact=true",
-                                 "daily_value_owner_reads_exact=true") if phase == 24 else ())),
+                                 "daily_value_restored_owner_reads_exact=true") if phase == 24 else ())),
             authority=True,
         ),
         "roles": roles,
@@ -656,6 +657,11 @@ def execute_recovery(*, phase=14, suite="recovery"):
             execute_stages(selected, guard, stages=stages)
         else:
             status["authority"] = execute_current_stage(selected, guard)
+        if phase == 24:
+            predecessor_digest = image_records.get(DAILY_VALUE_PREDECESSOR_BINDING)
+            if predecessor_digest is None:
+                raise ValueError("authenticated 0027 predecessor image record required")
+            status["predecessor_image_sha256"] = predecessor_digest
         status["ok"] = True
         status["stages"] = dict.fromkeys(stages, "passed-authenticated")
         status["whole7"] = status["same_archive_final_ci"] = full
@@ -691,13 +697,16 @@ def verify_successor_receipt(archive, tested_source, *, phase=21):
     if receipt.get("current_image") != image:
         raise ValueError("receipt does not match the authenticated current successor image")
     if phase == 24:
-        record = archive.parent / "portfolio0027-image-binding.json"
+        record = archive.parent / DAILY_VALUE_PREDECESSOR_BINDING
         pinned = ops.portfolio_sources().PORTFOLIO0027
-        retained_image = json.loads(ops.r.private(record).read_text())
+        record_data = ops.r.private(record).read_bytes()
+        retained_image = json.loads(record_data)
         require_successor_image(retained_image, {
             "tested_source": pinned["commit"], "app_tree": pinned["app_tree"],
             "context_sha256": pinned["archive_sha256"],
         })
+        if receipt.get("predecessor_image_sha256") != hashlib.sha256(record_data).hexdigest():
+            raise ValueError("receipt does not match the authenticated 0027 predecessor image")
     ops.r.bundle_verify(archive, expected, required_profile=profile)
     authenticate(ops, archive, expected, campaign_sources(ops, successor=True, phase=phase),
                  successor_identity=identity, phase=phase)

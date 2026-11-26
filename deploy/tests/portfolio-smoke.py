@@ -1282,7 +1282,8 @@ async def daily_value_fixture(mode):
             await seed_capture()
             print("daily_value_capture_exact=true")
         await verify_reads()
-        print("daily_value_owner_reads_exact=true")
+        if mode == "read":
+            print("daily_value_restored_owner_reads_exact=true")
     finally:
         for engine in (app_db, scheduler_db, owner_db):
             await engine.dispose()
