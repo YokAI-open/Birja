@@ -147,6 +147,37 @@ it("requires preview and explicit confirmation, then focuses the immutable histo
   await user.click(screen.getByRole("button", { name: "Trade again" }));
   expect(screen.getByLabelText("Whole-share quantity")).toHaveValue("");
 });
+it("shows the chosen portfolio's actual cash and shares for buys and sells", async () => {
+  const context = { ...contextFixture(), held_quantity: "9", cash: "2500", buy_max_quantity: "24" };
+  const { user } = setup({ context: () => Response.json(context) });
+  const ticket = within(await screen.findByRole("region", { name: "Trade ticket" }));
+  expect(await ticket.findByText("Cash available $2,500.00")).toBeVisible();
+  expect(ticket.getByText("Shares owned 9")).toBeVisible();
+
+  await user.click(ticket.getByRole("radio", { name: "Sell" }));
+  expect(ticket.getByText("Cash available $2,500.00")).toBeVisible();
+  expect(ticket.getByText("Shares owned 9")).toBeVisible();
+  await user.click(ticket.getByRole("button", { name: "Sell all" }));
+  expect(ticket.getByRole("textbox", { name: "Whole-share quantity" })).toHaveValue("9");
+});
+
+it("explains a reported halt and leaves new preview and confirmation disabled", async () => {
+  const context = {
+    ...contextFixture(),
+    execution_enabled: false,
+    execution_reason: "halted",
+    buy_max_quantity: "0",
+    valid_until: null,
+    quote: null,
+  };
+  const { user, calls } = setup({ context: () => Response.json(context) });
+  expect(await screen.findByText("Trading halted. New orders are unavailable.")).toBeVisible();
+  await user.type(screen.getByRole("textbox", { name: "Whole-share quantity" }), "3{Enter}");
+  expect(screen.getByRole("button", { name: "Preview trade" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Confirm buy" })).toBeDisabled();
+  expect(calls.some((call) => call.path.endsWith("/stock-trades/quote"))).toBe(false);
+});
+
 it("discloses the coverage of a current exchange halt report", async () => {
   const c = contextFixture();
   c.status = {

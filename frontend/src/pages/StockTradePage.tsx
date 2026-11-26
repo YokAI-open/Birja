@@ -13,6 +13,7 @@ import { MarketOpening } from "@/components/MarketOpening";
 import { StockDate, StockFigure, StockTradeReceipt } from "@/components/StockTradeReceipt";
 import { formatUnitPrice, formatUsd } from "@/lib/money";
 import { signedUsd } from "@/lib/financialDisplay";
+import "./tradeWorkspace.css";
 const reasons: Record<StockRefusal, string> = {
   market_closed: "Market closed.",
   halted: "Trading halted. New orders are unavailable.",
@@ -68,24 +69,16 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
     : c && c.execution_reason !== "available"
       ? reasons[c.execution_reason]
       : null;
-  const message =
-    t.phase === "filled"
-      ? "Order filled."
-      : t.phase === "unknown"
-        ? "We couldn't confirm the result. Check this order before placing another."
-        : t.phase === "submitting"
-          ? "Checking order result…"
-          : t.replacement
-            ? "Price updated. Review the changes before confirming again."
-            : t.interrupted && !marketClosed
-              ? "Trading became unavailable. Your quantity is saved here; get a fresh preview before confirming."
-              : (refusal ??
-                (t.phase === "preview"
-                  ? "Preview ready. Review before confirming."
-                  : "Enter a quantity to preview this trade."));
+  const marketStatus =
+    refusal ??
+    (t.interrupted
+      ? "Trading became unavailable. Your quantity is saved here; get a fresh preview before confirming."
+      : null);
   const quote = t.quote;
   const lastQuote = marketClosed ? cataloguedStock?.quote : null;
   const visible = quote ?? c?.quote;
+  const company = c?.company_name ?? cataloguedStock?.company_name;
+  const cash = c?.cash ?? portfolio?.cash;
   const requiredAttribution = stocks?.attribution.required_text;
   const noShortcut =
     !c?.execution_enabled ||
@@ -94,95 +87,83 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
       : /^0(?:\.0+)?$/.test(c.held_quantity));
   if (!target.isCurrent()) return null;
   return (
-    <div className="app-page flex flex-col gap-7 text-base md:gap-9">
-      <header>
-        <h1 className="app-heading wrap-anywhere">Trade {t.symbol}</h1>
+    <div className="trade-workspace">
+      <header className="trade-workspace-heading">
+        <h1>Trade {t.symbol}</h1>
+        {company && <p>{company}</p>}
       </header>
-      <p
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-        className={
-          refusal || t.interrupted || t.phase === "unknown"
-            ? "rounded-control bg-warn-soft p-4 text-warn-text"
-            : "sr-only"
-        }
-      >
-        {message}
-        {message === reasons.market_closed && (
-          <>
-            {" "}
-            <MarketOpening nextOpen={nextOpen} now={now} />
-          </>
-        )}
-      </p>
-      <div className="grid min-w-0 gap-6 lg:grid-cols-12 lg:gap-8">
-        <Card className="min-w-0 lg:col-span-7 lg:self-start">
-          <CardContent>
-            {c ? (
-              <>
-                <h2 className="text-2xl leading-tight font-semibold wrap-anywhere">
-                  {c.company_name}
-                </h2>
-                <p>
-                  {c.symbol} · {c.listing_exchange} · USD
+      <div className="trade-workspace-grid">
+        <Card role="region" aria-label="Trade ticket" className="trade-workspace-ticket">
+          <CardContent className="trade-workspace-content">
+            <div className="trade-workspace-market">
+              {t.contextLoading && !company && (
+                <div aria-busy="true" aria-label="Loading stock">
+                  <div className="h-7 rounded-control bg-muted" />
+                </div>
+              )}
+              {t.contextError && !marketClosed && (
+                <p role="alert">
+                  {stocks?.admission.state === "unavailable" && cataloguedStock
+                    ? "Stock data is paused."
+                    : "Couldn't load this stock."}
                 </p>
-              </>
-            ) : t.contextLoading ? (
-              <div aria-busy="true" aria-label="Loading stock">
-                <div className="h-7 rounded-control bg-muted" />
-              </div>
-            ) : null}
-            {t.contextError && !marketClosed && (
-              <p role="alert">
-                {stocks?.admission.state === "unavailable" && cataloguedStock
-                  ? "Stock data is paused."
-                  : "Couldn't load this stock."}
-              </p>
-            )}
-            {lastQuote && (
-              <div>
-                <p className="text-2xl font-semibold tabular-nums">
-                  {formatUnitPrice(lastQuote.mid)}
+              )}
+              {lastQuote && (
+                <div>
+                  <p className="trade-workspace-price">{formatUnitPrice(lastQuote.mid)}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Last verified IEX midpoint · <StockDate value={lastQuote.event_at} />
+                  </p>
+                </div>
+              )}
+              {!marketClosed && visible && (
+                <>
+                  <div className="grid min-w-0 grid-cols-2 gap-3">
+                    {(["bid", "ask"] as const).map((side) => {
+                      const selected = side === (t.side === "buy" ? "ask" : "bid");
+                      return (
+                        <div
+                          key={side}
+                          className={`min-w-0 rounded-control border p-3 ${selected ? "border-input bg-muted" : "border-border"}`}
+                        >
+                          <p className="text-sm text-muted-foreground">IEX {side}</p>
+                          <p className="trade-workspace-price">{formatUnitPrice(visible[side])}</p>
+                          {selected && (
+                            <p className="text-sm text-muted-foreground">
+                              {t.side === "buy" ? "Buy price" : "Sell price"}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Source quote: <StockDate value={visible.event_at} />
+                  </p>
+                </>
+              )}
+              {marketClosed ? (
+                <p role="status">
+                  <span>{reasons.market_closed}</span>{" "}
+                  <MarketOpening nextOpen={nextOpen} now={now} />
                 </p>
-                <p className="text-sm text-muted-foreground">
-                  Last verified IEX midpoint · <StockDate value={lastQuote.event_at} />
-                </p>
-              </div>
-            )}
-            {!marketClosed && (visible || c) && (
-              <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-                {(["bid", "ask"] as const).map((side) => {
-                  const selected = side === (t.side === "buy" ? "ask" : "bid");
-                  return (
-                    <div
-                      key={side}
-                      className={`min-w-0 rounded-control border p-4 md:p-5 ${selected ? "border-ring bg-accent text-accent-foreground" : "border-border bg-card"}`}
-                    >
-                      <p className="font-medium">IEX {side}</p>
-                      <p className="text-[24px] leading-7 wrap-anywhere tabular-nums">
-                        {visible ? formatUnitPrice(visible[side]) : "Unavailable"}
-                      </p>
-                      {selected && <p>{t.side === "buy" ? "Buy price" : "Sell price"}</p>}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            {visible && !marketClosed && (
-              <p className="text-[13px] leading-[18px]">
-                Source quote: <StockDate value={visible.event_at} />
-              </p>
-            )}
+              ) : (
+                marketStatus && (
+                  <p role="status" className="text-muted-foreground">
+                    {marketStatus}
+                  </p>
+                )
+              )}
+            </div>
             <form
-              className="flex min-w-0 flex-col gap-5 border-t border-border pt-5"
+              className="flex min-w-0 flex-col gap-4"
               onSubmit={(e) => {
                 e.preventDefault();
                 if (!marketClosed) void t.preview();
               }}
             >
               <fieldset disabled={locked} className="flex gap-3">
-                <legend className="mb-2 font-medium">Order side</legend>
+                <legend className="sr-only">Order side</legend>
                 {(["buy", "sell"] as const).map((side) => (
                   <label
                     key={side}
@@ -200,76 +181,56 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                   </label>
                 ))}
               </fieldset>
+              <div className="trade-workspace-balances">
+                {cash !== undefined && <p>Cash available {formatUsd(cash)}</p>}
+                {c && <p>Shares owned {c.held_quantity.split(".")[0]}</p>}
+              </div>
               <div className="flex flex-col gap-2">
                 <label htmlFor={id + "quantity"} className="font-medium">
                   Whole-share quantity
                 </label>
-                <Input
-                  id={id + "quantity"}
-                  ref={input}
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  value={t.quantity}
-                  disabled={locked}
-                  onChange={(e) => t.setQuantity(e.target.value)}
-                  aria-invalid={quantityError !== null}
-                  aria-describedby={
-                    id +
-                    "help" +
-                    (marketClosed ? "" : " " + id + "restriction") +
-                    (quantityError ? " " + id + "error" : "")
-                  }
-                />
-                <p id={id + "help"} className="text-[13px] leading-[18px] text-muted-foreground">
-                  Enter a whole number of shares.
-                </p>
+                <div className="relative">
+                  <Input
+                    id={id + "quantity"}
+                    className="min-h-13 pr-18 text-right tabular-nums"
+                    ref={input}
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    value={t.quantity}
+                    disabled={locked}
+                    onChange={(e) => t.setQuantity(e.target.value)}
+                    aria-invalid={quantityError !== null}
+                    aria-describedby={quantityError ? id + "error" : undefined}
+                  />
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-muted-foreground"
+                  >
+                    Shares
+                  </span>
+                </div>
                 {quantityError && (
                   <p id={id + "error"} className="text-loss-text">
                     {quantityError}
                   </p>
                 )}
-                {t.side === "buy" && portfolio && (
-                  <p className="text-[13px] leading-[18px] text-muted-foreground">
-                    Cash available {formatUsd(portfolio.cash)}
-                  </p>
-                )}
               </div>
-              <Button
-                type="button"
-                variant="secondary"
-                className="min-h-11 self-start"
-                disabled={locked || noShortcut}
-                onClick={t.side === "buy" ? t.buyMax : t.sellAll}
-              >
-                {t.side === "buy" ? "Buy max" : "Sell all"}
-              </Button>
-              {c?.execution_enabled && noShortcut && (
-                <p>
-                  {t.side === "buy"
-                    ? "Not enough cash to buy one share at the current ask."
-                    : "You do not hold shares of this stock."}
-                </p>
-              )}
-              {!marketClosed && (
-                <p
-                  id={id + "restriction"}
-                  className="text-[13px] leading-[18px] text-muted-foreground"
-                >
-                  {refusal
-                    ? "Preview unavailable while trading is paused. Your quantity is only a draft."
-                    : "A preview does not place an order. Confirm it separately."}
-                </p>
-              )}
-              {c && (
-                <dl className="flex flex-col gap-2">
-                  <StockFigure label="Shares owned">{c.held_quantity.split(".")[0]}</StockFigure>
-                </dl>
-              )}
-              {!marketClosed && (
-                <Button type="submit" disabled={!t.canPreview} className="min-h-11 self-start">
-                  {t.phase === "loading_preview" ? "Loading preview" : "Preview trade"}
-                </Button>
+              {!marketClosed && !locked && (
+                <div className="flex flex-wrap gap-3">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="min-h-11"
+                    disabled={noShortcut}
+                    onClick={t.side === "buy" ? t.buyMax : t.sellAll}
+                  >
+                    {t.side === "buy" ? "Buy max" : "Sell all"}
+                  </Button>
+                  <Button type="submit" disabled={!t.canPreview} className="min-h-11">
+                    {t.phase === "loading_preview" ? "Loading preview" : "Preview trade"}
+                  </Button>
+                </div>
               )}
             </form>
             {c?.status.source === "nasdaq-rss" && !marketClosed && (
@@ -284,8 +245,8 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
             )}
           </CardContent>
         </Card>
-        <Card className="min-w-0 bg-muted lg:col-span-5 lg:self-start">
-          <CardContent>
+        <Card className="trade-workspace-preview">
+          <CardContent className="trade-workspace-content">
             {t.fill ? (
               <StockTradeReceipt fill={t.fill} target={target} onTradeAgain={t.tradeAgain} />
             ) : (
@@ -302,11 +263,14 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                     ))}
                   </div>
                 )}
-                {t.error && t.error !== "unknown" && t.error !== "market_closed" && (
-                  <p role="alert" className="rounded-control bg-warn-soft p-4 text-warn-text">
-                    {reasons[t.error]}
-                  </p>
-                )}
+                {t.error &&
+                  t.error !== "unknown" &&
+                  t.error !== "market_closed" &&
+                  reasons[t.error] !== marketStatus && (
+                    <p role="alert" className="rounded-control bg-warn-soft p-4 text-warn-text">
+                      {reasons[t.error]}
+                    </p>
+                  )}
                 {t.replacement && (
                   <section
                     aria-label="Price changes"
@@ -332,7 +296,11 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                     </dl>
                   </section>
                 )}
-                {quote ? (
+                {t.phase === "unknown" ? (
+                  <p role="status">
+                    We couldn&apos;t confirm the result. Check this order before placing another.
+                  </p>
+                ) : quote ? (
                   <dl className="flex flex-col gap-3">
                     <StockFigure label="Quantity">{quote.quantity.split(".")[0]}</StockFigure>
                     <StockFigure label="Execution price">
@@ -344,16 +312,12 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                       {signedUsd(quote.cash_delta)}
                     </StockFigure>
                   </dl>
-                ) : t.phase === "unknown" ? (
-                  <p>
-                    We couldn&apos;t confirm the result. Check this order before placing another.
-                  </p>
-                ) : !marketClosed ? (
+                ) : !marketClosed && t.phase !== "loading_preview" && t.phase !== "submitting" ? (
                   <p>Enter a quantity to preview this trade.</p>
                 ) : null}
                 {t.phase === "unknown" || t.phase === "submitting" ? (
                   <Button
-                    className="min-h-11"
+                    className="min-h-12"
                     disabled={t.phase === "submitting"}
                     onClick={() => void t.checkResult()}
                   >
@@ -361,7 +325,7 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                   </Button>
                 ) : (
                   <Button
-                    className="min-h-11"
+                    className="min-h-12"
                     disabled={marketClosed || !t.canConfirm}
                     onClick={() => void t.confirm()}
                   >
