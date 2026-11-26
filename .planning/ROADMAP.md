@@ -51,9 +51,9 @@
 3. Historical requests use qualified coverage and a measured, bounded free-tier fetch/cache policy. Market orders still use the existing current-quote path.
 4. The running app matches the approved Markets reference on ticker tiles, spacing, chart controls and action placement across four matched desktop and mobile captures. Real-data and attribution differences are recorded.
 
-**Plans:** 4 plans across 4 waves
+**Plans:** 1/4 plans complete across 4 waves
 
-- [ ] 23-01 — Qualify source candidates and define actual time-series data contracts.
+- [x] 23-01 — Qualify source candidates and define actual time-series data contracts.
 - [ ] 23-02 — Serve selected histories through bounded API and scheduler work.
 - [ ] 23-03 — Render charts and match the approved Markets layout.
 - [ ] 23-04 — Verify independent trading behavior and compare actual-app and ZIP captures.
@@ -93,7 +93,7 @@
 | Phase | Plans complete | Status |
 |---|---|---|
 | 22. Adopt the market workspace | 3/3 | Complete 2026-11-26 |
-| 23. Show historical market prices | 0/4 | Planned |
+| 23. Show historical market prices | 1/4 | Executing |
 | 24. Compare portfolio performance | 0/TBD | Unplanned |
 | 25. Finish the trading flows and verify the integrated app | 0/TBD | Unplanned |
 
