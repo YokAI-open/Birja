@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { writeFile } from "node:fs/promises";
 import { portfolioApi, portfolioId, signInNewUser } from "./helpers.js";
+import { capturePhase25, testPhase25Reflow } from "./phase25-review-capture.js";
 import { stockFixture } from "./stock-trade-fixtures.js";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
@@ -10,6 +11,9 @@ type Ledger = {
   cash: string;
   originals: Array<{ id: number; amount: string }>;
   decisions: Array<{ id: number; outcome: string; delta: string; desired: string | null }>;
+};
+type HistoryPage = {
+  items: Array<{ id: string; kind: string; asset_type: "crypto" | "stock" }>;
 };
 function evidence(operation: string, email: string, symbol = "AMD"): Ledger {
   expect(process.env.COMPOSE_PROJECT_NAME).toBe("birja-phase09-e2e-test");
@@ -40,6 +44,10 @@ const activity = (page: Page) =>
     name: "Account activity",
     exact: true,
   });
+const displayedEventIds = (page: Page) =>
+  activity(page)
+    .getByRole("listitem")
+    .evaluateAll((rows) => rows.map((row) => row.id.replace(/^history-\d+-\d+-/, "")));
 async function openEvent(page: Page, title: string) {
   const summary = activity(page).locator("summary").filter({ hasText: title }).first();
   await expect(summary).toBeVisible();
@@ -82,6 +90,108 @@ async function cryptoFill(page: Page, side: "buy" | "sell", amount: string) {
   }
   throw new Error("No actual crypto fill after bounded confirmations");
 }
+
+test("Phase 25 History filters the server ledger before paging and resets on portfolio switch", async ({
+  page,
+}, info) => {
+  test.setTimeout(180000);
+  const email = await signInNewUser(page);
+  stockFixture("long-name", "MSFT");
+  evidence("bulk", email, "MSFT");
+  evidence("up", email, "MSFT");
+  const fill = await cryptoFill(page, "buy", "1");
+  const id = await portfolioId(page);
+  const endpoint = `/api/v2/portfolios/${id}/event-history`;
+  const read = async (query = ""): Promise<HistoryPage> => {
+    const response = await page.request.get(`${endpoint}${query}`);
+    expect(response.ok()).toBe(true);
+    return response.json();
+  };
+  const first = await read();
+  expect(first.items).toHaveLength(25);
+  expect(first.items[0]).toMatchObject({ id: `trade:${fill.trade_id}`, asset_type: "crypto" });
+  const filtered = await read("?activity=dividend&asset=stock&limit=100");
+  expect(filtered.items).toHaveLength(29);
+  expect(filtered.items.every((item) => item.asset_type === "stock")).toBe(true);
+  expect(filtered.items.some((item) => !first.items.some((row) => row.id === item.id))).toBe(true);
+
+  await page.request.get("/api/v1/auth/csrf");
+  const csrf = (await page.context().cookies()).find((cookie) => cookie.name === "bj_csrf");
+  if (!csrf) throw new Error("Expected authenticated portfolio setup");
+  const created = await page.request.post("/api/v2/portfolios", {
+    headers: { "X-CSRF-Token": csrf.value, "Idempotency-Key": crypto.randomUUID() },
+    data: { name: "History filter reset", description: "" },
+  });
+  expect(created.status()).toBe(201);
+  const second = (await created.json()).id;
+
+  await page.goto(`/portfolios/${id}/history`);
+  await expect(activity(page).getByRole("listitem")).toHaveCount(25);
+  expect(await displayedEventIds(page)).toEqual(first.items.map((item) => item.id));
+  await capturePhase25(page, info, "history");
+  const activityFilter = page.getByRole("combobox", { name: "Filter activity", exact: true });
+  const assetFilter = page.getByRole("combobox", { name: "Filter assets", exact: true });
+  await testPhase25Reflow(page, activityFilter, assetFilter);
+
+  await activityFilter.focus();
+  await activityFilter.selectOption("buy");
+  await expect(activityFilter).toBeFocused();
+  await expect(activity(page).getByRole("listitem")).toHaveCount(1);
+  expect(await displayedEventIds(page)).toEqual([first.items[0].id]);
+  await assetFilter.selectOption("stock");
+  await expect(page.getByRole("heading", { name: "No matching activity" })).toBeVisible();
+
+  let failAppend = true;
+  await page.route(`**${endpoint}*`, (route) => {
+    const url = new URL(route.request().url());
+    if (
+      url.searchParams.get("activity") !== "dividend" ||
+      url.searchParams.get("asset") !== "stock"
+    ) {
+      return route.continue();
+    }
+    if (!url.searchParams.has("cursor")) {
+      // Use a real short first page to guarantee that the original is outside the loaded rows.
+      url.searchParams.set("limit", "1");
+      return route.continue({ url: url.href });
+    }
+    if (!failAppend) return route.continue();
+    return route.fulfill({ status: 503, json: { detail: "synthetic unavailable" } });
+  });
+  await activityFilter.selectOption("dividend");
+  await expect(activity(page).getByRole("listitem")).toHaveCount(1);
+  expect(await displayedEventIds(page)).toEqual([filtered.items[0].id]);
+  expect(filtered.items[0].kind).toBe("dividend_correction");
+  await openEvent(page, "Dividend correction ·");
+  const original = activity(page).getByRole("button", {
+    name: "View original dividend",
+    exact: true,
+  });
+  await original.focus();
+  await page.keyboard.press("Enter");
+  await expect(activity(page).getByRole("heading", { name: /Original dividend/ })).toBeFocused();
+  await activity(page).getByRole("button", { name: "Back to correction", exact: true }).click();
+  await expect(original).toBeFocused();
+
+  await page.getByRole("button", { name: "Load more", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("Your loaded events are still here");
+  const retry = page.getByRole("button", { name: "Try loading more", exact: true });
+  await expect(retry).toBeFocused();
+  expect(await displayedEventIds(page)).toEqual([filtered.items[0].id]);
+  failAppend = false;
+  await page.keyboard.press("Enter");
+  await expect(activity(page).getByRole("listitem")).toHaveCount(26);
+  await page.getByRole("button", { name: "Load more", exact: true }).click();
+  await expect(page.getByText("All events loaded.", { exact: true })).toBeFocused();
+  expect(await displayedEventIds(page)).toEqual(filtered.items.map((item) => item.id));
+
+  await page.getByRole("combobox", { name: "History portfolio", exact: true }).selectOption(second);
+  await expect(page).toHaveURL(`/portfolios/${second}/history`);
+  await expect(activityFilter).toHaveValue("all");
+  await expect(assetFilter).toHaveValue("all");
+  await expect(page.getByRole("heading", { name: "No activity yet" })).toBeVisible();
+});
+
 async function snapshot(page: Page, info: TestInfo, name: string) {
   let css = await page.evaluate<string>(
     "Array.from(document.styleSheets).flatMap(sheet=>Array.from(sheet.cssRules,rule=>rule.cssText)).join('\\n')",
