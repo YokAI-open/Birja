@@ -34,22 +34,31 @@ function EventCard({
   return (
     <li id={`${prefix}${item.id}`} tabIndex={-1} className="min-w-0 scroll-mt-4">
       {day && <h2 className="history-date-heading">{day}</h2>}
-      <details className="group rounded-card border border-border bg-card">
+      <details className="group history-event-row">
         <summary className="history-event-summary hover:bg-accent/50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring">
-          <span className="min-w-0 wrap-anywhere">
-            <span className="block font-semibold [&>span]:font-semibold">
-              <HistoryEventTitle item={item} />
-              {" · "}
-              <span>{item.symbol}</span>
+          <span className="history-event-identity">
+            <span className="history-asset-tile" data-asset={item.asset_type} aria-hidden="true">
+              {item.asset_type === "crypto" && item.symbol === "BTC" ? "₿" : item.symbol.charAt(0)}
             </span>
-            <time
-              className="block text-muted-foreground"
-              dateTime={item.recorded_at}
-              title={item.recorded_at}
-              aria-label={`${time}, UTC ${item.recorded_at}`}
-            >
-              {time}
-            </time>
+            <span className="min-w-0 wrap-anywhere">
+              <span className="block font-semibold [&>span]:font-semibold">
+                <HistoryEventTitle item={item} />
+                {" · "}
+                <span>{item.symbol}</span>
+              </span>
+              <span className="history-event-meta">
+                {item.name !== item.symbol && (
+                  <span className="history-event-name">{item.name} ·</span>
+                )}
+                <time
+                  dateTime={item.recorded_at}
+                  title={item.recorded_at}
+                  aria-label={`${time}, UTC ${item.recorded_at}`}
+                >
+                  {time}
+                </time>
+              </span>
+            </span>
           </span>
           <span className="min-w-0 text-right">
             <span className="sr-only">Cash change: </span>
@@ -215,7 +224,7 @@ function OwnedHistory({ target }: { target: PortfolioTarget }) {
             variant="secondary"
             aria-label={isFetching && !isFetchingNextPage ? "Updating history…" : "Update history"}
             title="Update history"
-            className="size-11 shrink-0 p-0 aria-disabled:opacity-40"
+            className="size-11 min-h-11 p-0 aria-disabled:opacity-40"
             aria-disabled={isFetching}
             onClick={refresh}
           >
@@ -317,7 +326,7 @@ function OwnedHistory({ target }: { target: PortfolioTarget }) {
             <ol
               key={`${filters.activity}-${filters.asset}`}
               aria-label="Account activity"
-              className="grid min-w-0 gap-3"
+              className="history-event-list min-w-0"
             >
               {items.map((item, index) => {
                 const day = dayFormat.format(new Date(item.recorded_at));

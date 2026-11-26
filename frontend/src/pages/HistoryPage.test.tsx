@@ -101,8 +101,9 @@ it("opens the original catalog issue in the owned portfolio from expanded Histor
   historyFetch(() => ok([item, stock]));
   const { user } = renderWithClient(<HistoryPage />);
   const label = await screen.findByText(stock.symbol);
+  const summary = label.closest("summary")!;
+  expect(within(summary).getByText(`${stock.name} ·`)).toBeVisible();
   await user.click(label);
-  expect(screen.getByText(stock.name, { exact: false })).toBeVisible();
   expect(
     screen.getByRole("link", { name: `View stock ticket for ${stock.symbol}` }),
   ).toHaveAttribute("href", "/portfolios/1/trade/catalog/9007199254740993");
@@ -225,6 +226,8 @@ it("keeps entry details collapsed until opened without a false end message", asy
     expect(cards).toHaveTextContent(text);
   }
   const summary = first!.querySelector("summary")!;
+  expect(within(summary).getByText("₿")).toHaveAttribute("aria-hidden", "true");
+  expect(within(summary).getByText("Bitcoin ·")).toBeVisible();
   expect(first!.querySelector("details")).not.toHaveAttribute("open");
   expect(within(first!).getByText("Quantity")).not.toBeVisible();
   await user.click(summary);
