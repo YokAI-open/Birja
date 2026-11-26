@@ -358,6 +358,8 @@ function catalogOk(body: unknown, status = 200) {
   });
 }
 
+const catalogDetails = () => within(screen.getByRole("region", { name: "Fixture Company" }));
+
 function stockFetch(
   search: (term: string, init: RequestInit) => Response | Promise<Response>,
   quote: (path: string, init: RequestInit) => Response | Promise<Response> = () => {
@@ -418,7 +420,8 @@ describe("MarketsPage stock catalog", () => {
     expect(request).not.toHaveBeenCalled();
     row.focus();
     await page.user.keyboard("{Enter}");
-    expect(await screen.findByText("$10.20")).toBeVisible();
+    expect(await catalogDetails().findByText("$10.20")).toBeVisible();
+    expect(within(row).getByText("$10.20")).toBeVisible();
     expect(screen.getByText(/IEX midpoint/)).toBeVisible();
     expect(screen.getByRole("link", { name: "View details FQA" })).toHaveAttribute(
       "href",
@@ -431,7 +434,7 @@ describe("MarketsPage stock catalog", () => {
 
     await page.user.click(screen.getByRole("button", { name: "Select second portfolio" }));
     expect(input).toHaveValue("F");
-    expect(screen.getByText("$10.20")).toBeVisible();
+    expect(catalogDetails().getByText("$10.20")).toBeVisible();
     expect(screen.getByRole("link", { name: "View details FQA" })).toHaveAttribute(
       "href",
       "/portfolios/51/trade/catalog/9007199254740993",
@@ -572,7 +575,7 @@ describe("MarketsPage stock catalog", () => {
     expect(opening).toBeVisible();
     expect(opening).toHaveAttribute("title", fullLocalTimestamp(openingAt));
     expect(screen.getByText(/Local opening time/)).toHaveTextContent(fullLocalTimestamp(openingAt));
-    const price = screen.getByText("$10.20");
+    const price = catalogDetails().getByText("$10.20");
     expect(price).toBeVisible();
     expect(price.querySelector("time.sr-only")).toHaveAttribute("datetime", expect.any(String));
     expect(screen.queryByText(/IEX midpoint/)).toBeNull();
@@ -628,7 +631,7 @@ describe("MarketsPage stock catalog", () => {
     });
     await act(async () => vi.advanceTimersByTimeAsync(300));
     fireEvent.click(await screen.findByRole("button", { name: /FQA/ }));
-    expect(await screen.findByText("$10.20")).toBeVisible();
+    expect(await catalogDetails().findByText("$10.20")).toBeVisible();
     expect(screen.getByRole("link", { name: "Trade FQA" })).toBeVisible();
     await act(async () => vi.advanceTimersByTimeAsync(5_000));
     expect(request).toHaveBeenCalledTimes(1);
@@ -650,7 +653,7 @@ describe("MarketsPage stock catalog", () => {
         }),
       ),
     );
-    expect(await screen.findByText("$10.20")).toBeVisible();
+    expect(await catalogDetails().findByText("$10.20")).toBeVisible();
     expect(screen.queryByText("Market closed")).toBeNull();
     expect(screen.getByRole("link", { name: "Trade FQA" })).toBeVisible();
   });
@@ -683,13 +686,97 @@ describe("MarketsPage stock catalog", () => {
       });
       await act(async () => vi.advanceTimersByTimeAsync(300));
       fireEvent.click(await screen.findByRole("button", { name: /FQA/ }));
-      expect(await screen.findByText("$10.20")).toBeVisible();
+      expect(await catalogDetails().findByText("$10.20")).toBeVisible();
       expect(request).toHaveBeenCalledTimes(1);
       await act(async () => vi.advanceTimersByTimeAsync(10_500));
       expect(request).toHaveBeenCalledTimes(2);
       await act(async () => vi.advanceTimersByTimeAsync(9_000));
       expect(request).toHaveBeenCalledTimes(3);
     },
+  );
+});
+
+it("derives the selected row change only from comparable history and leaves its current trade usable", async () => {
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      disconnect() {}
+    },
+  );
+  const sent: unknown[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string, init: RequestInit) => {
+      if (url === "/api/v1/auth/csrf") {
+        document.cookie = "bj_csrf=fixture-token";
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
+      if (url !== "/api/v2/market-history/query") return ok(payload());
+      const request = JSON.parse(String(init.body));
+      sent.push(request);
+      if (request.range !== "1W")
+        return Promise.resolve(catalogOk({ ...request, state: "unavailable", series: null }));
+      return Promise.resolve(
+        catalogOk({
+          ...request,
+          state: "ready",
+          series: {
+            source: "kraken",
+            currency: "USD",
+            time_basis: "utc",
+            adjustment: "raw",
+            interval_minutes: 60,
+            start_at: "2026-11-26T09:00:00Z",
+            end_at: "2026-11-26T11:00:00Z",
+            as_of: "2026-11-26T11:00:00Z",
+            expected_through_at: "2026-11-26T11:00:00Z",
+            timeliness: "on_time",
+            coverage: "complete",
+            day_change_pct: "2.26",
+            period_change_pct: "3.15",
+            points: [
+              {
+                starts_at: "2026-11-26T09:00:00Z",
+                ends_at: "2026-11-26T10:00:00Z",
+                close: "78000.50",
+                gap_before: null,
+              },
+              {
+                starts_at: "2026-11-26T10:00:00Z",
+                ends_at: "2026-11-26T11:00:00Z",
+                close: "80000.25",
+                gap_before: null,
+              },
+            ],
+          },
+        }),
+      );
+    }),
+  );
+  const app = renderWithClient(
+    <SignedIn>
+      <MarketsPage portfolioId="50" />
+    </SignedIn>,
+  );
+  await app.user.click(screen.getByRole("button", { name: "Crypto" }));
+  const list = within(await screen.findByRole("list", { name: "Crypto" }));
+  const details = within(screen.getByRole("region", { name: "Bitcoin" }));
+  expect(await details.findByText("+2.26%")).toBeVisible();
+  expect(
+    within(list.getByRole("button", { name: /Bitcoin BTC/ })).getByText("+2.26%"),
+  ).toBeVisible();
+  expect(
+    within(list.getByRole("button", { name: /Ethereum ETH/ })).queryByText("+2.26%"),
+  ).toBeNull();
+  expect(sent).toEqual([{ instrument: { kind: "crypto", symbol: "BTC" }, range: "1W" }]);
+  await app.user.click(details.getByRole("button", { name: "1M" }));
+  expect(await details.findByText("Couldn’t load price history")).toBeVisible();
+  expect(details.queryByText("+2.26%")).toBeNull();
+  expect(details.getByText("$81,042.35")).toBeVisible();
+  expect(details.getByRole("link", { name: "Trade BTC" })).toHaveAttribute(
+    "href",
+    "/portfolios/50/trade/BTC",
   );
 });
 

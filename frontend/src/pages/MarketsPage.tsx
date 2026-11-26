@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
+import { Search } from "lucide-react";
+import { MarketHistoryChange, MarketHistoryChart } from "@/components/MarketHistoryChart";
 import { MarketOpening } from "@/components/MarketOpening";
 import { PortfolioSwitcher } from "@/components/PortfolioSwitcher";
 import { ApiError } from "@/api/client";
+import type { HistoryInstrument, HistoryRange } from "@/api/marketHistory";
 import type { StockCatalogItem } from "@/api/stockCatalog";
 import type { StockItem } from "@/api/stocks";
 import { stockActionSummary } from "@/lib/stockActionCopy";
 import { useNow } from "@/hooks/useNow";
+import { useMarketHistory } from "@/hooks/useMarketHistory";
 import { usePrices } from "@/hooks/usePrices";
 import {
   catalogDisplay,
@@ -45,6 +49,16 @@ const stockRestrictions: Record<StockItem["execution_reason"], string> = {
   receipt_unavailable: "Check the previous order result before trading again.",
 };
 
+const coinStamps: Record<string, string> = { BTC: "₿", ETH: "Ξ", DOGE: "Ð" };
+
+function AssetStamp({ symbol, crypto }: { symbol: string; crypto: boolean }) {
+  return (
+    <span className="market-stamp" aria-hidden="true" data-coin={crypto ? symbol : undefined}>
+      {(crypto && coinStamps[symbol]) || symbol.charAt(0)}
+    </span>
+  );
+}
+
 export default function MarketsPage({
   portfolioId,
   onSelectPortfolio,
@@ -60,6 +74,7 @@ export default function MarketsPage({
   const [submittedSearch, setSubmittedSearch] = useState("");
   const [catalogIntent, setCatalogIntent] = useState<StockCatalogItem | null>(null);
   const [selection, setSelection] = useState<string>();
+  const [range, setRange] = useState<HistoryRange>("1W");
   const assetHeading = useRef<HTMLHeadingElement>(null);
   const selectedRow = useRef<HTMLButtonElement>(null);
   const searchField = useRef<HTMLInputElement>(null);
@@ -204,6 +219,21 @@ export default function MarketsPage({
   const closingMarkTime = marketClosed
     ? (catalogMark?.quote?.event_at ?? stockQuote?.event_at)
     : undefined;
+  const historyInstrument: HistoryInstrument | null = !asset
+    ? null
+    : catalogListing
+      ? !listingChanged && !missingListing && catalogListing.state === "active"
+        ? {
+            kind: "catalog",
+            catalog_id: catalogListing.catalog_id,
+            listing_version: catalogListing.listing_version,
+          }
+        : null
+      : { kind: stockMarket ? "featured" : "crypto", symbol: asset.symbol };
+  const history = useMarketHistory(historyInstrument, range);
+  const dayChange = history.response?.series?.day_change_pct;
+  const open =
+    !marketClosed && (stockRestriction === "Market open" || quoteView?.session.state === "open");
 
   function selectMarket(next: Market) {
     if (next === market) return;
@@ -213,21 +243,23 @@ export default function MarketsPage({
     setComposing(false);
     setCatalogIntent(null);
     setSelection(undefined);
+    setRange("1W");
   }
 
   function pickAsset(item: MarketRow) {
     setCatalogIntent(item.listing ?? null);
     setSelection(item.key);
+    if (asset?.key !== item.key) setRange("1W");
     if (window.matchMedia?.("(width < 48rem)").matches) {
       requestAnimationFrame(() => assetHeading.current?.focus());
     }
   }
 
   return (
-    <div className="markets mx-auto my-7 max-w-[1280px] md:my-12 lg:my-16">
+    <div className="markets">
       <h1 className="sr-only">Markets</h1>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-        <div role="group" aria-label="Asset class" className="flex gap-6 md:gap-8">
+      <div className="market-toolbar">
+        <div role="group" aria-label="Asset class" className="flex gap-6">
           <button
             type="button"
             aria-pressed={stockMarket}
@@ -249,33 +281,33 @@ export default function MarketsPage({
           <PortfolioSwitcher portfolioId={portfolioId} onSelect={onSelectPortfolio} inline />
         )}
       </div>
-      <div className="market-workspace grid min-w-0 grid-cols-1 items-start gap-6 md:gap-8">
+      <div className="market-workspace">
         <section aria-label="Find an asset" className="min-w-0">
-          <label
-            htmlFor="market-search"
-            className={stockMarket ? "mb-2 block font-medium" : "sr-only"}
-          >
+          <label htmlFor="market-search" className="sr-only">
             {stockMarket ? "Search stocks" : "Search by name or symbol"}
           </label>
-          <input
-            id="market-search"
-            ref={searchField}
-            type="search"
-            value={search}
-            maxLength={stockMarket ? 80 : undefined}
-            placeholder={stockMarket ? "Name or ticker" : "Search by name or symbol"}
-            onCompositionStart={() => setComposing(true)}
-            onCompositionEnd={(event) => {
-              setSearch(event.currentTarget.value);
-              setComposing(false);
-            }}
-            className="mb-5 min-h-13 w-full rounded-sm border border-[var(--market-input)] px-4 placeholder:text-[var(--market-muted)] md:min-h-14"
-            onChange={(event) => {
-              setSearch(event.target.value);
-              setSubmittedSearch("");
-              setCatalogIntent(null);
-            }}
-          />
+          <div className="market-search">
+            <Search aria-hidden="true" size={16} />
+            <input
+              id="market-search"
+              ref={searchField}
+              type="search"
+              value={search}
+              maxLength={stockMarket ? 80 : undefined}
+              placeholder="Name or ticker"
+              onCompositionStart={() => setComposing(true)}
+              onCompositionEnd={(event) => {
+                setSearch(event.currentTarget.value);
+                setComposing(false);
+              }}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setSubmittedSearch("");
+                setCatalogIntent(null);
+                setRange("1W");
+              }}
+            />
+          </div>
           {waitingForCatalog && <p role="status">Searching stocks…</p>}
           {catalogUnavailable && (
             <div role="status" className="mb-3 flex flex-wrap items-center gap-3 text-sm">
@@ -330,71 +362,104 @@ export default function MarketsPage({
                 </button>
               </div>
             ) : null)}
-          {!catalogData &&
-            !waitingForCatalog &&
-            stockMarket &&
-            permitted &&
-            stockItems.some((item) => item.quote) && (
-              <p className="mb-2 text-xs text-[var(--market-muted)]">
-                IEX prices · Midpoint
-                {stocks.data?.attribution.required_text && (
-                  <span className="block">{stocks.data.attribution.required_text}</span>
-                )}
-              </p>
-            )}
           {results.length > 0 ? (
-            <ul
-              aria-label={stockMarket ? "US stocks" : "Crypto"}
-              className="market-list border-y border-border"
-            >
-              {results.map((item) => {
-                const { key, symbol, name, price: value, listing } = item;
-                const status =
-                  item.age_seconds !== undefined && prices.data
-                    ? freshnessStatus(
-                        item.age_seconds + elapsed,
-                        prices.data.fresh_seconds,
-                        prices.data.stale_seconds,
-                      )
-                    : undefined;
-                return (
-                  <li key={key} className="border-b border-border last:border-b-0">
-                    <button
-                      type="button"
-                      ref={asset?.key === key ? selectedRow : undefined}
-                      aria-current={asset?.key === key ? true : undefined}
-                      className="market-row grid min-h-16 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-3 py-2 text-left"
-                      onClick={() => pickAsset(item)}
-                    >
-                      <span className="flex min-w-0 flex-col wrap-anywhere">
-                        {(listing || symbol !== name) && (
-                          <span className="order-2 text-sm text-muted-foreground">{name}</span>
-                        )}{" "}
-                        <span className="font-semibold">
-                          {symbol}
-                          {listing && ` · ${listing.listing_exchange}`}
-                          {listing?.share_class && ` · Class ${listing.share_class}`}
-                        </span>
-                      </span>
-                      {value && (
-                        <>
-                          {" "}
-                          <span className="text-right tabular-nums">
-                            {formatUnitPrice(value)}
-                            {status && status !== "fresh" && (
-                              <span className="block text-sm text-[var(--market-muted)]">
-                                {" "}
-                                {statusLabel(status)}
-                              </span>
-                            )}
+            <>
+              <div className="market-list-columns" aria-hidden="true">
+                <span>Asset</span>
+                <span>Price</span>
+                <span>Day</span>
+              </div>
+              <ul aria-label={stockMarket ? "US stocks" : "Crypto"} className="market-list">
+                {results.map((item) => {
+                  const { key, symbol, name, listing } = item;
+                  const selected = asset?.key === key;
+                  const value = selected ? rawPrice : item.price;
+                  const status =
+                    item.age_seconds !== undefined && prices.data
+                      ? freshnessStatus(
+                          item.age_seconds + elapsed,
+                          prices.data.fresh_seconds,
+                          prices.data.stale_seconds,
+                        )
+                      : undefined;
+                  return (
+                    <li key={key} className="border-b border-border last:border-b-0">
+                      <button
+                        type="button"
+                        ref={selected ? selectedRow : undefined}
+                        aria-current={selected ? true : undefined}
+                        className="market-row"
+                        onClick={() => pickAsset(item)}
+                      >
+                        <span className="market-row-identity">
+                          <AssetStamp symbol={symbol} crypto={!stockMarket} />
+                          <span className="flex min-w-0 flex-col wrap-anywhere">
+                            {(listing || symbol !== name) && (
+                              <span className="order-2 text-xs text-muted-foreground">{name}</span>
+                            )}{" "}
+                            <span className="font-semibold">
+                              {symbol}
+                              {listing && (
+                                <>
+                                  {" "}
+                                  <span className="text-xs font-normal text-muted-foreground">
+                                    {`· ${listing.listing_exchange}`}
+                                    {listing.share_class && ` · Class ${listing.share_class}`}
+                                  </span>
+                                </>
+                              )}
+                            </span>
                           </span>
-                        </>
-                      )}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+                        </span>
+                        <span className="market-row-price">
+                          {value && (
+                            <>
+                              {formatUnitPrice(value)}
+                              {status && status !== "fresh" && (
+                                <span className="block text-xs font-normal text-muted-foreground">
+                                  {statusLabel(status)}
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </span>
+                        <span className="market-row-day">
+                          {selected && dayChange != null ? (
+                            <>
+                              <span className="sr-only">Day change </span>
+                              <MarketHistoryChange value={dayChange} />
+                            </>
+                          ) : (
+                            <span className="sr-only">Day change unavailable</span>
+                          )}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+              <p className="market-list-count">
+                {results.length}{" "}
+                {catalogData
+                  ? results.length === 1
+                    ? "result"
+                    : "results"
+                  : stockMarket
+                    ? "featured stocks"
+                    : "cryptocurrencies"}
+              </p>
+              {!catalogData &&
+                stockMarket &&
+                permitted &&
+                stockItems.some((item) => item.quote) && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    IEX prices · Midpoint
+                    {stocks.data?.attribution.required_text && (
+                      <span className="block">{stocks.data.attribution.required_text}</span>
+                    )}
+                  </p>
+                )}
+            </>
           ) : catalogData ? (
             <p role="status">No matching stocks. Try another name or ticker.</p>
           ) : !waitingForCatalog && !catalogUnavailable && !query.isPending && !query.isError ? (
@@ -411,7 +476,7 @@ export default function MarketsPage({
           <section
             ref={restoreFocusFromRemovedDetail}
             aria-labelledby="market-asset"
-            className="min-w-0 rounded-card border border-border bg-card p-5 md:p-7"
+            className="market-detail"
           >
             <button
               type="button"
@@ -422,34 +487,67 @@ export default function MarketsPage({
             >
               Back to results
             </button>
-            <h2
-              id="market-asset"
-              ref={assetHeading}
-              tabIndex={-1}
-              className="scroll-mt-4 text-2xl font-semibold tracking-tight wrap-anywhere"
-            >
-              {asset.name}
-            </h2>
-            <p className="mt-2 wrap-anywhere text-[var(--market-muted)]">
-              {asset.symbol} ·{" "}
-              {catalogListing?.listing_exchange ?? stock?.listing_exchange ?? "USD"}
-              {catalogListing?.share_class && ` · Class ${catalogListing.share_class}`}
-            </p>
-            <div className="my-5 border-y border-border py-5 md:my-6 md:py-6">
-              {price && (
-                <p
-                  className="text-[clamp(2rem,4vw,3.25rem)] leading-tight font-semibold tracking-tight wrap-anywhere tabular-nums"
-                  title={closingMarkTime ? fullLocalTimestamp(closingMarkTime) : undefined}
-                >
-                  {price}
-                  {closingMarkTime && (
-                    <time className="sr-only" dateTime={closingMarkTime}>
-                      {" As of "}
-                      {fullLocalTimestamp(closingMarkTime)}
-                    </time>
-                  )}
-                </p>
+            <div className="market-detail-heading">
+              <div className="market-row-identity">
+                <AssetStamp symbol={asset.symbol} crypto={!stockMarket} />
+                <div className="min-w-0">
+                  <h2
+                    id="market-asset"
+                    ref={assetHeading}
+                    tabIndex={-1}
+                    className="scroll-mt-4 text-2xl leading-tight font-semibold tracking-tight wrap-anywhere"
+                  >
+                    {asset.name}
+                  </h2>
+                  <p className="text-sm wrap-anywhere text-muted-foreground">
+                    {asset.symbol} ·{" "}
+                    {catalogListing?.listing_exchange ?? stock?.listing_exchange ?? "Crypto"}
+                    {catalogListing?.share_class && ` · Class ${catalogListing.share_class}`}
+                  </p>
+                </div>
+              </div>
+              {marketClosed ? (
+                <div className="market-session text-muted-foreground">
+                  <p role="status" className="font-semibold">
+                    Market closed
+                  </p>
+                  <p className="empty:hidden">
+                    <MarketOpening nextOpen={nextOpen} now={now} />
+                  </p>
+                </div>
+              ) : (
+                (open || (coin && fresh)) && (
+                  <p role="status" className="market-session market-session-open">
+                    {coin ? "Trading open" : "Market open"}
+                  </p>
+                )
               )}
+            </div>
+            <div className="market-quote">
+              <div className="market-quote-value">
+                {price && (
+                  <p
+                    className="market-main-price"
+                    title={closingMarkTime ? fullLocalTimestamp(closingMarkTime) : undefined}
+                  >
+                    {price}
+                    {closingMarkTime && (
+                      <time className="sr-only" dateTime={closingMarkTime}>
+                        {" As of "}
+                        {fullLocalTimestamp(closingMarkTime)}
+                      </time>
+                    )}
+                  </p>
+                )}
+                {dayChange != null && (
+                  <p className="text-sm tabular-nums">
+                    <MarketHistoryChange value={dayChange} />{" "}
+                    <span className="text-muted-foreground">
+                      {coin ? "24 hr" : open ? "today" : "last session"}
+                    </span>
+                  </p>
+                )}
+              </div>
               {coin && age !== null && (
                 <p className="mt-2 text-[var(--market-muted)]">
                   <time dateTime={coin.as_of} title={coin.as_of}>
@@ -501,17 +599,7 @@ export default function MarketsPage({
                   Retry price
                 </button>
               )}
-              {marketClosed && (
-                <div className="mt-2 text-[var(--market-muted)]">
-                  <p role="status" className="font-medium">
-                    Market closed
-                  </p>
-                  <p className="empty:hidden">
-                    <MarketOpening nextOpen={nextOpen} now={now} />
-                  </p>
-                </div>
-              )}
-              {stock && !marketClosed && (
+              {stock && !marketClosed && stockRestriction !== "Market open" && (
                 <div className="mt-2 space-y-2">
                   <p
                     role="status"
@@ -526,32 +614,42 @@ export default function MarketsPage({
                 </div>
               )}
             </div>
-            {portfolioBlock === "pending" && (
-              <p className="text-muted-foreground" role="status">
-                Checking your trading portfolio…
-              </p>
+            {historyInstrument && (
+              <MarketHistoryChart
+                symbol={asset.symbol}
+                range={range}
+                onRange={setRange}
+                {...history}
+              />
             )}
-            {portfolioBlock === "unavailable" && (
-              <Link className="inline-flex min-h-11 items-center underline" to="/portfolios">
-                Choose an available portfolio
-              </Link>
-            )}
-            {!portfolioBlock &&
-              !listingChanged &&
-              !missingListing &&
-              (!catalogListing || !selectedQuote.isFetching) && (
-                <Link
-                  className="market-action inline-flex min-h-11 items-center justify-center rounded-pill px-5 py-2 font-semibold"
-                  to={
-                    catalogListing
-                      ? `${prefix}/trade/catalog/${catalogListing.catalog_id}`
-                      : `${prefix}/trade/${stockMarket ? "stocks/" : ""}${encodeURIComponent(asset.symbol)}`
-                  }
-                  aria-label={`${action} ${asset.symbol}`}
-                >
-                  {action}
+            <div className="market-action-row">
+              {portfolioBlock === "pending" && (
+                <p className="text-muted-foreground" role="status">
+                  Checking your trading portfolio…
+                </p>
+              )}
+              {portfolioBlock === "unavailable" && (
+                <Link className="inline-flex min-h-11 items-center underline" to="/portfolios">
+                  Choose an available portfolio
                 </Link>
               )}
+              {!portfolioBlock &&
+                !listingChanged &&
+                !missingListing &&
+                (!catalogListing || !selectedQuote.isFetching) && (
+                  <Link
+                    className="market-action inline-flex min-h-11 items-center justify-center rounded-pill px-5 py-2 font-semibold"
+                    to={
+                      catalogListing
+                        ? `${prefix}/trade/catalog/${catalogListing.catalog_id}`
+                        : `${prefix}/trade/${stockMarket ? "stocks/" : ""}${encodeURIComponent(asset.symbol)}`
+                    }
+                    aria-label={`${action} ${asset.symbol}`}
+                  >
+                    {action} {asset.symbol}
+                  </Link>
+                )}
+            </div>
             {stockQuote && stocks.data?.attribution.required_text && (
               <p className="mt-3 text-xs text-[var(--market-muted)] md:hidden">
                 {stocks.data.attribution.required_text}
