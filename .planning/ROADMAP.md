@@ -80,8 +80,8 @@ Live Kraken and IEX history qualification remains open under CHART-04.
 
 **Wave 1**
 
-- [ ] 24-01 — [Add the daily value schema and narrow capture authority](phases/24-compare-portfolio-performance/24-01-PLAN.md).
-- [ ] 24-02 — [Build the selected portfolio toolbar, allocation and holdings](phases/24-compare-portfolio-performance/24-02-PLAN.md).
+- [x] 24-01 — [Add the daily value schema and narrow capture authority](phases/24-compare-portfolio-performance/24-01-PLAN.md).
+- [x] 24-02 — [Build the selected portfolio toolbar, allocation and holdings](phases/24-compare-portfolio-performance/24-02-PLAN.md).
 
 **Wave 2**
 
@@ -126,7 +126,7 @@ Live Kraken and IEX history qualification remains open under CHART-04.
 |---|---|---|
 | 22. Adopt the market workspace | 3/3 | Complete 2026-11-26 |
 | 23. Show historical market prices | 4/4 | Local checks passed. Live qualification pending. |
-| 24. Compare portfolio performance | 0/8 | Ready to execute |
+| 24. Compare portfolio performance | 2/8 | Executing wave 2 |
 | 25. Finish the trading flows and verify the integrated app | 0/TBD | Unplanned |
 
 All 16 requirements map once in [REQUIREMENTS.md](REQUIREMENTS.md).
