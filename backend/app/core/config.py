@@ -3,13 +3,21 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from decimal import Decimal
 from functools import lru_cache
-from typing import Literal
+from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
-from pydantic import Field, SecretStr, ValidationInfo, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import (
+    Field,
+    SecretStr,
+    ValidationError,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from app.db.connection import database_ssl_context, validate_database_url
+from app.schemas.market_history import MarketHistoryScopes
 
 
 class _StockSettings(BaseSettings):
@@ -27,6 +35,22 @@ class _StockSettings(BaseSettings):
     stock_max_response_bytes: int = Field(default=262144, ge=4096, le=1048576)
     stock_data_account: str = Field(default="birja", min_length=1, max_length=128)
     stock_data_server: str = Field(default="birja", min_length=1, max_length=128)
+    market_history_scope_json: Annotated[MarketHistoryScopes | None, NoDecode] = Field(
+        default=None, repr=False
+    )
+
+    @field_validator("market_history_scope_json", mode="before")
+    @classmethod
+    def _decode_market_history_scope(cls, value: object) -> object:
+        if isinstance(value, str):
+            if 0 < len(value) <= 1048576:
+                try:
+                    return MarketHistoryScopes.model_validate_json(value)
+                except ValidationError:
+                    pass
+            # Optional chart configuration must never stop current-price or order services.
+            return None
+        return value
 
     @property
     def catalog_cache_url(self) -> str | None:
