@@ -2,16 +2,17 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Market Charts and Workspace Redesign
-current_phase: 24
-status: verifying
-last_updated: "2026-11-26T16:30:44Z"
-last_activity: 2026-11-26 -- Phase 24 guarded backend, browser and recovery checks passed
+current_phase: 25
+status: ready_to_plan
+last_updated: "2026-11-26T16:34:05Z"
+last_activity: 2026-11-26 -- Phase 24 passed independent verification
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 15
   completed_plans: 15
-  percent: 25
+  percent: 50
+stopped_at: Phase 24 complete (8/8) — Phase 25 ready to plan
 ---
 
 # Project State
@@ -23,20 +24,22 @@ See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md),
 [approved design](ui-reviews/v1.5/README.md).
 
 Core value: correct virtual trade and valuation money.
-Current focus: Implement Phase 24 portfolio performance and recovery.
+Current focus: Plan Phase 25 trade, History, sign-in and integrated acceptance.
 
 ## Current Position
 
-Phase: 24 of 25 (Compare portfolio performance)
-Plan: 8 of 8 executed
-Status: Verifying
-Last activity: 2026-11-26 -- Phase 24 guarded backend, browser and recovery checks passed
+Phase: 25 of 25 (Finish the trading flows and verify the integrated app)
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-11-26 -- Phase 24 passed independent verification
 
-Eight plans across six waves cover TREND-01 through TREND-04 and all five
-design decisions. The plan uses a 30-day display window and collects one
-observation per active portfolio during 22:00–24:00 UTC. Final verification
-pairs four running app and prototype views and tests exact encrypted restore.
-[Phase 24 validation strategy](phases/24-compare-portfolio-performance/24-VALIDATION.md)
+Phase 24 completed eight plans and verified all four portfolio trend
+requirements. Portfolios show exact current figures and a private 30-day
+history from capture enablement. Chromium verified eight journeys and four
+matched app and reference pairs. All seven encrypted recovery stages and
+the exact receipt verifier passed locally. Hosted recovery timing and
+Phase 23's CHART-04 live qualification are recorded release checks.
+[Phase 24 verification](phases/24-compare-portfolio-performance/24-VERIFICATION.md)
 
 ## Prior phase evidence
 

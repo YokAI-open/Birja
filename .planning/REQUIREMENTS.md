@@ -21,10 +21,10 @@ history depends on CHART-04.
 
 ## Portfolio trends and workspace
 
-- [ ] **TREND-01** — Fully clickable strategy cards show the name, optional description, cash, total and return under the existing valuation rules. The final `New portfolio` card opens creation and the supported zero-portfolio and limit states still work.
-- [ ] **TREND-02** — Each active portfolio can display a sparkline and an accessible summary of its own recorded daily value. Missing valuations produce visible gaps and portfolios without enough observations show their current figures.
-- [ ] **TREND-03** — Durable snapshots use exact existing valuation and the original starting cash, remain private, survive restart and restore, and do not duplicate a capture or collect new points after confirmed closure.
-- [ ] **TREND-04** — A selected portfolio groups the switcher, Edit, Update with age, and Remove above current value, profit and cash/stock/crypto allocation. Users can filter and sort holdings and open their trade tickets.
+- [x] **TREND-01** — Fully clickable strategy cards show the name, optional description, cash, total and return under the existing valuation rules. The final `New portfolio` card opens creation and the supported zero-portfolio and limit states still work.
+- [x] **TREND-02** — Each active portfolio can display a sparkline and an accessible summary of its own recorded daily value. Missing valuations produce visible gaps and portfolios without enough observations show their current figures.
+- [x] **TREND-03** — Durable snapshots use exact existing valuation and the original starting cash, remain private, survive restart and restore, and do not duplicate a capture or collect new points after confirmed closure.
+- [x] **TREND-04** — A selected portfolio groups the switcher, Edit, Update with age, and Remove above current value, profit and cash/stock/crypto allocation. Users can filter and sort holdings and open their trade tickets.
 
 ## Trade, History, sign-in and acceptance
 
@@ -53,10 +53,10 @@ order types are outside this milestone.
 | CHART-02 | 23 | Verified locally |
 | CHART-03 | 23 | Verified locally |
 | CHART-04 | 23 | Live qualification pending |
-| TREND-01 | 24 | Pending |
-| TREND-02 | 24 | Pending |
-| TREND-03 | 24 | Pending |
-| TREND-04 | 24 | Pending |
+| TREND-01 | 24 | Complete |
+| TREND-02 | 24 | Complete |
+| TREND-03 | 24 | Complete |
+| TREND-04 | 24 | Complete |
 | FLOW-01 | 25 | Pending |
 | FLOW-02 | 25 | Pending |
 | FLOW-03 | 25 | Pending |

@@ -7,13 +7,13 @@
 - [x] **v1.2 Multiple Strategy Portfolios** · [Roadmap](milestones/v1.2-ROADMAP.md)
 - [x] **v1.3 Birja Interface Redesign** · [Roadmap](milestones/v1.3-ROADMAP.md) · [Audit](v1.3-MILESTONE-AUDIT.md)
 - [ ] **v1.4 Searchable Stock Trading** · Previous milestone. [Closeout handoff](milestones/v1.4-OPEN-HANDOFF.md)
-- [ ] **v1.5 Market Charts and Workspace Redesign** · Phase 22 is complete. [Approved prototype](ui-reviews/v1.5/README.md)
+- [ ] **v1.5 Market Charts and Workspace Redesign** · Phases 22 and 24 are complete. [Approved prototype](ui-reviews/v1.5/README.md)
 
 ## Phases
 
 - [x] **Phase 22: Adopt the market workspace** (completed 2026-11-26)
 - [ ] **Phase 23: Show historical market prices**
-- [ ] **Phase 24: Compare portfolio performance**
+- [x] **Phase 24: Compare portfolio performance** (completed 2026-11-26)
 - [ ] **Phase 25: Finish the trading flows and verify the integrated app**
 
 ### Phase 22: Adopt the market workspace
@@ -76,7 +76,7 @@ Live Kraken and IEX history qualification remains open under CHART-04.
 2. The portfolio page puts the selector and actions above value and allocation, followed by sortable, filterable holdings. Incomplete valuations stay explicit.
 3. Daily snapshots agree with authoritative values, preserve missing data, never cross portfolio boundaries, and survive restart and encrypted restore. Capture retries and closures preserve the same historical record.
 
-**Plans:** 8 plans across 6 waves
+**Plans:** 8/8 plans complete across 6 waves
 
 **Wave 1**
 
@@ -104,7 +104,7 @@ Live Kraken and IEX history qualification remains open under CHART-04.
 
 - [x] 24-08 — [Verify the running views, finance behavior and encrypted recovery](phases/24-compare-portfolio-performance/24-08-PLAN.md).
 
-[Research](phases/24-compare-portfolio-performance/24-RESEARCH.md) · [UI contract](phases/24-compare-portfolio-performance/24-UI-SPEC.md) · [Validation](phases/24-compare-portfolio-performance/24-VALIDATION.md)
+[Research](phases/24-compare-portfolio-performance/24-RESEARCH.md) · [UI contract](phases/24-compare-portfolio-performance/24-UI-SPEC.md) · [Validation](phases/24-compare-portfolio-performance/24-VALIDATION.md) · [Verification](phases/24-compare-portfolio-performance/24-VERIFICATION.md)
 
 ### Phase 25: Finish the trading flows and verify the integrated app
 
@@ -126,7 +126,7 @@ Live Kraken and IEX history qualification remains open under CHART-04.
 |---|---|---|
 | 22. Adopt the market workspace | 3/3 | Complete 2026-11-26 |
 | 23. Show historical market prices | 4/4 | Local checks passed. Live qualification pending. |
-| 24. Compare portfolio performance | 8/8 | Verifying |
+| 24. Compare portfolio performance | 8/8 | Complete 2026-11-26 |
 | 25. Finish the trading flows and verify the integrated app | 0/TBD | Unplanned |
 
 All 16 requirements map once in [REQUIREMENTS.md](REQUIREMENTS.md).

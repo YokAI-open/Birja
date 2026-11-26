@@ -125,10 +125,12 @@ the approved simulator rules. Preserve its [open closeout handoff](milestones/v1
 
 ## Current State
 
-Phase 22 completed locally on the v1.5 feature branch. The integrated app
-passed the full isolated browser suite and frontend checks. Phase 23 owns
-historical market price charts. The release history below records earlier
-milestones and environments.
+Phases 22 and 24 completed locally on the v1.5 feature branch. Portfolios
+now show independent trends and current values using the approved layout.
+Phase 24 passed the browser, backend coverage and encrypted recovery
+checks. Phase 23's local charts are verified, with live historical data
+qualification still open. The release history below records earlier
+milestones and environments. [Phase 24 verification](phases/24-compare-portfolio-performance/24-VERIFICATION.md)
 
 Production is verified online at main7d236e4/schema0023 (v0.6.2), with exact
 post-rollout encrypted recovery, original-data preservation and refreshed
@@ -408,4 +410,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-26 after local Phase 22 verification.*
+*Last updated: 2026-11-26 after local Phase 24 verification.*
