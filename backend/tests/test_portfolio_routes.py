@@ -282,9 +282,11 @@ def test_production_route_inventory_has_no_implicit_financial_consumer(app):
     assert v2 == {
         ("POST", "/api/v2/auth/verify-code"),
         ("GET", "/api/v2/me"),
+        ("POST", "/api/v2/market-history/query"),
         ("GET", "/api/v2/portfolios"),
         ("POST", "/api/v2/portfolios"),
         ("GET", "/api/v2/portfolios/overview"),
+        ("GET", "/api/v2/portfolios/value-history"),
         ("GET", base + "/metadata"),
         ("PATCH", base),
         ("DELETE", base),
