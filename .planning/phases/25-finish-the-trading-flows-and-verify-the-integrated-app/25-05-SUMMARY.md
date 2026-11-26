@@ -6,14 +6,16 @@ tags: [playwright, trading, history, auth, comparison]
 requires:
   - phase: 25-02
     provides: Owned server History filters, exact cursor behavior and guarded backend proof
-  - phase: 25-03
+  - phase: 25-01
     provides: Trades, previews, receipts and portfolio chooser alignment
+  - phase: 25-03
+    provides: Focused email sign-in and accessible auth door
   - phase: 25-04
-    provides: Responsive History and focused email sign-in workspaces
+    provides: Responsive, filterable History workspace
 provides:
   - Exact browser proof for the trade, History and sign-in flows
   - Six paired screenshots from the approved prototype and guarded application
-affects: [25-06, FLOW-04]
+affects: [25-07, FLOW-04]
 tech-stack:
   added: []
   patterns: [isolated synthetic Playwright, exact ledger reconciliation, paired viewport geometry]
@@ -55,7 +57,7 @@ passed 1,441 cases with 94.58% statement and 92.37% branch coverage. The
 guarded API replay passed 108 cases in 121.10 seconds, and the backend and
 test Compose inputs matched the final browser candidate. FLOW-04 has local
 browser and visual evidence here. Hosted recovery and required CI are
-tracked through Plan 25-06 and release qualification.
+tracked through Plan 25-07.
 
 ## Adjustments
 

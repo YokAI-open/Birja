@@ -135,7 +135,7 @@ Live Kraken and IEX history qualification remains open under CHART-04.
 
 **Wave 3** · Depends on 25-01 and 25-04
 
-- [ ] 25-05 — [Verify real app flows and compare with the approved prototype](phases/25-finish-the-trading-flows-and-verify-the-integrated-app/25-05-PLAN.md).
+- [x] 25-05 — [Verify real app flows and compare with the approved prototype](phases/25-finish-the-trading-flows-and-verify-the-integrated-app/25-05-PLAN.md).
 
 **Wave 4** · Depends on 25-05 and 25-06
 
@@ -150,7 +150,7 @@ Live Kraken and IEX history qualification remains open under CHART-04.
 | 22. Adopt the market workspace | 3/3 | Complete 2026-11-26 |
 | 23. Show historical market prices | 4/4 | Local checks passed. Live qualification pending. |
 | 24. Compare portfolio performance | 8/8 | Complete 2026-11-26 |
-| 25. Finish the trading flows and verify the integrated app | 5/7 | Executing wave 3 |
+| 25. Finish the trading flows and verify the integrated app | 6/7 | Awaiting candidate publication |
 
 All 16 requirements map once in [REQUIREMENTS.md](REQUIREMENTS.md).
 [Research](research/v1.5/SUMMARY.md) · [Design reference](ui-reviews/v1.5/README.md)

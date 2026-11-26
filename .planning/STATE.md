@@ -3,16 +3,16 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Market Charts and Workspace Redesign
 current_phase: 25
-status: executing
-last_updated: "2026-11-26T19:51:12Z"
-last_activity: 2026-11-26 -- Phase 25 trade tickets and filtered History UI verified
+status: awaiting_approval
+last_updated: "2026-11-26T20:30:32Z"
+last_activity: 2026-11-26 -- Phase 25 local validation passed and the candidate is ready for hosted CI
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 22
-  completed_plans: 20
+  completed_plans: 21
   percent: 50
-stopped_at: Phase 25 (5/7) — Executing wave 3
+stopped_at: Phase 25 (6/7) — Awaiting candidate publication
 ---
 
 # Project State
@@ -24,18 +24,19 @@ See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md),
 [approved design](ui-reviews/v1.5/README.md).
 
 Core value: correct virtual trade and valuation money.
-Current focus: Execute Phase 25 trade, History, sign-in and integrated acceptance.
+Current focus: Publish the locally verified Phase 25 candidate for hosted CI.
 
 ## Current Position
 
 Phase: 25 of 25 (Finish the trading flows and verify the integrated app)
-Plan: 5 of 7 executed
-Status: Executing wave 3
-Last activity: 2026-11-26 -- Phase 25 trade tickets and filtered History UI verified
+Plan: 6 of 7 executed
+Status: Awaiting candidate publication
+Last activity: 2026-11-26 -- Phase 25 local validation passed and the candidate is ready for hosted CI
 
-Seven independently checked plans cover all four FLOW requirements across
-four waves. Wave 1 covers the History API, sign-in and bounded CI timing.
-The final plan ties hosted CI to the exact authorized candidate.
+The trade, History and sign-in workspaces passed scoped backend checks and
+1,441 frontend tests. All 18 guarded browser journeys and six comparison
+pairs passed review. The final plan awaits explicit approval to publish the
+exact candidate for all six hosted jobs and the authenticated recovery receipt.
 [Phase 25 validation](phases/25-finish-the-trading-flows-and-verify-the-integrated-app/25-VALIDATION.md)
 
 Phase 24 completed eight plans and verified all four portfolio trend

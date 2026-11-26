@@ -1,7 +1,7 @@
 ---
 phase: 25
 slug: finish-the-trading-flows-and-verify-the-integrated-app
-status: planned
+status: local_verified
 nyquist_compliant: true
 wave_0_complete: true
 created: 2026-11-26
@@ -49,10 +49,24 @@ Reuse current local evidence with the tested scope and exact input comparison.
 | 25-07-02 | 4 | FLOW-04 | Local exact candidate identity check. Explicit publication decision gates an external push and PR. |
 | 25-07-03 | 4 | FLOW-04 | Authorized run's actual six hosted job outcomes, checkout identity, authenticated seven-stage receipt and archive digest. |
 
-All runtime results remain planned. Each task has automated verification and
-all required CI checks still apply. The only publication decision follows
-local review and evidence. FLOW-04 remains pending until the matching hosted
-run and receipt pass.
+## Measured results
+
+On November 26, 2026, all scoped local checks and the independent review
+passed. The runtime evidence binds to commit
+`0087e99b80231e103eb70deceedc830475382b11`.
+[Candidate and evidence digests](25-CANDIDATE.md)
+
+| Tasks | Result |
+|---|---|
+| 25-01, 25-03 and 25-04 | Final frontend gate passed lint, formatting, TypeScript, build and all 1,441 tests. The real browser run covered crypto and stock trading, filtered History and sign-in. |
+| 25-02 | 316 guarded backend tests passed, with 100% statements and branches across all three critical History modules. Ruff and mypy passed. |
+| 25-05 | 108 guarded API cases and all 18 selected Chromium cases passed. Six app and prototype image pairs passed integrity checks. Narrow layouts and measured 200% CSS text enlargement passed. Native browser zoom was outside the local check. [Browser receipt](25-BROWSER-RECEIPT.md) |
+| 25-06 | 115 offline workflow checks passed. The recovery selector dry run returned all seven stages in order. |
+| 25-07-01 | Review findings were repaired and rechecked. The recovery input comparison records what still applies from Phase 24. [Code review](25-REVIEW.md) |
+| 25-07-02 and 25-07-03 | Pending approval for the exact push and PR, followed by the six required hosted jobs and authenticated recovery receipt. |
+
+FLOW-04 and overall Phase 25 verification await the matching hosted run
+and receipt. The CHART-04 live-history qualification remains open.
 
 ## Additional evidence
 
