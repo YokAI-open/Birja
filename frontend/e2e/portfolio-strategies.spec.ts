@@ -1025,7 +1025,11 @@ test("Phase13 failed refresh suppresses expired stock proof while cash sibling r
     b = await create(page, "Unaffected cash");
   await stockBuy(page, a.id, "1");
   const value = await statement(page, a.id);
-  expect(value.valuation_complete).toBe(true);
+  expect(value).toMatchObject({
+    cash: "9898.00",
+    total_value: "9999.00",
+    valuation_complete: true,
+  });
   const mark = value.holdings[0].stock_mark;
   expect(mark.mark_mode).toBe("fresh");
   expect(Date.parse(mark.valid_until)).toBeGreaterThan(Date.now());
@@ -1035,35 +1039,38 @@ test("Phase13 failed refresh suppresses expired stock proof while cash sibling r
   await page.clock.fastForward(31_000);
   await expect(page.getByRole("alert")).toContainText("Couldn't refresh");
   await page.clock.fastForward(Math.max(1, Date.parse(mark.valid_until) - Date.now() + 2000));
-  await expect(page.getByText("Return unavailable", { exact: true })).toBeVisible();
-  const cards = page.getByRole("list", { name: "Portfolios", exact: true }).getByRole("listitem");
-  const expired = cards.filter({
-    has: page.getByRole("link", { name: "Expiring stock evidence", exact: true }),
-  });
+  const expired = openCard(page, "Expiring stock evidence");
+  await expect(expired).toHaveAttribute("href", `/portfolios/${a.id}`);
   await expect(expired.getByText("Value unavailable — refresh required")).toBeVisible();
-  await expect(expired.getByText("$9,898.00", { exact: true })).toHaveCount(1);
-  await expect(expired.getByText("$9,999.00", { exact: true })).toHaveCount(0);
-  const cashSibling = cards.filter({
-    has: page.getByRole("link", { name: "Unaffected cash", exact: true }),
-  });
-  await expect(cashSibling.getByText("$10,000.00", { exact: true })).toHaveCount(2);
-  await expect(page.getByRole("link", { name: "Unaffected cash", exact: true })).toHaveAttribute(
-    "href",
-    `/portfolios/${b.id}`,
+  await expect(expired.getByText("Return unavailable", { exact: true })).toBeVisible();
+  await expect(expired.getByText("1 holding cannot be valued.", { exact: true })).toBeVisible();
+  await expect(expired.getByText(`${formatUsd(value.cash)} cash`, { exact: true })).toBeVisible();
+  await expect(expired.getByText("Total value:", { exact: true })).toHaveCount(0);
+  await expect(expired.locator(".portfolio-overview-value")).not.toContainText(
+    formatUsd(value.total_value),
+  );
+  const cashSibling = openCard(page, "Unaffected cash");
+  await expect(cashSibling).toHaveAttribute("href", `/portfolios/${b.id}`);
+  await expect(cashSibling.getByText("$10,000.00 cash", { exact: true })).toBeVisible();
+  await expect(cashSibling.getByText("Total value:", { exact: true }).locator("..")).toContainText(
+    "$10,000.00",
   );
 });
 
 async function reviewedLayout(page: Page, state: string, width: number) {
   const dimensions: Record<string, number> = {};
   const navigation = page.getByRole("region", { name: "Portfolio navigation", exact: true });
-  if (width < 768 && (await navigation.isVisible())) {
-    const select = navigation.getByLabel("Open portfolio", { exact: true });
+  if (await navigation.isVisible()) {
+    const select = navigation.getByRole("combobox", { name: "Open portfolio", exact: true });
+    await select.click({ trial: true, timeout: 5000 });
+    await expect(select).toBeInViewport();
     const [regionBox, fieldBox] = await Promise.all([
       navigation.boundingBox(),
       select.boundingBox(),
     ]);
-    expect(fieldBox!.width).toBeGreaterThanOrEqual(regionBox!.width - 1);
-    expect(fieldBox!.height).toBeGreaterThanOrEqual(48);
+    if (width < 768) expect(fieldBox!.width).toBeGreaterThanOrEqual(regionBox!.width - 1);
+    // Phase 24 adopted the prototype's 44px minimum for the compact chooser.
+    expect(fieldBox!.height).toBeGreaterThanOrEqual(44);
     await expect(navigation.getByRole("button")).toHaveCount(0);
     await expect(navigation.getByRole("link")).toHaveCount(0);
     Object.assign(dimensions, {
