@@ -71,6 +71,7 @@
   color: var(--market-muted);
 }
 .market-list {
+  position: relative;
   max-height: min(30.5rem, 55vh);
   overflow-y: auto;
   border-block: 1px solid var(--border);

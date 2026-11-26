@@ -106,7 +106,13 @@ export async function expectChartRange(page: Page, query: HistoryQuery) {
 }
 
 export async function captureMarkets(page: Page, info: TestInfo, name: string) {
-  await page.evaluate("window.scrollTo(0, 0)");
+  await page.evaluate("document.fonts.ready.then(() => window.scrollTo(0, 0))");
+  if (page.viewportSize()?.width === 1440) {
+    const overflow = await page.evaluate<number>(
+      "document.documentElement.scrollHeight - window.innerHeight",
+    );
+    expect(overflow).toBeLessThanOrEqual(1);
+  }
   const selectors = [
     ".market-toolbar",
     ".market-workspace",
@@ -134,7 +140,7 @@ export async function captureMarkets(page: Page, info: TestInfo, name: string) {
   );
   await page.screenshot({
     path: info.outputPath(`${name}.png`),
-    fullPage: (page.viewportSize()?.width ?? 1440) < 768,
+    fullPage: true,
     animations: "disabled",
   });
 }
