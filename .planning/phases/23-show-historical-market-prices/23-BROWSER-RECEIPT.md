@@ -89,4 +89,3 @@ provider has zero live attempts in Phase 23. The actual history collection,
 display and derived-use rights, permitted storage, representative coverage
 and measured account or IP headroom remain open under CHART-04.
 [Source qualification evidence](23-SOURCE-QUALIFICATION.md)
-
