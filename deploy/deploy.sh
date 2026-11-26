@@ -141,10 +141,39 @@ deploy/db/bootstrap-roles.sql 78e1c8d9e461b50900c70199ac6f5fc41d997c11c471eb9312
 CATALOG_PINS
 }
 
-stock_catalog_finance_source_supported() {
+daily_value_source_supported() {
   local name expected actual
-  if [ "${2:-0026}" = 0027 ]; then
+  while read -r name expected; do
+    actual=$(git -C "$APP_DIR" show "$1:$name" 2>/dev/null | sha256sum | awk '{print $1}') || return 1
+    [ "$actual" = "$expected" ] || return 1
+  done <<'DAILY_VALUE_PINS'
+backend/alembic/sql/0028_portfolio_daily_values.sql 6982dea7fb2590633d622f53e856a079f15510766f3043bc4dda808458846954
+backend/alembic/versions/0028_portfolio_daily_values.py 99ad0ef275fc877225ea13408b5c7c407465b5fb3cbae1b6ca1aefcaa80f0879
+backend/app/db/dev_bootstrap.py 483ba7f4cd0b743e1a57f3fb6708d223f0517fc8c0a5ee2e4981eec0ecea0801
+backend/app/db/portfolio_bootstrap.py ea5aa7924c69662ee9ac649d7b215071b23f240f74835306126205e4551769f8
+backend/app/db/portfolio_migrate.py 315d19423840ebf05ee5df0cb330b60b964ccd7e8bbbb7921f73fcb2f8c6e1be
+backend/app/db/schema_contract.py 452680b4c8193ed52541b14095707eeabaa150373ab13c494caae974bc7d0ffd
+backend/app/models/__init__.py 670efc0f7a2d6a7d78b10c1afe9cb0fe18807dd966ee32ae3bd9b85b6af71bbc
+backend/app/models/portfolio_daily_value.py 718bb9e5d0619bbe48d4feec977b903071111de90627c03c394d5ea225d218c4
+backend/app/schemas/portfolio_daily_values.py 75f59be479aa2c33576b05407864685f287cf2b78fdc6a5b720dbe0ea9ad0871
+backend/app/services/portfolio_daily_values.py 429a676027185c40f35ecd9d9c11cce6138c3387a2b8699d988fa9d1f8623e08
+backend/app/tasks/portfolio_daily_values.py e1c3b5e1f619b0f9f24dc3984c17d30cf741e09caf66ac438ad97ed2f1e27aca
+deploy/db/bootstrap-roles.sql 7e51a8bb080519e838a3cf756db4214a9d45fd45eb383248f2ee55270acda03d
+DAILY_VALUE_PINS
+}
+
+stock_catalog_finance_source_supported() {
+  local name expected actual revision=${2:-0026}
+  if [ "$revision" = 0028 ]; then
+    daily_value_source_supported "$1" || return 1
+  fi
+  if [[ "$revision" = 0027 || "$revision" = 0028 ]]; then
     while read -r name expected; do
+      if [ "$revision" = 0028 ]; then
+        case "$name" in
+          backend/app/db/dev_bootstrap.py|backend/app/db/portfolio_bootstrap.py|backend/app/db/portfolio_migrate.py|backend/app/db/schema_contract.py|deploy/db/bootstrap-roles.sql) continue ;;
+        esac
+      fi
       actual=$(git -C "$APP_DIR" show "$1:$name" 2>/dev/null | sha256sum | awk '{print $1}') || return 1
       [ "$actual" = "$expected" ] || return 1
     done <<'CATALOG_NYSE_PINS'
@@ -158,11 +187,12 @@ deploy/db/bootstrap-roles.sql 229a9c1dafcaeaf76b99c5f9db05574c88a08d7a1baff65a2f
 CATALOG_NYSE_PINS
   fi
   while read -r name expected; do
-    if [ "${2:-0026}" = 0027 ]; then
+    if [[ "$revision" = 0027 || "$revision" = 0028 ]]; then
       case "$name" in
         backend/app/db/dev_bootstrap.py|backend/app/db/portfolio_bootstrap.py|backend/app/db/portfolio_migrate.py|backend/app/db/schema_contract.py|deploy/db/bootstrap-roles.sql) continue ;;
       esac
     fi
+    if [[ "$revision" = 0028 && "$name" = backend/app/models/__init__.py ]]; then continue; fi
     actual=$(git -C "$APP_DIR" show "$1:$name" 2>/dev/null | sha256sum | awk '{print $1}') || return 1
     [ "$actual" = "$expected" ] || return 1
   done <<'CATALOG_FINANCE_PINS'
@@ -188,10 +218,28 @@ deploy/db/bootstrap-roles.sql 51ce20003aea6a9c9d4d03f8eae67e708a4571555b56e9de61
 CATALOG_FINANCE_PINS
 }
 
+daily_value_source_marker() {
+  git -C "$APP_DIR" cat-file -e "$1:backend/alembic/versions/0028_portfolio_daily_values.py" 2>/dev/null
+}
+
 admit_application_source() {
   # ADMITTED_REVISION is authenticated by recovery_gate; tested_source is
   # pinned by the retained manifest. A mutable ref name proves neither.
   [[ "${1:-}" =~ ^[0-9a-f]{40}$ ]] || { application_schema_incompatible; return 1; }
+  if daily_value_source_marker "$1"; then
+    [ "$1" = "${BIRJA_TESTED_SOURCE:-}" ] && stock_catalog_finance_source_supported "$1" 0028 || {
+      application_schema_incompatible; return 1;
+    }
+    if [ "${2:-runtime}" = portfolio-upgrade ]; then
+      case "${ADMITTED_REVISION:-}" in
+        0027|0028) return 0 ;;
+        *) application_schema_incompatible; return 1 ;;
+      esac
+    fi
+    [ "${ADMITTED_REVISION:-}" = 0028 ] && return 0
+    application_schema_incompatible
+    return 1
+  fi
   if git -C "$APP_DIR" cat-file -e "$1:backend/alembic/versions/0027_stock_catalog_nyse_source.py" 2>/dev/null; then
     [ "$1" = "${BIRJA_TESTED_SOURCE:-}" ] && stock_catalog_finance_source_supported "$1" 0027 || {
       application_schema_incompatible; return 1;
@@ -339,6 +387,10 @@ print(d['source_revision'])
 PY
 }
 
+database_revision() {
+  dc exec -T postgres sh -c 'exec psql -XqAt -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT version_num FROM alembic_version"'
+}
+
 recovery_gate() {
   local recovery snapshot source_sha revision bundle
   recovery=$(readlink -f /var/lib/birja/recovery/current)
@@ -356,7 +408,7 @@ recovery_gate() {
     revision=$(startup_revision "$source_sha" "$snapshot") || return 1
   else
     bindings --check-running || return 1
-    revision=$(dc exec -T postgres sh -c 'exec psql -XqAt -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT version_num FROM alembic_version"' 2>/dev/null) || return 1
+    revision=$(database_revision 2>/dev/null) || return 1
   fi
   [[ "$revision" =~ ^[A-Za-z0-9_]{1,64}$ ]] || return 1
   BIRJA_BACKUP_LOCK_FD=9 python3 "$recovery/deploy/backup-snapshot.py" recovery-gate \
@@ -444,7 +496,7 @@ start_selected_datastores() {
   dc up -d --wait postgres redis || return 1
   bindings --check-running || return 1
   local actual
-  actual=$(dc exec -T postgres sh -c 'exec psql -XqAt -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT version_num FROM alembic_version"') || return 1
+  actual=$(database_revision) || return 1
   [ "$actual" = "$ADMITTED_REVISION" ] || { echo "candidate_revision_mismatch=true" >&2; return 1; }
   echo "selected_datastores_started=true writers_started=false"
 }
@@ -656,6 +708,12 @@ do_deploy() {
   dc --profile migrate build migrate
   BIRJA_BACKUP_LOCK_FD=9 "$BIRJA_RETAINED_DIR/deploy/configure-db.sh" --production \
     --resume-portfolio-migration --approved-operation portfolio-migration-to-final
+  if daily_value_source_marker "$sha"; then
+    STEP="application schema compatibility after migration"
+    local candidate_revision
+    candidate_revision=$(database_revision) || { application_schema_incompatible; return 1; }
+    ADMITTED_REVISION=$candidate_revision admit_application_source "$sha" || return 1
+  fi
   STEP="start backend"
   # shellcheck disable=SC2086 # word list on purpose; --remove-orphans drops a scheduler this release lacks
   dc up -d --wait --remove-orphans $services

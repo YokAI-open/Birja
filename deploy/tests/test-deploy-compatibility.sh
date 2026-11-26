@@ -53,7 +53,10 @@ event() { echo "$*" >> "$TMP/calls"; }
 checkout_source() { event checkout; }
 maybe_reexec() { :; }
 app_services() { echo 'backend scheduler'; }
-dc() { event "dc $*"; }
+dc() {
+  event "dc $*"
+  if [ "$1" = exec ]; then printf '%s\n' "${CANDIDATE_DB_REVISION:-0028}"; fi
+}
 bindings() { event bindings; }
 build_frontend_release() { event build; RELEASE_DIR=$WEB_ROOT/releases/good; }
 swap_current() { event swap; }
@@ -76,6 +79,15 @@ run_case() {
     grep -q 'application_schema_incompatible=true' "$TMP/output"
     [ ! -s "$TMP/calls" ]
     [ "$before" = "$(sha256sum "$DEPLOY_LOG"; if [ -e "$PENDING_MARK" ]; then sha256sum "$PENDING_MARK"; fi)" ]
+  elif [ "$want" = migration-refused ]; then
+    [ "$rc" != 0 ] || { echo "FAIL started writer with an incompatible migrated revision"; return 1; }
+    grep -q 'application_schema_incompatible=true' "$TMP/output"
+    grep -q '^dc stop backend scheduler$' "$TMP/calls"
+    grep -q '^configure-db ' "$TMP/calls"
+    grep -q '^dc exec -T postgres ' "$TMP/calls"
+    ! grep -q '^dc up -d --wait --remove-orphans' "$TMP/calls"
+    ! grep -q '^record$' "$TMP/calls"
+    [ -e "$PENDING_MARK" ]
   else
     [ "$rc" = 0 ] || { cat "$TMP/output"; return 1; }
     grep -q checkout "$TMP/calls"
@@ -91,6 +103,8 @@ stop = calls.index('dc stop backend scheduler')
 configure = next(i for i, line in enumerate(calls) if line.startswith('configure-db '))
 start = calls.index('dc up -d --wait --remove-orphans backend scheduler')
 assert stop < configure < start, calls
+for probe in (i for i, line in enumerate(calls) if line.startswith('dc exec -T postgres ')):
+    assert configure < probe < start, calls
 ORDER
     else
       ! grep -q '^configure-db ' "$TMP/calls"
@@ -272,10 +286,11 @@ run_case rollback 0026 main yes refuse
 # The successor recognizes the original 0026 datastore for migration, then
 # binds runtime and rollback to the new exact provenance constraint contract.
 git -C "$APP_DIR" checkout -q --detach "$FINANCE_TESTED"
+RETAINED_0027=0c26810fb0bcb15323705a38aae63b531d69b992
 for name in backend/alembic/versions/0027_stock_catalog_nyse_source.py \
   backend/app/db/{portfolio_bootstrap,portfolio_migrate,schema_contract,dev_bootstrap}.py \
   backend/app/models/stock_catalog.py deploy/db/bootstrap-roles.sql; do
-  cp "$HERE/../../$name" "$APP_DIR/$name"
+  git -C "$HERE/../.." show "$RETAINED_0027:$name" > "$APP_DIR/$name"
   git -C "$APP_DIR" add "$name"
 done
 git -C "$APP_DIR" -c user.name=Test -c user.email=test@example.invalid commit -q -m catalog-nyse-tested
@@ -297,3 +312,48 @@ git -C "$APP_DIR" -c user.name=Test -c user.email=test@example.invalid commit -q
 BIRJA_TESTED_SOURCE=$(git -C "$APP_DIR" rev-parse HEAD)
 run_case deploy 0026 "$BIRJA_TESTED_SOURCE" no refuse
 run_case rollback 0027 main yes refuse
+
+# Authenticate the exact released 0027 object from this checkout, then use it
+# only on the restored original revision under its matching tooling.
+command git -C "$APP_DIR" fetch -q --no-tags "$HERE/../.." "$RETAINED_0027"
+BIRJA_TESTED_SOURCE=$RETAINED_0027
+run_case rollback 0027 main yes pass
+run_case rollback 0028 main yes refuse
+run_case deploy 0028 "$RETAINED_0027" no refuse
+
+# The 0028 candidate permits migration from its qualified 0027 predecessor.
+# Its app/scheduler can start only once the selected database reaches 0028.
+git -C "$APP_DIR" checkout -q --detach "$NYSE_TESTED"
+for name in backend/alembic/sql/0028_portfolio_daily_values.sql backend/alembic/versions/0028_portfolio_daily_values.py \
+  backend/app/db/{dev_bootstrap,portfolio_bootstrap,portfolio_migrate,schema_contract}.py \
+  backend/app/models/{__init__,portfolio_daily_value}.py \
+  backend/app/{schemas,services,tasks}/portfolio_daily_values.py deploy/db/bootstrap-roles.sql; do
+  mkdir -p "$APP_DIR/$(dirname "$name")"
+  cp "$HERE/../../$name" "$APP_DIR/$name"
+  git -C "$APP_DIR" add "$name"
+done
+git -C "$APP_DIR" -c user.name=Test -c user.email=test@example.invalid commit -q -m daily-value-tested
+DAILY_TESTED=$(git -C "$APP_DIR" rev-parse HEAD)
+BIRJA_TESTED_SOURCE=$DAILY_TESTED
+run_case deploy 0026 "$DAILY_TESTED" no refuse
+run_case deploy 0027 "$DAILY_TESTED" no pass
+run_case deploy 0028 "$DAILY_TESTED" no pass
+run_case deploy 0029 "$DAILY_TESTED" no refuse
+CANDIDATE_DB_REVISION=0027 run_case deploy 0027 "$DAILY_TESTED" no migration-refused
+run_case rollback 0027 main yes refuse
+run_case rollback 0028 main yes pass
+run_case deploy 0028 "$RETAINED_0027" no refuse
+
+# The role definitions and exact SQL remain mandatory even if the manifest
+# binds the source whose contents were substituted.
+for name in backend/alembic/sql/0028_portfolio_daily_values.sql \
+  backend/app/db/schema_contract.py deploy/db/bootstrap-roles.sql \
+  backend/alembic/versions/0027_stock_catalog_nyse_source.py; do
+  git -C "$APP_DIR" checkout -q --detach "$DAILY_TESTED"
+  printf '\n# altered synthetic contract\n' >> "$APP_DIR/$name"
+  git -C "$APP_DIR" add "$name"
+  git -C "$APP_DIR" -c user.name=Test -c user.email=test@example.invalid commit -q -m daily-value-corrupt
+  BIRJA_TESTED_SOURCE=$(git -C "$APP_DIR" rev-parse HEAD)
+  run_case deploy 0027 "$BIRJA_TESTED_SOURCE" no refuse
+  run_case rollback 0028 main yes refuse
+done
