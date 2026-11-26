@@ -76,6 +76,36 @@ Live Kraken and IEX history qualification remains open under CHART-04.
 2. The portfolio page puts the selector and actions above value and allocation, followed by sortable, filterable holdings. Incomplete valuations stay explicit.
 3. Daily snapshots agree with authoritative values, preserve missing data, never cross portfolio boundaries, and survive restart and encrypted restore. Capture retries and closures preserve the same historical record.
 
+**Plans:** 8 plans across 6 waves
+
+**Wave 1**
+
+- [ ] 24-01 — [Add the daily value schema and narrow capture authority](phases/24-compare-portfolio-performance/24-01-PLAN.md).
+- [ ] 24-02 — [Build the selected portfolio toolbar, allocation and holdings](phases/24-compare-portfolio-performance/24-02-PLAN.md).
+
+**Wave 2**
+
+- [ ] 24-03 — [Verify fresh and upgraded 0028 database paths](phases/24-compare-portfolio-performance/24-03-PLAN.md).
+
+**Wave 3**
+
+- [ ] 24-04 — [Capture daily valuations and serve private 30-day trends](phases/24-compare-portfolio-performance/24-04-PLAN.md).
+
+**Wave 4**
+
+- [ ] 24-05 — [Build portfolio overview cards and sparklines](phases/24-compare-portfolio-performance/24-05-PLAN.md).
+- [ ] 24-06 — [Extend encrypted backup and restore to daily values](phases/24-compare-portfolio-performance/24-06-PLAN.md).
+
+**Wave 5**
+
+- [ ] 24-07 — [Wire predecessor compatibility and successor recovery into CI](phases/24-compare-portfolio-performance/24-07-PLAN.md).
+
+**Wave 6**
+
+- [ ] 24-08 — [Verify the running views, finance behavior and encrypted recovery](phases/24-compare-portfolio-performance/24-08-PLAN.md).
+
+[Research](phases/24-compare-portfolio-performance/24-RESEARCH.md) · [UI contract](phases/24-compare-portfolio-performance/24-UI-SPEC.md) · [Validation](phases/24-compare-portfolio-performance/24-VALIDATION.md)
+
 ### Phase 25: Finish the trading flows and verify the integrated app
 
 **Goal:** Bring the approved trade, History and sign-in layouts into the live application code and qualify the release candidate.
@@ -96,7 +126,7 @@ Live Kraken and IEX history qualification remains open under CHART-04.
 |---|---|---|
 | 22. Adopt the market workspace | 3/3 | Complete 2026-11-26 |
 | 23. Show historical market prices | 4/4 | Local checks passed. Live qualification pending. |
-| 24. Compare portfolio performance | 0/TBD | Unplanned |
+| 24. Compare portfolio performance | 0/8 | Ready to execute |
 | 25. Finish the trading flows and verify the integrated app | 0/TBD | Unplanned |
 
 All 16 requirements map once in [REQUIREMENTS.md](REQUIREMENTS.md).

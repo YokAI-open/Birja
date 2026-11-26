@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Market Charts and Workspace Redesign
-current_phase: 23
-status: verifying
-last_updated: "2026-11-26T11:49:58Z"
-last_activity: 2026-11-26 -- Phase 23 local execution and verification complete
+current_phase: 24
+status: planned
+last_updated: "2026-11-26T12:36:11Z"
+last_activity: 2026-11-26 -- Phase 24 plans passed independent review
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 7
+  total_plans: 15
   completed_plans: 7
   percent: 25
 ---
@@ -23,14 +23,22 @@ See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md),
 [approved design](ui-reviews/v1.5/README.md).
 
 Core value: correct virtual trade and valuation money.
-Current focus: Qualify live historical prices for Phase 23.
+Current focus: Implement Phase 24 portfolio performance and recovery.
 
 ## Current Position
 
-Phase: 23 of 25 (Show historical market prices)
-Plan: 4 of 4 executed locally
-Status: Live provider qualification pending
-Last activity: 2026-11-26 -- Phase 23 local execution and verification complete
+Phase: 24 of 25 (Compare portfolio performance)
+Plan: 0 of 8 executed
+Status: Ready to execute
+Last activity: 2026-11-26 -- Phase 24 plans passed independent review
+
+Eight plans across six waves cover TREND-01 through TREND-04 and all five
+design decisions. The plan uses a 30-day display window and collects one
+observation per active portfolio during 22:00–24:00 UTC. Final verification
+pairs four running app and prototype views and tests exact encrypted restore.
+[Phase 24 validation strategy](phases/24-compare-portfolio-performance/24-VALIDATION.md)
+
+## Prior phase evidence
 
 The tested runtime `775c435` passed 11 isolated browser cases and 1,409
 frontend tests. Four app views were compared with the approved ZIP.
