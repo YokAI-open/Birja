@@ -2,7 +2,9 @@ import { test, expect, type Page, type TestInfo } from "@playwright/test";
 import { writeFile } from "node:fs/promises";
 import { stockFixture } from "./stock-trade-fixtures.js";
 import { portfolioApi, portfolioId, signInNewUser } from "./helpers.js";
-type StockFill = Record<"exec_price" | "cash_after" | "fee" | "held_after", string>;
+import { verifyOwnedReceipt, type TradeReceipt } from "./phase25-review-capture.js";
+
+type StockFill = TradeReceipt & { held_after: string };
 
 /** Actual DOM/CSS, frozen for offline owner zoom review; no API, script or navigation. */
 async function reviewSnapshot(page: Page, info: TestInfo, name: string) {
@@ -83,6 +85,12 @@ async function ticket(page: Page) {
   await link.click();
   await expect(page.getByLabel("Whole-share quantity")).toBeVisible();
   await expect(page.getByRole("button", { name: "Buy max" })).toBeEnabled();
+  const chooser = page.getByRole("combobox", { name: "Trading portfolio" });
+  await expect(chooser).toHaveCount(1);
+  await expect(chooser).toHaveValue(await portfolioId(page));
+  const order = page.getByRole("region", { name: "Trade ticket" });
+  await expect(order).toContainText("Cash available $10,000.00");
+  await expect(order).not.toContainText(await chooser.locator("option:checked").innerText());
 }
 async function pollStockContext(page: Page) {
   const refresh = page.waitForResponse((response) =>
@@ -140,6 +148,7 @@ test("actual ask buy and bid sale preserve immutable receipt, shared cash and co
   expect(buy.cash_after).toBe("9796.00000000");
   expect(buy.fee).toBe("0.00000000");
   expect(buy.held_after).toBe("2.00000000");
+  await verifyOwnedReceipt(page, buy, "stock");
   await openOwnedPortfolio(page);
   const portfolio = await page.request.get(await portfolioApi(page));
   const p = await portfolio.json();
@@ -159,6 +168,7 @@ test("actual ask buy and bid sale preserve immutable receipt, shared cash and co
   expect(sell.exec_price).toBe("100.00000000");
   expect(sell.cash_after).toBe("9996.00000000");
   expect(sell.held_after).toBe("0.00000000");
+  await verifyOwnedReceipt(page, sell, "stock");
   const selected = await portfolioId(page);
   await page.goto(`/portfolios/${selected}/trade/BTC`);
   await expect(page.getByRole("heading", { name: /Trade BTC/ })).toBeVisible();
@@ -210,6 +220,7 @@ test("actual changed ask requires renewed confirmation with the exact server del
   await reviewSnapshot(page, info, "stock-reprice-review");
   const saved = await fill(page);
   expect(saved.cash_after).toBe("9794.00000000");
+  await verifyOwnedReceipt(page, saved, "stock");
 });
 
 test("actual committed lost response resolves the original receipt with the same key after close", async ({
@@ -219,7 +230,7 @@ test("actual committed lost response resolves the original receipt with the same
   await ticket(page);
   await preview(page);
   const bodies: unknown[] = [];
-  let original: unknown;
+  let original: StockFill | undefined;
   await page.route("**" + (await portfolioApi(page, "/stock-trades")), async (route) => {
     bodies.push(route.request().postDataJSON());
     const response = await route.fetch();
@@ -246,6 +257,8 @@ test("actual committed lost response resolves the original receipt with the same
   const p = await (await page.request.get(await portfolioApi(page))).json();
   expect(p.cash).toBe("9796.00");
   expect(p.holdings[0].quantity).toBe("2.00000000");
+  expect(original).toBeDefined();
+  await verifyOwnedReceipt(page, original!, "stock");
 });
 
 test("actual malformed success preserves the original attempt for safe result recovery", async ({
@@ -276,6 +289,8 @@ test("closed drafts retain quantity and require a fresh explicit preview after r
   stockFixture("close");
   await pollStockContext(page);
   await expect(page.getByText("Market closed.", { exact: false })).toBeVisible();
+  await expect(page.locator("time").filter({ hasText: /^Opens in / })).toBeVisible();
+  await expect(page.locator(".trade-workspace-price")).toHaveText("$101.00");
   await expect(page.getByRole("button", { name: "Confirm buy", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Retry stock", exact: true })).toHaveCount(0);
   await expect(page.getByText("Cash available $10,000.00", { exact: true })).toBeVisible();

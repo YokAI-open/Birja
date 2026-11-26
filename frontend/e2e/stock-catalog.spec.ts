@@ -10,6 +10,7 @@ import {
   type HistoryQuery,
 } from "./market-history-fixtures.js";
 import { stockFixture } from "./stock-trade-fixtures.js";
+import { verifyOwnedReceipt, type TradeReceipt } from "./phase25-review-capture.js";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const quotePath = /^\/api\/v2\/stock-catalog\/([1-9]\d*)\/quote$/;
@@ -478,12 +479,14 @@ test("catalog buys and sells a promoted out-of-list stock with repricing and rep
   const result = await replay;
   expect(result.status()).toBe(200);
   expect(result.request().postDataJSON()).toEqual(firstBody);
-  expect(await result.json()).toEqual(committed);
+  const buyReceipt: TradeReceipt = await result.json();
+  expect(buyReceipt).toEqual(committed);
   expect(writes.filter((path) => path === endpoint + "/confirm")).toHaveLength(2);
   const receipt = page.getByRole("heading", { name: "Order filled" });
   await expect(receipt).toBeFocused();
   await expect(page.getByText("Bought 2 shares", { exact: true })).toBeVisible();
   await expect(page.getByText("Cash after this trade", { exact: true })).toBeVisible();
+  await verifyOwnedReceipt(page, buyReceipt, "stock");
   const bought = await (await page.request.get(scope)).json();
   expect(Number(bought.cash)).toBe(9791.75);
   expect(bought.holdings).toEqual([
@@ -506,8 +509,10 @@ test("catalog buys and sells a promoted out-of-list stock with repricing and rep
   await page.getByRole("button", { name: "Preview trade" }).click();
   const sale = page.waitForResponse((r) => new URL(r.url()).pathname === endpoint + "/confirm");
   await page.getByRole("button", { name: "Confirm sell" }).click();
-  expect((await sale).status()).toBe(201);
+  const saleResponse = await sale;
+  expect(saleResponse.status()).toBe(201);
   await expect(page.getByText("Sold 2 shares", { exact: true })).toBeVisible();
+  await verifyOwnedReceipt(page, await saleResponse.json(), "stock");
   const sold = await (await page.request.get(scope)).json();
   expect(Number(sold.cash)).toBe(9993.75);
   expect(sold.holdings).toEqual([]);
