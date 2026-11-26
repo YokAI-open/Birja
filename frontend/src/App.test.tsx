@@ -530,6 +530,35 @@ it("keeps a terminal-refusal same-ID metadata retry visible after fresh proof fa
       .every(([path]) => path === "/api/v2/portfolios/1"),
   ).toBe(true);
 });
+it("uses one managed toolbar in chooser, Edit, Update and Remove tab order", async () => {
+  probes.actualPage = true;
+  const fetch = deletionApi({ rows: () => [first, second] });
+  const { user } = setup("/portfolios/1");
+  await screen.findByRole("region", { name: "Cash" });
+  const toolbar = screen.getByRole("group", { name: "Portfolio controls" });
+  const chooser = within(toolbar).getByRole("combobox", { name: "Open portfolio" });
+  const edit = within(toolbar).getByRole("button", { name: "Edit portfolio" });
+  const update = within(toolbar).getByRole("button", { name: "Update portfolio" });
+  const remove = within(toolbar).getByRole("button", { name: "Remove portfolio" });
+  await waitFor(() => expect(remove).toBeEnabled());
+  expect(screen.getAllByRole("combobox", { name: "Open portfolio" })).toEqual([chooser]);
+  expect(screen.getAllByRole("button", { name: "Update portfolio" })).toEqual([update]);
+  expect([...toolbar.querySelectorAll("select, button")]).toEqual([chooser, edit, update, remove]);
+  expect(update.querySelector("time")).toHaveAttribute("datetime", cashPortfolio().valued_at);
+  await user.click(chooser);
+  await user.tab();
+  expect(edit).toHaveFocus();
+  await user.tab();
+  expect(update).toHaveFocus();
+  await user.tab();
+  expect(remove).toHaveFocus();
+  await user.click(update);
+  await waitFor(() =>
+    expect(fetch.mock.calls.filter(([path]) => path === "/api/v2/portfolios/1")).toHaveLength(2),
+  );
+  expect(fetch.mock.calls.some(([path]) => path === "/api/v2/portfolios/2")).toBe(false);
+});
+
 it.each(["/portfolios/1", "/portfolios/1/"])(
   "gives real index %s one primary h1 and the persistent management host",
   async (route) => {
@@ -594,6 +623,7 @@ it.each(["/portfolios/1/history", "/portfolios/1/trade/BTC", "/portfolios/1/trad
     await screen.findByText(/Private alice@example.test root 1/);
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "Edit portfolio" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Update portfolio" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Remove portfolio" })).toBeNull();
   },
 );

@@ -1,0 +1,49 @@
+.portfolio-workspace {
+  width: 100%;
+  max-width: 1360px;
+  min-width: 0;
+  margin: 24px auto 0;
+}
+
+.portfolio-managed-toolbar,
+.portfolio-managed-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.portfolio-managed-toolbar {
+  justify-content: space-between;
+}
+
+.portfolio-managed-picker {
+  width: min(220px, 100%);
+}
+
+.portfolio-managed-picker select {
+  height: auto;
+  min-height: 44px;
+  padding-block: 8px;
+}
+
+.portfolio-workspace-content {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 28px;
+  margin-top: 22px;
+}
+
+@media (min-width: 741px) {
+  .portfolio-workspace {
+    margin-top: 46px;
+  }
+}
+
+@media (max-width: 520px) {
+  .portfolio-managed-actions {
+    flex-basis: 100%;
+  }
+}

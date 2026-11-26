@@ -1,5 +1,5 @@
-import { useCallback, useRef } from "react";
-import { RefreshCw } from "lucide-react";
+import { useCallback, useContext, useId, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useLocation, useOutletContext } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,13 +10,17 @@ import { useNow } from "@/hooks/useNow";
 import { PortfolioFreshness } from "@/components/PortfolioFreshness";
 import { PortfolioHoldings } from "@/components/PortfolioHoldings";
 import { PortfolioAllocation } from "@/components/PortfolioAllocation";
+import { PortfolioToolbarSlot } from "@/components/PortfolioToolbarSlot";
 import { formatUsd } from "@/lib/money";
 import { formatAge, freshnessStatus, oldestHoldingAge, statusLabel } from "@/lib/age";
 import { fullLocalTimestamp, outcome, signedPercent, signedUsd } from "@/lib/financialDisplay";
 import type { PortfolioTarget } from "@/hooks/usePortfolioTarget";
+import "./portfolioWorkspace.css";
 
 export default function PortfolioPage() {
   const target = useOutletContext<PortfolioTarget>();
+  const toolbarSlot = useContext(PortfolioToolbarSlot);
+  const freshnessId = useId();
   const { state } = useLocation();
   const { metadata } = usePortfolioManagement(target.portfolioId);
   const { data, isPending, isError, isFetching, refetch, dataUpdatedAt } = usePortfolio(target);
@@ -53,31 +57,38 @@ export default function PortfolioPage() {
           ? "Incomplete"
           : historical
             ? "Dated prices"
-            : `${liveStatus ? statusLabel(liveStatus) : "Updated"} · ${formatAge(oldest ?? elapsed)}`;
+            : liveStatus && liveStatus !== "fresh"
+              ? `${statusLabel(liveStatus)} · ${formatAge(oldest ?? elapsed)}`
+              : formatAge(oldest ?? elapsed);
+
+  const refreshControl = (
+    <Button
+      ref={refreshButton}
+      variant="secondary"
+      className="min-h-11 min-w-11 flex-wrap gap-x-2 rounded-pill px-4 aria-disabled:opacity-40"
+      aria-label={isFetching ? "Updating portfolio…" : "Update portfolio"}
+      aria-describedby={freshnessId}
+      aria-disabled={isFetching}
+      onClick={refresh}
+    >
+      Update
+      <time
+        id={freshnessId}
+        className="text-xs font-normal text-muted-foreground tabular-nums"
+        dateTime={data?.valued_at}
+        title={data && fullLocalTimestamp(data.valued_at)}
+      >
+        {freshness}
+      </time>
+    </Button>
+  );
 
   return (
     <>
-      <div className="flex min-w-0 shrink-0 items-center gap-1.5 sm:gap-3">
-        <Button
-          ref={refreshButton}
-          variant="secondary"
-          className="min-h-11 min-w-11 gap-2 px-2.5 aria-disabled:opacity-40 sm:px-4"
-          aria-label={isFetching ? "Updating portfolio…" : "Update portfolio"}
-          title="Update portfolio"
-          aria-disabled={isFetching}
-          onClick={refresh}
-        >
-          <RefreshCw aria-hidden="true" className="size-4" />
-          <span className="hidden sm:inline">Update</span>
-        </Button>
-        <span
-          className="max-w-[6ch] text-xs leading-tight text-muted-foreground tabular-nums sm:max-w-none sm:text-sm"
-          title={data && fullLocalTimestamp(data.valued_at)}
-        >
-          {freshness}
-        </span>
-      </div>
-      <div className="col-span-full my-6 flex min-w-0 flex-col gap-7 text-base lg:gap-9">
+      {toolbarSlot === undefined
+        ? refreshControl
+        : toolbarSlot && createPortal(refreshControl, toolbarSlot)}
+      <div className="portfolio-workspace-content">
         {state?.creationResult?.id === target.portfolioId && (
           <p role="status">
             {state.creationResult.replay ? "Original portfolio confirmed." : "Portfolio created."}

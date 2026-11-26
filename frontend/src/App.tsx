@@ -27,6 +27,7 @@ import PortfoliosPage from "@/pages/PortfoliosPage";
 import { PortfolioSwitcher } from "@/components/PortfolioSwitcher";
 import HistoryPage from "@/pages/HistoryPage";
 import { PortfolioTargetBoundary } from "@/components/PortfolioTargetBoundary";
+import { PortfolioToolbarSlot } from "@/components/PortfolioToolbarSlot";
 import { usePortfolioTarget } from "@/hooks/usePortfolioTarget";
 import { isPortfolioId } from "@/api/portfolios";
 import { isCatalogId } from "@/api/stockCatalog";
@@ -42,10 +43,10 @@ export function PortfolioRoute() {
   const target = usePortfolioTarget(portfolioId);
   const client = useQueryClient();
   const owner = useMe().data?.email;
-  const root = useRef<HTMLDivElement>(null);
   const primaryHeading = useRef<HTMLHeadingElement>(null);
   const managementFocus = useRef<Element | null>(null);
   const editTrigger = useRef<HTMLButtonElement>(null);
+  const [updateSlot, setUpdateSlot] = useState<HTMLDivElement | null>(null);
   const [removeSlot, setRemoveSlot] = useState<HTMLDivElement | null>(null);
   const [editingId, setEditingId] = useState<string>();
   const detailMatch = useMatch({ path: "/portfolios/:portfolioId", end: true });
@@ -60,17 +61,10 @@ export function PortfolioRoute() {
       !managementFocus.current.isConnected &&
       document.activeElement === document.body
     )
-      root.current?.querySelector<HTMLHeadingElement>("h1")?.focus();
+      primaryHeading.current?.focus();
   }, [target.status]);
   return (
-    <div
-      className={cn(
-        detail ? "mx-auto mt-6 w-full max-w-[1280px]" : "contents",
-        ready &&
-          "grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 sm:grid-cols-[minmax(0,30rem)_auto_1fr] sm:gap-x-3",
-      )}
-      ref={root}
-    >
+    <div className={detail ? "portfolio-workspace" : "contents"}>
       {detail && (
         <h1
           ref={primaryHeading}
@@ -88,28 +82,42 @@ export function PortfolioRoute() {
         </h1>
       )}
       {detail && (
-        <div className="flex min-w-0 items-center gap-2">
-          <PortfolioSwitcher portfolioId={portfolioId} prominent inline />
+        <div
+          className="portfolio-managed-toolbar"
+          role="group"
+          aria-label="Portfolio controls"
+          onFocusCapture={(event) => {
+            managementFocus.current = event.target;
+          }}
+        >
+          <div className="portfolio-managed-picker">
+            <PortfolioSwitcher portfolioId={portfolioId} inline />
+          </div>
           {ready && (
-            <Button
-              ref={editTrigger}
-              type="button"
-              variant="secondary"
-              aria-label="Edit portfolio"
-              className="min-h-11 px-3"
-              disabled={editOpen || management.metadataPending || management.metadataBlocked}
-              onClick={() => setEditingId(portfolioId)}
-            >
-              Edit
-            </Button>
+            <div className="portfolio-managed-actions">
+              <Button
+                ref={editTrigger}
+                type="button"
+                variant="secondary"
+                aria-label="Edit portfolio"
+                className="min-h-11 rounded-pill px-4"
+                disabled={editOpen || management.metadataPending || management.metadataBlocked}
+                onClick={() => setEditingId(portfolioId)}
+              >
+                Edit
+              </Button>
+              <div ref={setUpdateSlot} className="min-w-0" />
+              <div ref={setRemoveSlot} className="min-w-0" />
+            </div>
           )}
-          {ready && <div ref={setRemoveSlot} className="shrink-0" />}
         </div>
       )}
-      <PortfolioTargetBoundary primaryHeading={detail ? primaryHeading : undefined} />
+      <PortfolioToolbarSlot.Provider value={detail ? updateSlot : undefined}>
+        <PortfolioTargetBoundary primaryHeading={detail ? primaryHeading : undefined} />
+      </PortfolioToolbarSlot.Provider>
       {detail && owner && (
         <div
-          className="col-span-full min-w-0"
+          className="min-w-0"
           onFocusCapture={(event) => {
             managementFocus.current = event.target;
           }}
