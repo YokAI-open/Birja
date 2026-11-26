@@ -1,5 +1,6 @@
 """Use disposable datastore loops with bounded, synthetic provider responses."""
 
+import asyncio
 import json
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -17,7 +18,7 @@ from app.models.trade import Trade
 from app.schemas.market_history import MarketHistoryQuery, MarketHistoryScopes
 from app.services.kraken import TICKER_URL, fetch_tickers_isolated
 from app.services.market_history_authority import resolve_history
-from app.services.market_history_demand import _queue, request_history
+from app.services.market_history_demand import _queue, complete_history, request_history
 from app.services.market_history_providers import IEX_BARS_URL, KRAKEN_OHLC_URL
 from app.tasks import market_history, stock_scheduler
 from tests.helpers import put_price, sign_in, unique_email
@@ -60,7 +61,7 @@ async def enqueue(factory, redis, settings, query, now=NOW):
     async with factory() as db:
         authority = await resolve_history(db, settings, query, now)
     assert authority is not None
-    result = await request_history(
+    result, _ = await request_history(
         redis,
         server=settings.stock_data_server,
         owner_id=7,
@@ -88,13 +89,16 @@ async def test_kraken_history_publishes_once_and_keeps_current_price(
     # A stable UTC minute groups the real authenticated browser reads and worker.
     from app.api.v2 import market_history as api
 
+    now = datetime.now(UTC).replace(microsecond=0)
+    time = [now]
+
     class Clock(datetime):
         @classmethod
         def now(cls, tz=None):
-            return NOW
+            return time[0]
 
     monkeypatch.setattr(api, "datetime", Clock)
-    scope = crypto_scope(NOW, history_server, retention_seconds=15)
+    scope = crypto_scope(now, history_server, retention_seconds=15)
     monkeypatch.setattr(settings, "market_history_scope_json", scope)
     config = schedule(settings, scope)
     factory = async_sessionmaker(engine, expire_on_commit=False)
@@ -110,7 +114,7 @@ async def test_kraken_history_publishes_once_and_keeps_current_price(
     headers = {"X-CSRF-Token": auth_client.cookies["bj_csrf"]}
     assert (await auth_client.post(URL, json=BTC, headers=headers)).json()["state"] == "pending"
     query = MarketHistoryQuery.model_validate(BTC)
-    authority = await enqueue(factory, redis_client, config, query)
+    authority = await enqueue(factory, redis_client, config, query, now)
     tracker, _ = ticker_budget()
     count = 0
 
@@ -133,7 +137,7 @@ async def test_kraken_history_publishes_once_and_keeps_current_price(
                 stock_http=None,
                 settings=config,
                 tracker=tracker,
-                now=lambda: NOW,
+                now=lambda: now,
             )
             assert result.accepted == accepted
     assert count == 1
@@ -143,6 +147,22 @@ async def test_kraken_history_publishes_once_and_keeps_current_price(
     assert all(point["close"] != "80000" for point in body["series"]["points"])
     key = f"{_queue(history_server)}:result:{authority.fingerprint}"
     assert 0 < await redis_client.pttl(key) <= 15000
+    assert await redis_client.pexpiretime(key) == int(now.timestamp() * 1000) + 15000
+
+    resolve = api.resolve_history
+    checks = 0
+
+    async def expire_during_check(*args):
+        nonlocal checks
+        outcome = await resolve(*args)
+        checks += 1
+        if checks == 2:
+            time[0] += timedelta(seconds=16)
+        return outcome
+
+    monkeypatch.setattr(api, "resolve_history", expire_during_check)
+    expired = await auth_client.post(URL, json=BTC, headers=headers)
+    assert checks == 2 and expired.json() == {**BTC, "state": "unavailable", "series": None}
     prices_after = (await auth_client.get("/api/v1/prices")).json()["items"]
     assert [(row["symbol"], row["price"], row["as_of"]) for row in prices_after] == [
         (row["symbol"], row["price"], row["as_of"]) for row in prices_before
@@ -222,6 +242,56 @@ async def test_kraken_counts_each_retry_and_pair_fallback(settings, history_serv
     assert seen == [",".join(pairs), ",".join(pairs), *pairs]
     assert len(tracker.attempts) == 4
     assert sum(PAIR in attempted for _, attempted in tracker.attempts) == 3
+
+
+def test_kraken_ticker_priority_uses_fixed_cadence_after_late_wakeup(history_server) -> None:
+    scope = crypto_scope(NOW, history_server).kraken
+    assert scope is not None
+    tracker, clock = ticker_budget()
+    scheduled_start = tracker.next_due
+    assert scheduled_start is not None
+    clock[0] = scheduled_start + 3
+    tracker.start_ticker()
+    tracker.record_ticker_attempt([PAIR])
+    tracker.finish_ticker()
+    assert tracker.next_due == scheduled_start + 60
+    clock[0] = scheduled_start + 55
+    assert tracker.headroom(scope, PAIR) is None
+
+
+async def test_timed_out_history_demand_leaves_the_next_job_claimable(
+    engine, settings, redis_client, history_server, monkeypatch
+) -> None:
+    config = schedule(settings, crypto_scope(NOW, history_server))
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    newest = MarketHistoryQuery.model_validate({**BTC, "range": "1D"})
+    oldest = MarketHistoryQuery.model_validate(BTC)
+    first = await enqueue(factory, redis_client, config, oldest)
+    await enqueue(factory, redis_client, config, newest)
+    await redis_client.zincrby(_queue(history_server), -500, first.fingerprint)
+    attempted = []
+
+    async def consume(_factory, cache, _quota, _http, _stock, _settings, job, _tracker, _now):
+        attempted.append(job.query)
+        if job.query == oldest:
+            await asyncio.sleep(5)
+        await complete_history(cache, history_server, job)
+        return 0
+
+    monkeypatch.setattr(market_history, "_consume", consume)
+    monkeypatch.setattr(market_history, "_WALL_SECONDS", 0.1)
+    async with httpx.AsyncClient(transport=httpx.MockTransport(forbidden)) as http:
+        for status in ("source_error", "ok"):
+            result = await market_history.run_history_cycle(
+                sessionmaker=factory,
+                redis=redis_client,
+                quota_redis=redis_client,
+                http=http,
+                stock_http=None,
+                settings=config,
+            )
+            assert result.status == status
+    assert attempted == [oldest, newest]
 
 
 async def test_kraken_reservations_share_the_seconds_and_minute_window(

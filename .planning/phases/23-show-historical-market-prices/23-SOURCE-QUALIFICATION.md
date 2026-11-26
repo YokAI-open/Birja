@@ -20,6 +20,11 @@ is 12 IEX and 6 Kraken attempts across all ranges within 10 minutes, subject
 to the applicable lower limits. IEX access uses the explicit IEX feed.
 [Alpaca market data FAQ](https://docs.alpaca.markets/us/docs/market-data-faq)
 
+Record whether each observed limit applies just to historical bars or to the
+entire Alpaca account. When the provider's measured shared account ceiling
+is lower than Birja's existing quote and corporate-action account ceiling,
+bind the shared configuration to that lower ceiling before enabling history.
+
 Local fixtures are enabled for both candidates. Live collection, display,
 derived changes, and caching remain gated. The live portion of CHART-04
 remains open.

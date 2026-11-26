@@ -19,6 +19,9 @@ PRIVATE = {"Cache-Control": "no-store", "Vary": "Cookie, Authorization"}
 
 
 class PrivateRoute(APIRoute):
+    failure_context = "stock request"
+    failure_message = "Order result unavailable. Check the original order again."
+
     def get_route_handler(self) -> Callable[[Request], Coroutine[Any, Any, Response]]:
         original = super().get_route_handler()
 
@@ -33,13 +36,13 @@ class PrivateRoute(APIRoute):
             except Exception as exc:
                 # A response failure can follow commit. Never imply no fill or
                 # expose SQL/provider/credential details; retry the ORIGINAL key.
-                logger.error("stock request failed type=%s", type(exc).__name__)
+                logger.error("%s failed type=%s", self.failure_context, type(exc).__name__)
                 response = JSONResponse(
                     status_code=500,
                     content={
                         "detail": {
                             "code": "service_unavailable",
-                            "message": "Order result unavailable. Check the original order again.",
+                            "message": self.failure_message,
                         }
                     },
                 )

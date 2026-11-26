@@ -18,7 +18,13 @@ from app.services.market_history_authority import (
 )
 from app.services.market_history_demand import history_response, request_history
 
-router = APIRouter(tags=["market history"], route_class=PrivateRoute)
+
+class _HistoryRoute(PrivateRoute):
+    failure_context = "market history request"
+    failure_message = "Couldn’t load price history."
+
+
+router = APIRouter(tags=["market history"], route_class=_HistoryRoute)
 
 
 async def _resolve(
@@ -47,7 +53,7 @@ async def post_market_history(
     owner_id = user.id
     await db.rollback()
     try:
-        result = await request_history(
+        result, expires_at_ms = await request_history(
             redis,
             server=settings.stock_data_server,
             owner_id=owner_id,
@@ -63,6 +69,11 @@ async def post_market_history(
     current = await _resolve(db, settings, body)
     if current is None or current.fingerprint != authority.fingerprint:
         return history_response(body, "unavailable")
-    if datetime.now(UTC) >= current.valid_until:
+    checked_at = datetime.now(UTC)
+    if (
+        checked_at >= current.valid_until
+        or expires_at_ms is None
+        or int(checked_at.timestamp() * 1000) >= expires_at_ms
+    ):
         return history_response(body, "unavailable")
     return result

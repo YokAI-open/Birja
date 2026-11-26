@@ -55,14 +55,29 @@ if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
 if redis.call('GET', KEYS[2]) ~= ARGV[2] then return 0 end
 return 1
 """
-_COMPLETE = """
+_READ_CACHED = """
+local value = redis.call('GET', KEYS[1])
+if not value then return {} end
+return {value, redis.call('PEXPIRETIME', KEYS[1])}
+"""
+_COMPLETE = (
+    _TIME
+    + """
 if redis.call('GET', KEYS[2]) ~= ARGV[2] then return 0 end
 if redis.call('GET', KEYS[3]) ~= ARGV[3] then return 0 end
-if ARGV[4] ~= '' then redis.call('SET', KEYS[4], ARGV[4], 'PX', ARGV[5]) end
+local completed = 1
+if ARGV[4] ~= '' then
+    if tonumber(ARGV[5]) > now then
+        redis.call('SET', KEYS[4], ARGV[4], 'PXAT', ARGV[5])
+    else
+        completed = 0
+    end
+end
 redis.call('DEL', KEYS[2], KEYS[3])
 redis.call('ZREM', KEYS[1], ARGV[1])
-return 1
+return completed
 """
+)
 _RELEASE = """
 if redis.call('GET', KEYS[1]) == ARGV[1] then redis.call('DEL', KEYS[1]) end
 """
@@ -94,9 +109,12 @@ def history_response(query: MarketHistoryQuery, state: HistoryState) -> MarketHi
 
 async def _cached(
     redis: Redis, key: str, query: MarketHistoryQuery
-) -> MarketHistoryResponse | None:
-    raw = await redis.get(key)
-    if raw is None or len(raw) > _MAX_RESULT:
+) -> tuple[MarketHistoryResponse, int] | None:
+    entry = await redis.eval(_READ_CACHED, 1, key)
+    if not entry:
+        return None
+    raw, expires_at_ms = entry
+    if expires_at_ms <= 0 or len(raw) > _MAX_RESULT:
         return None
     try:
         result = MarketHistoryResponse.model_validate_json(raw)
@@ -104,7 +122,7 @@ async def _cached(
         return None
     if result.instrument != query.instrument or result.range != query.range:
         return None
-    return result
+    return result, expires_at_ms
 
 
 async def request_history(
@@ -114,7 +132,7 @@ async def request_history(
     owner_id: int,
     query: MarketHistoryQuery,
     fingerprint: str,
-) -> MarketHistoryResponse:
+) -> tuple[MarketHistoryResponse, int | None]:
     queue = _queue(server)
     cache = f"{queue}:result:{fingerprint}"
     async with asyncio.timeout(2):
@@ -123,7 +141,7 @@ async def request_history(
             return result
         allowed, _ = await hit(redis, f"{queue}:owner:{owner_id}", 12, 60)
         if not allowed:
-            return history_response(query, "unavailable")
+            return history_response(query, "unavailable"), None
         pending = _Pending(
             instrument=query.instrument, range=query.range, token=secrets.token_hex(16)
         )
@@ -143,7 +161,7 @@ async def request_history(
             result = await _cached(redis, cache, query)
             if result is not None:
                 return result
-        return history_response(query, "pending" if response == "pending" else "unavailable")
+        return history_response(query, "pending" if response == "pending" else "unavailable"), None
 
 
 async def claim_history(redis: Redis, server: str) -> HistoryJob | None:
@@ -186,10 +204,10 @@ async def complete_history(
     job: HistoryJob,
     result: MarketHistoryResponse | None = None,
     *,
-    ttl_ms: int = 0,
+    expires_at_ms: int = 0,
 ) -> bool:
     queue = _queue(server)
-    serialized = result.model_dump_json() if result is not None and ttl_ms > 0 else ""
+    serialized = result.model_dump_json() if result is not None else ""
     if len(serialized) > _MAX_RESULT:
         serialized = ""
     return bool(
@@ -204,7 +222,7 @@ async def complete_history(
             job.pending,
             job.lock_token,
             serialized,
-            ttl_ms,
+            expires_at_ms,
         )
     )
 

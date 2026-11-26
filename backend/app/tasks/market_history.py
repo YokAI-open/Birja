@@ -92,9 +92,14 @@ class KrakenHistoryBudget:
 
     def start_ticker(self) -> None:
         self.running = True
-        self.next_due = self.monotonic() + self.interval
+        now = self.monotonic()
+        base = min(now, self.next_due) if self.next_due is not None else now
+        self.next_due = base + self.interval
 
     def finish_ticker(self) -> None:
+        now = self.monotonic()
+        if self.next_due is not None and self.next_due <= now:
+            self.next_due = now + self.interval
         self.running = False
 
     def set_pairs(self, pairs: Sequence[str]) -> None:
@@ -186,14 +191,10 @@ async def _reserve_kraken(
     return checked is not None and min(checked) > 0
 
 
-def _cache_ttl_ms(
-    authority: HistoryAuthority, started: datetime, at: datetime, *, available: bool
-) -> int:
+def _cache_expiry_ms(authority: HistoryAuthority, started: datetime, *, available: bool) -> int:
     ceiling = _CACHE_SECONDS[authority.window.range] if available else 10
     retained_until = started + timedelta(seconds=min(ceiling, authority.scope.retention_seconds))
-    # Redis TTL is server-relative. Leave a margin for crossing the wire.
-    allowed = min(authority.valid_until, retained_until) - at
-    return max(0, int(allowed.total_seconds() * 1000) - 100)
+    return int(min(authority.valid_until, retained_until).timestamp() * 1000)
 
 
 async def _load_authority(
@@ -282,9 +283,9 @@ async def _consume(
     if current is None:
         await complete_history(redis, server, job)
         return 0
-    ttl = _cache_ttl_ms(current, started, now(), available=result.series is not None)
-    stored = await complete_history(redis, server, job, result, ttl_ms=ttl)
-    return int(stored and ttl > 0 and result.series is not None)
+    expires_at = _cache_expiry_ms(current, started, available=result.series is not None)
+    stored = await complete_history(redis, server, job, result, expires_at_ms=expires_at)
+    return int(stored and result.series is not None)
 
 
 async def run_history_cycle(
@@ -301,6 +302,7 @@ async def run_history_cycle(
     if redis is None or settings.market_history_scope_json is None:
         return CycleResult("ok")
     job = None
+    failed = False
     server = settings.stock_data_server
     try:
         async with asyncio.timeout(_WALL_SECONDS):
@@ -312,10 +314,13 @@ async def run_history_cycle(
             )
             return CycleResult("ok", accepted=accepted, rejected=1 - accepted)
     except Exception as exc:
+        failed = True
         logger.warning("market history cycle failed: %s", type(exc).__name__)
         return CycleResult("source_error")
     finally:
         if job is not None:
             with suppress(RedisError, TimeoutError):
                 async with asyncio.timeout(1):
+                    if failed:
+                        await complete_history(redis, server, job)
                     await release_history(redis, server, job)

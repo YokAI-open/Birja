@@ -119,7 +119,17 @@ async def test_repeated_history_reads_share_work_and_rate_limits(
     redis_client,
     history_server,
 ) -> None:
-    scope = crypto_scope(datetime.now(UTC), history_server)
+    from app.api.v2 import market_history as api
+
+    now = datetime.now(UTC)
+
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return now
+
+    monkeypatch.setattr(api, "datetime", Clock)
+    scope = crypto_scope(now, history_server)
     monkeypatch.setattr(settings, "market_history_scope_json", scope)
     await sign_in(auth_client, outbox, unique_email())
     headers = {"X-CSRF-Token": auth_client.cookies["bj_csrf"]}
@@ -152,8 +162,8 @@ async def test_pending_capacity_is_shared_across_users(redis_client, history_ser
             for index in range(65)
         ]
     )
-    assert sum(item.state == "pending" for item in results) == 64
-    assert sum(item.state == "unavailable" for item in results) == 1
+    assert sum(item.state == "pending" for item, _ in results) == 64
+    assert sum(item.state == "unavailable" for item, _ in results) == 1
 
 
 async def test_expired_scope_and_redis_outage_are_history_only(
@@ -179,13 +189,28 @@ async def test_expired_scope_and_redis_outage_are_history_only(
     monkeypatch.setattr(settings, "market_history_scope_json", crypto_scope(now, history_server))
 
     class BrokenCache:
-        async def get(self, _key):
+        async def eval(self, *_args):
             raise RedisError("synthetic cache outage")
 
     monkeypatch.setattr(running_app.state, "catalog_quote_redis", BrokenCache())
     response = await auth_client.post(URL, json=BTC, headers=headers)
     assert response.json() == {**BTC, "state": "unavailable", "series": None}
     assert (await auth_client.get("/api/v1/prices")).status_code == 200
+
+
+async def test_unexpected_history_error_stays_private(auth_client, outbox, monkeypatch) -> None:
+    from app.api.v2 import market_history as api
+
+    async def raised(*_args):
+        raise RuntimeError("synthetic history resolution failure")
+
+    await sign_in(auth_client, outbox, unique_email())
+    monkeypatch.setattr(api, "resolve_history", raised)
+    headers = {"X-CSRF-Token": auth_client.cookies["bj_csrf"]}
+    response = await auth_client.post(URL, json=BTC, headers=headers)
+    assert response.status_code == 500
+    assert response.json()["detail"]["message"] == "Couldn’t load price history."
+    assert "no-store" in response.headers["cache-control"]
 
 
 def test_invalid_optional_scope_leaves_other_services_configured(monkeypatch) -> None:
