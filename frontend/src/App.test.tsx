@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation, useNavigate, useOutletContext, useParams } from "react-router";
 import userEvent from "@testing-library/user-event";
@@ -1000,6 +1000,7 @@ it("preserves logout CSRF and refuses late identity/root resurrection", async ()
   await waitFor(() => expect(release).toBeTypeOf("function"));
   await user.click(screen.getByRole("button", { name: "Sign out" }));
   expect(await screen.findByRole("button", { name: "Send code" })).toBeVisible();
+  expect(screen.getByLabelText("Email")).toHaveFocus();
   expect(signal.aborted).toBe(true);
   expect(client.getQueryCache().find({ queryKey: ["me"] })).toBe(query);
   const call = fetch.mock.calls.find(([url]) => url === "/api/v1/auth/logout")!;
@@ -1010,6 +1011,34 @@ it("preserves logout CSRF and refuses late identity/root resurrection", async ()
   });
   expect(client.getQueryData(["me"])).toBeNull();
   expect(screen.queryByRole("navigation")).toBeNull();
+});
+it("keeps one sign-out request pending and focuses the email field on success", async () => {
+  document.cookie = "bj_csrf=synthetic; path=/";
+  let release!: (response: Response) => void;
+  const base = api();
+  const fetch = vi.fn((path: string) =>
+    path === "/api/v1/auth/logout"
+      ? new Promise<Response>((resolve) => (release = resolve))
+      : base(path),
+  );
+  vi.stubGlobal("fetch", fetch);
+  const { user } = setup("/portfolios/1/history");
+  await screen.findByRole("heading", { name: "History page" });
+  const door = screen.getByRole("button", { name: "Sign out" });
+  act(() => {
+    fireEvent.click(door);
+    fireEvent.click(door);
+  });
+  const busyDoor = await screen.findByRole("button", { name: "Signing out…" });
+  expect(busyDoor).toHaveAttribute("aria-disabled", "true");
+  expect(busyDoor).toHaveAttribute("aria-busy", "true");
+  await user.click(busyDoor);
+  const logoutCalls = () => fetch.mock.calls.filter(([path]) => path === "/api/v1/auth/logout");
+  expect(logoutCalls()).toHaveLength(1);
+  await act(async () => release(new Response(null, { status: 204 })));
+  expect(await screen.findByLabelText("Email")).toHaveFocus();
+  expect(screen.queryByRole("navigation")).toBeNull();
+  expect(logoutCalls()).toHaveLength(1);
 });
 it("keeps the current page and sign-out control usable on failure", async () => {
   document.cookie = "bj_csrf=synthetic; path=/";

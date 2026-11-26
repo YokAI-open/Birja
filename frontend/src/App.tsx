@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { DoorClosed, DoorOpen } from "lucide-react";
 import {
   Link,
@@ -169,6 +169,7 @@ function SessionButton({
       aria-label={signedIn ? label : "Go to sign-in form"}
       title={label}
       aria-disabled={pending}
+      aria-busy={pending || undefined}
       onClick={onClick}
     >
       <Icon aria-hidden="true" />
@@ -239,9 +240,24 @@ function CatalogTradeEntry() {
   );
 }
 
-function SignedIn() {
+function SignedIn({ onSignedOut }: { onSignedOut: () => void }) {
   const { pathname } = useLocation();
   const logout = useLogout();
+  const logoutInFlight = useRef(false);
+
+  async function signOut() {
+    if (logoutInFlight.current || logout.isPending) return;
+    logoutInFlight.current = true;
+    try {
+      await logout.mutateAsync();
+      onSignedOut();
+    } catch {
+      // The mutation drives the existing retryable sign-out alert.
+    } finally {
+      logoutInFlight.current = false;
+    }
+  }
+
   // This memory belongs to this mounted signed-in identity only. Explicit
   // routes take priority, including their refusal; never fall back from one.
   const [openedId, setOpenedId] = useState<string>();
@@ -304,13 +320,7 @@ function SignedIn() {
               History
             </NavLink>
           </nav>
-          <SessionButton
-            signedIn
-            pending={logout.isPending}
-            onClick={() => {
-              if (!logout.isPending) logout.mutate();
-            }}
-          />
+          <SessionButton signedIn pending={logout.isPending} onClick={() => void signOut()} />
         </>
       }
     >
@@ -386,14 +396,24 @@ function SignedIn() {
 function App() {
   const { data, isPending, isError, refetch } = useMe();
   const signInInput = useRef<HTMLInputElement>(null);
-  if (data && !isPending && !isError) return <SignedIn key={data.email} />;
+  const pendingSignInFocus = useRef(false);
+  const bindSignInInput = useCallback((input: HTMLInputElement | null) => {
+    signInInput.current = input;
+    if (input && pendingSignInFocus.current) {
+      pendingSignInFocus.current = false;
+      input.focus();
+    }
+  }, []);
+  const focusSignIn = () => {
+    if (signInInput.current) signInInput.current.focus();
+    else pendingSignInFocus.current = true;
+  };
+  if (data && !isPending && !isError) {
+    return <SignedIn key={data.email} onSignedOut={focusSignIn} />;
+  }
 
   return (
-    <AppShell
-      navigation={
-        !isPending && !isError && <SessionButton onClick={() => signInInput.current?.focus()} />
-      }
-    >
+    <AppShell navigation={!isPending && !isError && <SessionButton onClick={focusSignIn} />}>
       {isPending ? (
         <Card
           className="mx-auto my-8 max-w-xl"
@@ -419,7 +439,7 @@ function App() {
           </CardContent>
         </Card>
       ) : (
-        <SignInPage inputRef={signInInput} />
+        <SignInPage inputRef={bindSignInInput} />
       )}
     </AppShell>
   );
