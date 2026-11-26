@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import secrets
 import sys
 from collections.abc import AsyncIterator
 from datetime import UTC, date, datetime
@@ -36,7 +37,9 @@ async def scratch_database() -> AsyncIterator[tuple[AsyncEngine, AsyncEngine]]:
     migrator_url = make_url(test_migration_url())
     name = f"daily_values_{uuid4().hex}_test"
     admin = create_async_engine(admin_url, isolation_level="AUTOCOMMIT", poolclass=NullPool)
-    scratch = create_async_engine(admin_url.set(database=name), poolclass=NullPool)
+    scratch = create_async_engine(
+        admin_url.set(database=name), poolclass=NullPool, hide_parameters=True
+    )
     migrator = create_async_engine(migrator_url.set(database=name), poolclass=NullPool)
     try:
         async with admin.connect() as conn:
@@ -174,3 +177,128 @@ async def test_isolated_schema_exact_observations_and_populated_downgrade(scratc
                 """)
             )
         ).all() == [(Decimal("0.00"), True), (None, False)]
+
+
+async def authorize_dev(engine: AsyncEngine, revision: str) -> None:
+    from app.db.dev_bootstrap import _authorize_portfolios
+
+    async with engine.begin() as conn:
+        assert await conn.scalar(MIGRATION_REVISION) == revision
+        raw = await conn.get_raw_connection()
+        await _authorize_portfolios(raw.driver_connection, revision)
+
+
+@pytest.mark.parametrize("source", [None, "0027"], ids=["fresh", "populated"])
+async def test_current_admission_after_verified_migration(scratch_database, source):
+    from app.db.portfolio_migrate import require_migrator, require_source
+    from app.db.schema_contract import SchemaAdmissionError, require_schema
+
+    admin, migrator = scratch_database
+    require_source()
+    if source is not None:
+        await run_migration(migrator, source)
+        async with migrator.begin() as conn:
+            await seed_portfolio_world(conn)
+        await authorize_dev(admin, source)
+        async with admin.connect() as conn:
+            await conn.execute(text("SET LOCAL ROLE birja_app"))
+            assert await require_schema(conn) == source
+            with pytest.raises(SchemaAdmissionError, match="incompatible_schema"):
+                await require_schema(conn, consumer="portfolio_daily")
+    async with migrator.connect() as conn:
+        assert await require_migrator(conn, fresh=source is None) == source
+
+    await run_migration(migrator, "0028")
+    async with migrator.connect() as conn:
+        assert await require_migrator(conn) == "0028"
+    async with admin.connect() as conn:
+        assert await conn.scalar(text("SELECT count(*) FROM public.portfolio_daily_values")) == 0
+        with pytest.raises(SchemaAdmissionError, match="incompatible_authority"):
+            await require_schema(conn, consumer="portfolio_daily")
+    await authorize_dev(admin, "0028")
+    async with admin.connect() as conn:
+        await conn.execute(text("SET LOCAL ROLE birja_scheduler"))
+        assert await require_schema(conn, consumer="portfolio_daily") == "0028"
+
+
+async def test_current_admission_exact_runtime_roles_and_reapplication(scratch_database):
+    from app.db.schema_contract import SchemaAdmissionError, require_schema
+
+    admin, migrator = scratch_database
+    await run_migration(migrator, "0028")
+    async with migrator.begin() as conn:
+        world = await seed_portfolio_world(conn)
+        economics_before = await economic_snapshot(conn)
+    await authorize_dev(admin, "0028")
+
+    roles = {}
+    try:
+        async with admin.begin() as conn:
+            for role in ("birja_app", "birja_scheduler"):
+                password = secrets.token_hex(32)
+                statement = await conn.scalar(
+                    text(
+                        "SELECT format('ALTER ROLE %I LOGIN PASSWORD %L',"
+                        " CAST(:role AS text), CAST(:password AS text))"
+                    ),
+                    {"role": role, "password": password},
+                )
+                raw = await conn.get_raw_connection()
+                await raw.driver_connection.execute(statement)
+                roles[role] = create_async_engine(
+                    admin.url.set(username=role, password=password), poolclass=NullPool
+                )
+        value = observation(world.owner, world.first, total=Decimal("2468.17"))
+        async with roles["birja_scheduler"].begin() as conn:
+            assert await conn.scalar(text("SELECT session_user")) == "birja_scheduler"
+            assert await require_schema(conn, consumer="portfolio_daily") == "0028"
+            assert await conn.scalar(LOCK_ROOT, value)
+            assert not await conn.scalar(LOCK_ROOT, observation(world.owner, world.closed))
+            append = text(
+                OBSERVATION.text
+                + " ON CONFLICT (portfolio_id,utc_day) DO NOTHING RETURNING portfolio_id"
+            )
+            assert await conn.scalar(append, value) == world.first
+            assert await conn.scalar(append, {**value, "total": Decimal("1")}) is None
+            for statement in (
+                "SELECT total_value FROM public.portfolio_daily_values",
+                "UPDATE public.accounts SET cash=cash WHERE false",
+                "UPDATE public.portfolio_daily_values SET total_value=0 WHERE false",
+                "DELETE FROM public.portfolio_daily_values WHERE false",
+                "TRUNCATE public.portfolio_daily_values",
+            ):
+                with pytest.raises(DBAPIError) as denied:
+                    async with conn.begin_nested():
+                        await conn.exec_driver_sql(statement)
+                assert denied.value.orig.sqlstate == "42501"
+            with pytest.raises(DBAPIError) as closed:
+                async with conn.begin_nested():
+                    await conn.execute(OBSERVATION, observation(world.owner, world.closed))
+            assert closed.value.orig.sqlstate == "23514"
+        async with roles["birja_app"].begin() as conn:
+            assert await conn.scalar(text("SELECT session_user")) == "birja_app"
+            assert await require_schema(conn, consumer="portfolio_daily") == "0028"
+            assert await conn.scalar(
+                text("SELECT total_value FROM public.portfolio_daily_values")
+            ) == Decimal("2468.17")
+            with pytest.raises(DBAPIError) as denied:
+                async with conn.begin_nested():
+                    await conn.execute(OBSERVATION, observation(world.owner, world.sibling))
+            assert denied.value.orig.sqlstate == "42501"
+    finally:
+        for engine in roles.values():
+            await engine.dispose()
+
+    await authorize_dev(admin, "0028")
+    async with admin.begin() as conn:
+        assert await economic_snapshot(conn) == economics_before
+        assert await conn.scalar(
+            text("SELECT total_value FROM public.portfolio_daily_values")
+        ) == Decimal("2468.17")
+        with pytest.raises(SchemaAdmissionError, match="incompatible_authority"):
+            async with conn.begin_nested():
+                await conn.exec_driver_sql(
+                    "REVOKE SELECT ON public.portfolio_daily_values FROM birja_app"
+                )
+                await require_schema(conn, consumer="portfolio_daily")
+        assert await require_schema(conn, consumer="portfolio_daily") == "0028"
