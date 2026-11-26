@@ -191,11 +191,14 @@ test("actual ask buy and bid sale preserve immutable receipt, shared cash and co
   expect(mixed.cash).toBe("9794.00");
   expect(mixed.starting_cash).toBe("10000.00");
   expect(mixed.holdings.map((h: { symbol: string }) => h.symbol)).toEqual(["AAPL", "BTC"]);
-  await expect(
-    page
-      .getByRole("list", { name: "Holdings", exact: true })
-      .getByRole("heading", { name: "Bitcoin", exact: true }),
-  ).toBeVisible();
+  const holdings = page.getByRole("list", { name: "Holdings", exact: true });
+  await expect(holdings.getByRole("heading", { name: "AAPL", exact: true })).toBeVisible();
+  await expect(holdings.getByRole("heading", { name: "BTC", exact: true })).toBeVisible();
+  await expect(holdings.getByText("Bitcoin · Crypto", { exact: true })).toBeVisible();
+  await expect(holdings.getByRole("link", { name: "Trade BTC", exact: true })).toHaveAttribute(
+    "href",
+    `/portfolios/${selected}/trade/BTC`,
+  );
   await page.screenshot({
     path: info.outputPath("actual-stock-and-crypto-portfolio.png"),
     fullPage: true,

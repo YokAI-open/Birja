@@ -14,6 +14,7 @@ type Ledger = {
 };
 type HistoryPage = {
   items: Array<{ id: string; kind: string; asset_type: "crypto" | "stock" }>;
+  next_cursor: string | null;
 };
 function evidence(operation: string, email: string, symbol = "AMD"): Ledger {
   expect(process.env.COMPOSE_PROJECT_NAME).toBe("birja-phase09-e2e-test");
@@ -96,9 +97,9 @@ test("Phase 25 History filters the server ledger before paging and resets on por
 }, info) => {
   test.setTimeout(180000);
   const email = await signInNewUser(page);
-  // Keep batch prep separate from the retained mixed History journey's MSFT holdings.
+  // Leave the full dividend worker page available for the retained 28-payment journey.
   stockFixture("long-name", "COST");
-  evidence("bulk", email, "COST");
+  evidence("seed", email, "COST");
   evidence("up", email, "COST");
   const fill = await cryptoFill(page, "buy", "1");
   const id = await portfolioId(page);
@@ -109,12 +110,17 @@ test("Phase 25 History filters the server ledger before paging and resets on por
     return response.json();
   };
   const first = await read();
-  expect(first.items).toHaveLength(25);
+  expect(first.items).toHaveLength(3);
   expect(first.items[0]).toMatchObject({ id: `trade:${fill.trade_id}`, asset_type: "crypto" });
-  const filtered = await read("?activity=dividend&asset=stock&limit=100");
-  expect(filtered.items).toHaveLength(29);
+  const shortUnfiltered = await read("?limit=1");
+  expect(shortUnfiltered.items).toEqual(first.items.slice(0, 1));
+  expect(shortUnfiltered.next_cursor).toEqual(expect.any(String));
+  const filtered = await read("?activity=dividend&asset=stock");
+  expect(filtered.items).toHaveLength(2);
   expect(filtered.items.every((item) => item.asset_type === "stock")).toBe(true);
-  expect(filtered.items.some((item) => !first.items.some((row) => row.id === item.id))).toBe(true);
+  expect(filtered.items.map((item) => item.id)).toEqual(
+    first.items.slice(1).map((item) => item.id),
+  );
 
   await page.request.get("/api/v1/auth/csrf");
   const csrf = (await page.context().cookies()).find((cookie) => cookie.name === "bj_csrf");
@@ -127,7 +133,7 @@ test("Phase 25 History filters the server ledger before paging and resets on por
   const second = (await created.json()).id;
 
   await page.goto(`/portfolios/${id}/history`);
-  await expect(activity(page).getByRole("listitem")).toHaveCount(25);
+  await expect(activity(page).getByRole("listitem")).toHaveCount(first.items.length);
   expect(await displayedEventIds(page)).toEqual(first.items.map((item) => item.id));
   await capturePhase25(page, info, "history");
   const activityFilter = page.getByRole("combobox", { name: "Filter activity", exact: true });
@@ -186,8 +192,6 @@ test("Phase 25 History filters the server ledger before paging and resets on por
   expect(await displayedEventIds(page)).toEqual([filtered.items[0].id]);
   failAppend = false;
   await page.keyboard.press("Enter");
-  await expect(activity(page).getByRole("listitem")).toHaveCount(26);
-  await page.getByRole("button", { name: "Load more", exact: true }).click();
   await expect(page.getByText("All events loaded.", { exact: true })).toBeFocused();
   expect(await displayedEventIds(page)).toEqual(filtered.items.map((item) => item.id));
 
