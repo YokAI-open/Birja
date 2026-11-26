@@ -162,20 +162,16 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                 if (!marketClosed) void t.preview();
               }}
             >
-              <fieldset disabled={locked} className="flex gap-3">
+              <fieldset disabled={locked} className="trade-workspace-sides">
                 <legend className="sr-only">Order side</legend>
                 {(["buy", "sell"] as const).map((side) => (
-                  <label
-                    key={side}
-                    className={`flex min-h-11 flex-1 cursor-pointer items-center justify-center gap-2 rounded-pill border border-border px-4 ${t.side === side ? "bg-primary text-primary-foreground" : "bg-secondary"}`}
-                  >
+                  <label key={side}>
                     <input
                       type="radio"
                       name={id + "side"}
                       value={side}
                       checked={t.side === side}
                       onChange={() => t.setSide(side)}
-                      className="accent-current focus-visible:ring-2 focus-visible:ring-ring"
                     />
                     {side === "buy" ? "Buy" : "Sell"}
                   </label>

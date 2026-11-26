@@ -84,13 +84,6 @@ function SkeletonRows() {
   );
 }
 
-function segment(selected: boolean) {
-  return cn(
-    "inline-flex min-h-11 flex-1 items-center justify-center rounded-pill px-4 text-[15px] font-medium disabled:cursor-not-allowed disabled:opacity-40",
-    selected ? "bg-card text-foreground shadow-pop" : "text-muted-foreground hover:bg-accent",
-  );
-}
-
 function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string }) {
   const summaryHeadingId = useId();
   const resultHeading = useRef<HTMLHeadingElement>(null);
@@ -351,11 +344,7 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
             )}
 
             <form onSubmit={confirm} className="flex flex-col gap-5" id="trade-form" noValidate>
-              <div
-                role="radiogroup"
-                aria-label="Side"
-                className="flex gap-1 rounded-pill bg-muted p-1"
-              >
+              <div role="radiogroup" aria-label="Side" className="trade-workspace-sides">
                 {(["buy", "sell"] as const).map((value) => (
                   <button
                     key={value}
@@ -363,7 +352,6 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                     role="radio"
                     aria-checked={side === value}
                     disabled={locked}
-                    className={segment(side === value)}
                     onClick={() => {
                       setSide(value);
                       edited();

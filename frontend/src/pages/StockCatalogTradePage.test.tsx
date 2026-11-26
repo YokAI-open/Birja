@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router";
 import { afterEach, expect, it, vi } from "vitest";
@@ -11,6 +11,8 @@ const catalogId = "9007199254741002";
 const contextPath = (portfolioId: string) =>
   `/api/v2/portfolios/${portfolioId}/stock-catalog/${catalogId}/trade-context`;
 const ticketPath = (portfolioId: string) => `/portfolios/${portfolioId}/trade/catalog/${catalogId}`;
+const orderPath = (portfolioId: string, action: string) =>
+  `/api/v2/portfolios/${portfolioId}/stock-catalog/${catalogId}/${action}`;
 const first = { id: "1", name: "My portfolio" };
 const second = { id: "2", name: "Income portfolio" };
 const now = Date.parse("2026-11-24T15:00:00Z");
@@ -140,6 +142,7 @@ it("opens an explicit owned stock and keeps the exact listing on portfolio switc
   expect(await screen.findAllByText("Cash available $10,000.00")).toHaveLength(1);
   const chooser = screen.getByRole("combobox", { name: "Trading portfolio" });
   expect(chooser).toHaveValue("1");
+  expect(screen.getAllByRole("combobox")).toEqual([chooser]);
   await user.selectOptions(chooser, "2");
   expect(await screen.findByText("Cash available $2,500.00")).toBeVisible();
   expect(screen.getByTestId("location")).toHaveTextContent(ticketPath("2"));
@@ -213,6 +216,17 @@ it("keeps a retired reused ticker on its original catalog link", async () => {
   const { fetch } = setup({ context: () => Response.json(closed) });
   expect(await screen.findByRole("heading", { name: "Original Aerospace" })).toBeVisible();
   expect(screen.getByText("This listing is no longer active.")).toBeVisible();
+  expect(screen.getByTestId("location")).toHaveTextContent(ticketPath("1"));
+  readOnly(fetch);
+});
+
+it("refuses ticket data for another listing even when it has the same ticker", async () => {
+  const sameTicker = ticket();
+  sameTicker.listing.catalog_id = "9007199254741012";
+  const { fetch } = setup({ context: () => Response.json(sameTicker) });
+  expect(await screen.findByRole("heading", { name: "Stock unavailable" })).toBeVisible();
+  expect(screen.queryByText("Fixture Aerospace")).not.toBeInTheDocument();
+  expect(screen.queryByText("Cash available $10,000.00")).not.toBeInTheDocument();
   expect(screen.getByTestId("location")).toHaveTextContent(ticketPath("1"));
   readOnly(fetch);
 });
@@ -350,6 +364,7 @@ it("uses the existing ticket controls, explicitly reviews repricing, and focuses
     context: () => Response.json(openTicket()),
     order: (path, body) => {
       if (path.endsWith("/preview")) {
+        expect(path).toBe(orderPath("1", "preview"));
         expect(body).toEqual({
           listing_version: ticket().listing.listing_version,
           side: "buy",
@@ -357,6 +372,7 @@ it("uses the existing ticket controls, explicitly reviews repricing, and focuses
         });
         return Response.json(preview());
       }
+      expect(path).toBe(orderPath("1", "confirm"));
       confirmations.push(body);
       if (confirmations.length === 1)
         return Response.json(
@@ -376,7 +392,13 @@ it("uses the existing ticket controls, explicitly reviews repricing, and focuses
     },
   });
   const quantity = await screen.findByLabelText("Whole-share quantity");
-  expect(screen.getAllByText("Cash available $10,000.00")).toHaveLength(1);
+  const activeTicket = within(screen.getByRole("region", { name: "Trade ticket" }));
+  expect(activeTicket.getByText("Cash available $10,000.00")).toBeVisible();
+  expect(activeTicket.getByText("Shares owned 0")).toBeVisible();
+  await user.click(activeTicket.getByRole("radio", { name: "Sell" }));
+  expect(activeTicket.getByText("Cash available $10,000.00")).toBeVisible();
+  expect(activeTicket.getByText("Shares owned 0")).toBeVisible();
+  await user.click(activeTicket.getByRole("radio", { name: "Buy" }));
   await user.click(screen.getByRole("button", { name: "Buy max" }));
   expect(quantity).toHaveValue("66");
   await user.clear(quantity);
@@ -453,15 +475,15 @@ it("keeps quantity across a hold and closure, without offering an expired confir
   expect(screen.queryByRole("button", { name: "Preview trade" })).not.toBeInTheDocument();
 });
 
-it("checks the saved attempt after a rename and shows the original receipt", async () => {
-  const tries: { action: string | undefined; body: Record<string, unknown> }[] = [];
+it("checks the exact saved attempt after the listing is renamed and the session closes", async () => {
+  const tries: { path: string; body: Record<string, unknown> }[] = [];
   let active = openTicket();
   const { user, client } = setup({
     context: () => Response.json(active),
     order: (path, body) => {
       if (path.endsWith("/preview")) return Response.json(preview());
       const action = path.split("/").at(-1);
-      tries.push({ action, body });
+      tries.push({ path, body });
       if (action === "confirm")
         return Response.json({ detail: { code: "service_unavailable" } }, { status: 503 });
       if (tries.length === 2)
@@ -475,6 +497,12 @@ it("checks the saved attempt after a rename and shows the original receipt", asy
   expect(await screen.findByRole("button", { name: "Check order result" })).toBeEnabled();
   active = {
     ...active,
+    session: { state: "closed", opens_at: at(-3600), closes_at: at(-20), next_open_at: at(7200) },
+    read_only: true,
+    execution_reason: "market_closed",
+    quote: null,
+    reason: "market_closed",
+    buy_max_quantity: "0",
     listing: {
       ...active.listing,
       ticker: "NEWF",
@@ -486,13 +514,19 @@ it("checks the saved attempt after a rename and shows the original receipt", asy
     await client.invalidateQueries({ queryKey: ["stockCatalogTradeContext"] });
   });
   expect(await screen.findByRole("heading", { name: "Renamed Aerospace" })).toBeVisible();
+  expect(screen.getByText("Opens in 2 hr")).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Preview trade" })).not.toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Check order result" }));
   expect(await screen.findByRole("button", { name: "Check order result" })).toBeEnabled();
   expect(screen.queryByRole("button", { name: "Confirm buy" })).not.toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Check order result" }));
   expect(await screen.findByRole("heading", { name: "Order filled" })).toHaveFocus();
   expect(screen.getByText(/Fixture Aerospace · FQA/)).toBeVisible();
-  expect(tries.map(({ action }) => action)).toEqual(["confirm", "receipt", "receipt"]);
+  expect(tries.map(({ path }) => path)).toEqual([
+    orderPath("1", "confirm"),
+    orderPath("1", "receipt"),
+    orderPath("1", "receipt"),
+  ]);
   expect(tries.map(({ body }) => body)).toEqual([tries[0].body, tries[0].body, tries[0].body]);
 });
 
