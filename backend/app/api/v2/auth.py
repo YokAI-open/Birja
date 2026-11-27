@@ -2,12 +2,12 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 
-from app.api.v1.auth import _RATE_LIMITED_DOC, _rate_limited
+from app.api.v1.auth import _RATE_LIMITED_DOC, _rate_limited, _registration_closed
 from app.core.deps import ClientIpDep, DbDep, OtpStoreDep, RedisDep, SettingsDep, verify_csrf
 from app.core.security import set_session_cookies
 from app.schemas.auth import IdentityOut, VerifyCodeIn
 from app.services import auth as auth_service
-from app.services.auth import InvalidCode
+from app.services.auth import InvalidCode, RegistrationClosed
 from app.services.ratelimit import RateLimited
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -37,6 +37,8 @@ async def verify_code(
         )
     except RateLimited as exc:
         raise _rate_limited(exc) from None
+    except RegistrationClosed:
+        raise _registration_closed() from None
     except InvalidCode:
         raise HTTPException(
             status_code=400,

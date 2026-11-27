@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, HTTPException, Path, Response
+from fastapi import APIRouter, Depends, HTTPException, Path, Response
 from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +17,7 @@ from app.core.deps import (
     DbDep,
     OwnedActivePortfolioDep,
     SettingsDep,
+    require_personal_stock_access,
 )
 from app.models.corporate_action import StockActionState
 from app.models.stock_catalog_finance import StockCatalogInstrument
@@ -234,6 +235,7 @@ async def _present(
 
 @router.post(
     "/stock-catalog/{catalog_id}/quote",
+    dependencies=[Depends(require_personal_stock_access)],
     response_model=CatalogQuoteOut,
     summary="Request a selected listing's display price",
     description="Requests one admitted listing version and returns a display price or reason.",
@@ -309,6 +311,7 @@ async def post_catalog_quote(
 
 @router.get(
     "/portfolios/{portfolio_id}/stock-catalog/{catalog_id}/trade-context",
+    dependencies=[Depends(require_personal_stock_access)],
     response_model=CatalogTradeContextOut,
     summary="Read an owned portfolio's catalog trade context",
     description="Current listing, price and exact amounts for the active owned portfolio.",
@@ -378,6 +381,7 @@ def _order_refusal(exc: TradeRefused) -> HTTPException:
 
 @router.post(
     "/portfolios/{portfolio_id}/stock-catalog/{catalog_id}/preview",
+    dependencies=[Depends(require_personal_stock_access)],
     response_model=CatalogPreviewOut,
     summary="Preview an exact catalog stock order",
 )
@@ -411,6 +415,7 @@ async def post_catalog_preview(
 
 @router.post(
     "/portfolios/{portfolio_id}/stock-catalog/{catalog_id}/confirm",
+    dependencies=[Depends(require_personal_stock_access)],
     response_model=CatalogFillOut,
     status_code=201,
     summary="Confirm or replay an exact catalog stock order",

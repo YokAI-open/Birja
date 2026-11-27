@@ -160,6 +160,35 @@ The dev stack (project `birja`) is separate. Never run `-f docker-compose.prod.y
 7. The owner adds the DNS record in Cloudflare: Type A, Name `birja`, IPv4 151.243.171.52, Proxy status Proxied (D-08).
 8. `/srv/birja/deploy/smoke-prod.sh --public`
 
+## Restrict sign-in by email
+
+For a private deployment, put the allowed addresses in
+`/etc/birja/access/allowed-emails.txt`, one UTF-8 address per line, up to
+16 KiB. Protect the directory as `root:1001` mode `0750` and the file
+as `root:1001` mode `0640` so the app and scheduler can read it.
+Add these settings to the root-only `/etc/birja/prod.env`:
+
+```dotenv
+BIRJA_ACCESS_DIR=/etc/birja/access
+AUTH_ALLOWED_EMAILS_FILE=/run/birja/access/allowed-emails.txt
+```
+
+For personal Alpaca data, also configure `STOCK_DATA_OWNER_ID` and
+`STOCK_DATA_OWNER_EMAIL` with the existing Birja account's exact ID and
+address. Verify that they identify the same account. Store this configuration
+and the address list privately. Current Alpaca prices and new stock orders
+require the pinned account and a list containing only its email. They still
+require the existing data, calendar and trading checks. Adding addresses
+keeps invited accounts able to sign in and use crypto and their records.
+
+After the first rollout, edit the host file with `sudoedit` or atomically
+replace it in the same directory, preserving its ownership and mode. The
+app reads the current file during sign-in and when authorizing a session.
+Malformed, missing, unreadable or empty configured lists admit nobody.
+To recover or roll back, recreate the file and these settings from the
+private operator copy. Keep ingress private before starting an older
+release that predates file-backed access.
+
 ## Deploy (one command)
 
 ```bash

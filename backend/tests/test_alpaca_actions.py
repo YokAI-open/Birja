@@ -357,7 +357,7 @@ CURSOR = "01J9RPMV5TKB8WX3M4F1KZ7QH2"
 LAST = "01J9RPMV5TKB8WX3M4F1KZ7QH3"
 
 
-def frame(cursor=CURSOR, mutation="insert", symbol="AAPL"):
+def frame(cursor=CURSOR, mutation="insert", symbol="AAPL", *, as_object=False):
     entry = json.loads(BODY)["corporate_actions"]["cash_dividends"][0]
     entry["rate"] = "0.24000001"
     entry["symbol"] = symbol
@@ -371,11 +371,12 @@ def frame(cursor=CURSOR, mutation="insert", symbol="AAPL"):
             "ca": entry,
         }
     ]
-    return b"data: " + json.dumps(value).encode() + b"\n\n"
+    return b"data: " + json.dumps(value[0] if as_object else value).encode() + b"\n\n"
 
 
-async def test_replay_inclusive_terminal_witness_deduplicates_but_preserves_mutations():
-    stream = frame() + frame() + frame(LAST, "delete")
+@pytest.mark.parametrize("as_object", [False, True])
+async def test_replay_inclusive_terminal_witness_deduplicates_but_preserves_mutations(as_object):
+    stream = frame(as_object=as_object) * 2 + frame(LAST, "delete", as_object=as_object)
     with respx.mock(assert_all_called=False) as router:
         route = router.get(REPLAY_URL).respond(
             200, content=stream, headers={"Content-Type": "text/event-stream"}

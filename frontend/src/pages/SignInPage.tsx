@@ -33,6 +33,9 @@ function errorMessage(error: unknown, step: "email" | "code"): string {
       : `Too many attempts. Try again in ${waitText(error.retryAfter)}.`;
   }
   if (error.status === 403) {
+    if (error.code === "registration_closed") {
+      return "Birja isn’t accepting registrations at the moment.";
+    }
     return "Your session token is out of date. Reload the page and try again.";
   }
   if (error.status === 503) {

@@ -17,8 +17,10 @@ from app.core.security import (
     new_refresh_token,
 )
 from app.models.auth import AuthSession, RefreshToken
+from app.models.user import User
 from app.schemas.auth import IdentityOut
 from app.services import accounts
+from app.services.access_list import email_allowed
 from app.services.otp import OtpStore
 from app.services.ratelimit import RateLimited, enforce, ip_bucket
 
@@ -27,6 +29,10 @@ logger = logging.getLogger(__name__)
 
 class InvalidCode(Exception):
     """Wrong, reused, expired, replaced or exhausted code: all look the same."""
+
+
+class RegistrationClosed(Exception):
+    """The requested email is outside the current access list."""
 
 
 async def request_code(redis: Redis, otp: OtpStore, settings: Settings, email: str, ip: str) -> str:
@@ -40,6 +46,8 @@ async def request_code(redis: Redis, otp: OtpStore, settings: Settings, email: s
         settings.rl_request_ip_limit,
         settings.rl_request_ip_window,
     )
+    if not await email_allowed(settings.auth_allowed_emails_file, email):
+        raise RegistrationClosed
     await enforce(
         redis,
         f"sim:rl:req:email:{otp.email_key(email)}",
@@ -103,6 +111,8 @@ async def verify_code(
         settings.rl_verify_ip_limit,
         settings.rl_verify_ip_window,
     )
+    if not await email_allowed(settings.auth_allowed_emails_file, email):
+        raise RegistrationClosed
     await enforce(
         redis,
         f"sim:rl:ver:email:{otp.email_key(email)}",
@@ -151,6 +161,11 @@ async def rotate_session(db: AsyncSession, settings: Settings, raw_refresh: str)
     if token.expires_at <= now or session.revoked_at is not None:
         await db.rollback()
         raise InvalidSession(clear_cookies=True)
+    if settings.auth_allowed_emails_file:
+        email = await db.scalar(select(User.email).where(User.id == session.user_id))
+        if not await email_allowed(settings.auth_allowed_emails_file, email):
+            await db.rollback()
+            raise InvalidSession(clear_cookies=True)
     if token.used_at is not None:
         if (now - token.used_at).total_seconds() <= REFRESH_REUSE_GRACE_SECONDS:
             await db.rollback()
