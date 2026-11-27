@@ -127,10 +127,10 @@ the approved simulator rules. Preserve its [open closeout handoff](milestones/v1
 
 ## Current State
 
-Phases 22, 24 and 25 are complete on the v1.5 feature branch. PR #55
+Phases 22, 24 and 25 shipped in v0.9.0. PR #55
 passed all six required jobs and the authenticated seven-stage recovery
-on its exact GitHub checkout. Phase 23's local charts are verified, with
-live historical data qualification still open under CHART-04.
+on its exact GitHub checkout. Phase 23 qualified Coin Metrics Community
+crypto price history and TradingView stock charts for the v0.9.1 hotfix.
 [Phase 25 verification](phases/25-finish-the-trading-flows-and-verify-the-integrated-app/25-VERIFICATION.md) ·
 [Phase 24 verification](phases/24-compare-portfolio-performance/24-VERIFICATION.md)
 

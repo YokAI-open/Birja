@@ -8,11 +8,11 @@ last_updated: 2026-11-26T22:52:04.321Z
 last_activity: 2026-11-26 -- Phase 25 passed hosted CI and independent verification
 progress:
   total_phases: 4
-  completed_phases: 3
-  total_plans: 22
-  completed_plans: 22
-  percent: 75
-stopped_at: Phase 25 complete (7/7) — Phase 23 live-history qualification remains open
+  completed_phases: 4
+  total_plans: 25
+  completed_plans: 25
+  percent: 100
+stopped_at: Phase 23 replacement feeds verified for v0.9.1
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md),
 [approved design](ui-reviews/v1.5/README.md).
 
 Core value: correct virtual trade and valuation money.
-Current focus: Phase 23 live-history source qualification for v1.5.
+Current focus: v0.9.1 rollout and live chart verification.
 
 ## Current Position
 
@@ -44,15 +44,13 @@ requirements. Portfolios show exact current figures and a private 30-day
 history from capture enablement. Chromium verified eight journeys and four
 matched app and reference pairs. All seven encrypted recovery stages and
 the exact receipt verifier passed locally. Phase 25 verified the same
-recovery contract in hosted CI. Phase 23's CHART-04 live qualification
-remains open.
+recovery contract in hosted CI.
 [Phase 24 verification](phases/24-compare-portfolio-performance/24-VERIFICATION.md)
 
 
 Phase 25 and the Kraken scheduling fix merged into develop through
 [PR #55](https://github.com/YokAI-open/Birja/pull/55) after all six checks
-and source-bound recovery passed. The release keeps live historical
-chart activation open under CHART-04.
+and source-bound recovery passed for v0.9.0.
 
 ## Prior phase evidence
 
@@ -60,10 +58,10 @@ The tested runtime `775c435` passed 11 isolated browser cases and 1,409
 frontend tests. Four app views were compared with the approved ZIP.
 [Phase 23 verification](phases/23-show-historical-market-prices/23-VERIFICATION.md)
 
-All nine representative live chart windows and the shared rate bounds
-passed. CHART-04 stays open for the historical data use scope. The owner
-directed implementation and verification without further approval prompts.
-Live history is disabled by default. [Source qualification](phases/23-show-historical-market-prices/23-SOURCE-QUALIFICATION.md)
+The v0.9.1 replacement charts use Coin Metrics for crypto and TradingView
+for stocks. Both sources passed live qualification under CHART-04.
+The [v0.9.1 release record](https://github.com/YokAI-open/Birja/releases/tag/v0.9.1)
+tracks production activation. [Source qualification](phases/23-show-historical-market-prices/23-SOURCE-QUALIFICATION.md)
 
 Phase 22 passed all four requirements. The final isolated run passed 105
 browser tests with the expected deployed-site CSP skip. All 1,376 frontend

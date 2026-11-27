@@ -11,13 +11,13 @@ Scope follows the [approved prototype](ui-reviews/v1.5/README.md).
 
 ## Market charts
 
-The completed checks in this section verify local behavior. Live price
-history depends on CHART-04.
+The replacement sources are qualified for the noncommercial simulator.
+Stocks use TradingView’s hosted chart, and crypto uses Birja’s native chart.
 
-- [x] **CHART-01** — Users can view actual historical stock and crypto prices for the selected instrument in `1D`, `1W`, and `1M` ranges. `1W` opens by default, and the series identifies its source and time basis.
-- [x] **CHART-02** — The chart and equivalent text communicate dates, prices and a comparable period change. Daily and period change figures appear only when sufficient comparable data exist. Equity sessions, gaps, asset identity and split treatment do not produce fictitious prices or returns.
-- [x] **CHART-03** — When history is sparse, delayed or unreachable, chart states describe the available coverage. The current quote, search, and eligible trading still work independently.
-- [ ] **CHART-04** — Requests for historical data stay within measured free-tier budgets, respect applicable source scope, and are bounded and shared across common reads. Candidate sources are qualified on representative crypto, featured stock and out-of-list symbols.
+- [x] **CHART-01** — Users can view actual historical stock and crypto prices for the selected instrument in `1D`, `1W`, and `1M` ranges. `1W` opens by default and covers five trading days for stocks. Both charts identify their source.
+- [x] **CHART-02** — The native crypto chart and text show matching dates, prices and comparable changes. TradingView supplies stock history inside its widget.
+- [x] **CHART-03** — Crypto chart states describe sparse, delayed or unreachable history. Stocks label delayed data and link to the same chart on TradingView. Current quotes, search and eligible trading work independently.
+- [x] **CHART-04** — Requests for historical data stay within measured free-tier budgets, respect applicable source scope, and are bounded and shared across common reads. Candidate sources are qualified on representative crypto, featured stock and out-of-list symbols.
 
 ## Portfolio trends and workspace
 
@@ -52,7 +52,7 @@ order types are outside this milestone.
 | CHART-01 | 23 | Verified locally |
 | CHART-02 | 23 | Verified locally |
 | CHART-03 | 23 | Verified locally |
-| CHART-04 | 23 | Live qualification pending |
+| CHART-04 | 23 | Replacement sources verified |
 | TREND-01 | 24 | Complete |
 | TREND-02 | 24 | Complete |
 | TREND-03 | 24 | Complete |

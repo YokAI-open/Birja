@@ -1,5 +1,36 @@
 # Phase 23 historical source qualification
 
+## Replacement sources
+
+On November 27 the owner requested free sources that permit display to
+Birja users and authorized the replacement and production rollout.
+
+- **Coin Metrics Community** supplies crypto display reference prices.
+  The free Community license permits noncommercial use with attribution.
+  All 15 curated coins returned data. BTC, ETH, DOGE and XLM returned
+  complete 1D, 1W and 1M windows through the adapter, with 288, 168 and 30
+  points. Production reuses the private cache and bounds the source to
+  20 attempts per rolling minute, one per serial check and a response
+  ceiling. The chart links to the source and license.
+  [Community API](https://github.com/coinmetrics/product-docs/blob/master/docs/access-our-data/api/README.md) ·
+  [CC BY-NC license](https://github.com/coinmetrics/data/blob/master/LICENSE)
+- **TradingView Symbol Overview** supplies delayed NYSE and Nasdaq stock
+  charts through its free branded widget. The selected listed ticker is
+  mapped to the widget and the frame keeps its attribution. Live desktop
+  and mobile checks rendered AAPL and ORCL, including a five-trading-day
+  week view. Birja does not ingest the stock chart data.
+  [Widget documentation](https://www.tradingview.com/widget-docs/widgets/charts/symbol-overview/) ·
+  [US stock coverage](https://www.tradingview.com/widget-docs/markets/north-america/)
+
+The original Kraken OHLC and Alpaca IEX history paths are inactive in
+production. Simulator quote and execution inputs are independent of these
+charts. See [Plan 05](23-05-SUMMARY.md) and [Plan 06](23-06-SUMMARY.md).
+
+## Original source investigation
+
+The following records describe the earlier qualification and its former
+open questions.
+
 The initial provider review on 2026-11-26 checked public documentation.
 The subsequent live sample is recorded below. Both candidates remain
 unqualified for serving live history to Birja users. Historical source generation, validity, and any

@@ -1,27 +1,31 @@
 ---
 phase: 23-show-historical-market-prices
-verified: 2026-11-26T11:48:54Z
-live_sample_reviewed: 2026-11-27
-status: gaps_found
-score: 5/6 must-haves verified
-overrides_applied: 0
-runtime: 775c435c70484afa02705f48fb20f36d19b8183b
-gaps:
-  - truth: "Historical requests use qualified coverage and a measured, bounded free-tier fetch/cache policy. Market orders still use the existing current-quote path."
-    status: partial
-    reason: "Local fixtures verify request limits, short-lived caching and independent order execution. Both live source scopes remain unqualified, so historical collection is disabled by default."
-    artifacts:
-      - path: .planning/phases/23-show-historical-market-prices/23-SOURCE-QUALIFICATION.md
-        issue: "The November 27 live sample passed all nine windows. Production workload and scheduler bounds were checked. Applicable user-display and cache scope remains open."
-    missing:
-      - "Evidence for collection, user display, derived changes and transient retention for the actual Kraken and IEX scopes."
+verified: 2026-11-27
+status: passed
+score: 6/6 must-haves verified under replacement chart scope
 ---
 
 # Phase 23 verification
 
-The phase goal is a trustworthy price chart for the selected stock or coin.
-All four execution plans produced working local paths and tests. Live source
-qualification under CHART-04 remains the phase completion gap.
+Coin Metrics Community and TradingView replace the original production
+history candidates for Birja’s noncommercial simulator.
+
+| Requirement | Result |
+|---|---|
+| CHART-01 | Native crypto and hosted stock views offer 1D, 1W and 1M. 1W uses five trading days in the stock widget. |
+| CHART-02 | Crypto keeps its matching price table and comparable changes. TradingView owns the stock chart and its values. |
+| CHART-03 | Browser checks verified quote and trade independence for featured stock, catalog stock and crypto. Stocks provide a fallback link. |
+| CHART-04 | The live Coin Metrics adapter returned complete series in 12 windows. AAPL and ORCL rendered live TradingView charts. The source licenses, bounded demand and chart-only rate limit were reviewed. |
+
+See [crypto verification](23-05-SUMMARY.md), [stock verification](23-06-SUMMARY.md)
+and [replacement source evidence](23-SOURCE-QUALIFICATION.md#replacement-sources).
+The [v0.9.1 release](https://github.com/YokAI-open/Birja/releases/tag/v0.9.1)
+records the hosted CI and production verification.
+
+## Earlier verification of the original adapters
+
+The observations below are the original local evidence for Plans 01–04.
+Plans 05–07 replace those historical sources for production.
 
 ## Observable outcomes
 
