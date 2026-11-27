@@ -124,6 +124,7 @@ class KrakenHistoryBudget:
             or self.next_due is None
             or self.running
             or now + _WALL_SECONDS >= self.next_due
+            or (self.attempts and now - self.attempts[-1][0] < 1)
             or pair not in self.pairs
         ):
             return None
@@ -183,12 +184,9 @@ async def _reserve_kraken(
         return False
     server = sha256(scope.server.encode()).hexdigest()
     prefix = f"sim:history-quota:v1:kraken:{server}"
-    reserved = await redis.eval(
-        _WINDOW, 2, prefix, f"{prefix}:{pair}", *room, secrets.token_hex(16)
+    return bool(
+        await redis.eval(_WINDOW, 2, prefix, f"{prefix}:{pair}", *room, secrets.token_hex(16))
     )
-    # Redis wait may bring the Ticker schedule closer or begin another poll.
-    checked = tracker.headroom(scope, pair) if tracker is not None and reserved else None
-    return checked is not None and min(checked) > 0
 
 
 def _cache_expiry_ms(authority: HistoryAuthority, started: datetime, *, available: bool) -> int:
@@ -248,6 +246,12 @@ async def _consume(
             or now() >= current.valid_until
         ):
             raise _HistoryDeferred
+        if isinstance(scope, KrakenHistoryScope):
+            # The reservation and lease check both await Redis. Recheck ticker
+            # priority after those awaits, immediately before the OHLC request.
+            room = tracker.headroom(scope, authority.provider_symbol) if tracker else None
+            if room is None or min(room) < 1:
+                raise _HistoryDeferred
 
     try:
         if isinstance(scope, IexHistoryScope) and stock_http is not None:

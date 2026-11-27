@@ -1,6 +1,7 @@
 ---
 phase: 23-show-historical-market-prices
 verified: 2026-11-26T11:48:54Z
+live_sample_reviewed: 2026-11-27
 status: gaps_found
 score: 5/6 must-haves verified
 overrides_applied: 0
@@ -11,10 +12,9 @@ gaps:
     reason: "Local fixtures verify request limits, short-lived caching and independent order execution. Both live source scopes remain unqualified, so historical collection is disabled by default."
     artifacts:
       - path: .planning/phases/23-show-historical-market-prices/23-SOURCE-QUALIFICATION.md
-        issue: "Both candidates have zero live attempts. Applicable rights, representative coverage and measured quota remain open."
+        issue: "The November 27 live sample passed all nine windows. Production workload and scheduler bounds were checked. Applicable user-display and cache scope remains open."
     missing:
       - "Evidence for collection, user display, derived changes and transient retention for the actual Kraken and IEX scopes."
-      - "Authorized coverage, identity, freshness and measured limits for BTC, a featured stock and an exact catalog listing across 1D, 1W and 1M."
 ---
 
 # Phase 23 verification
@@ -29,10 +29,10 @@ qualification under CHART-04 remains the phase completion gap.
 |---|---|---|
 | A coin, featured stock and catalog listing have 1D, 1W and 1M ranges with a consistent chart and text alternative. | Verified locally | Chromium exercises BTC, AAPL and exact FQZT identity via the running app. `MarketsPage` starts with 1W and passes the exact selector to `useMarketHistory`. `MarketHistoryChart` uses the same points for the Canvas and Price data table. |
 | Closures and missing intervals stay distinct. Chart failure leaves the quote, search and eligible order path usable. | Verified locally | The chart breaks at marked gaps, describes sparse and delayed coverage, and retains keyboard retry. The browser exercised an unavailable chart and current AAPL and FQZT preview asks of $102 and $103. The retained stock and crypto fill journeys passed. |
-| Historical data uses qualified coverage and measured free-tier limits while orders use current quotes. | Blocker for phase completion | Queue bounds, scope and identity revalidation, expiry, scheduler caps and current-quote order behavior are implemented and locally tested. The candidate feeds have no live source qualification. |
+| Historical data uses qualified coverage and measured free-tier limits while orders use current quotes. | Blocker for phase completion | Queue bounds, scope and identity revalidation, expiry, scheduler caps and current-quote order behavior are implemented and locally tested. The live sample verified representative coverage and freshness. The production quota counters and guarded replay verified the shared request budget. Historical display and cache scope remains open. |
 | Four actual-app views match the approved layout with recorded data and attribution differences. | Verified locally | Inspected open AAPL, closed AAPL, ORCL on mobile and BTC. Recomputed eight PNG hashes and dimensions and checked panel widths, tile dimensions, plot dimensions and action right edges against the recorded ZIP geometry. |
 | Ranges contain validated completed closes with comparable Decimal changes. | Verified locally | The provider adapters map validated bars into the time window. The normalizer retains observed closes, marks gaps and suppresses changes when the qualifying baseline or coverage is missing. A direct Python check preserved two decimal closes, detected a missing interval and excluded an unfinished bar. |
-| The available live evidence and any unresolved source limitation are explicit. | Verified | The dated qualification record distinguishes published capabilities from the zero-call outcome and specifies the outstanding scope, coverage and budget evidence. |
+| The available live evidence and any unresolved source limitation are explicit. | Verified | The dated qualification record distinguishes the initial documentation review from the later live sample and records the shared budget and identifies the remaining display and cache scope. |
 
 ## Artifacts and connections
 
@@ -48,7 +48,7 @@ seven connections was traced directly through the source.
 | Scheduler → independent history cycle | The scheduler registers the history background callback when scope and cache are present. The cycle claims a bounded job, revalidates authority before provider attempts and publication, and caches display data with an absolute expiry. [Scheduler](../../../backend/app/tasks/scheduler.py) · [Worker](../../../backend/app/tasks/market_history.py) |
 | Selected instrument → cancellable client query → chart | Markets identifies the selected coin, featured stock or active catalog ID and version. The query key includes identity, range and session. The guarded HTTP client validates the response and the widget renders its series, intervals and exact values. [Markets](../../../frontend/src/pages/MarketsPage.tsx) · [Hook](../../../frontend/src/hooks/useMarketHistory.ts) · [Client](../../../frontend/src/api/marketHistory.ts) · [Chart](../../../frontend/src/components/MarketHistoryChart.tsx) |
 | Disposable browser runner → Markets and catalog journeys | `browser_specs` includes `markets` and `stock-catalog` in the selected suite. The runner exercised their real isolated routes with chart response fixtures. [Runner](../../../deploy/tests/run-stock-browser.py) · [Markets cases](../../../frontend/e2e/markets.spec.ts) · [Catalog cases](../../../frontend/e2e/stock-catalog.spec.ts) |
-| Browser receipt → source qualification | The receipt links to the actual candidate scope and zero live attempt record. [Browser receipt](23-BROWSER-RECEIPT.md) · [Source qualification](23-SOURCE-QUALIFICATION.md) |
+| Browser receipt → source qualification | The receipt links to the initial candidate scope and the later live sample. [Browser receipt](23-BROWSER-RECEIPT.md) · [Source qualification](23-SOURCE-QUALIFICATION.md) |
 
 The history data flow reaches the provider adapters through admitted scope
 and the scheduler. Normalized bars return through the cache, validated API
@@ -90,4 +90,4 @@ belongs to this phase and does not appear as an explicit later-phase item.
 | CHART-01 | 23-01, 23-02, 23-03, 23-04 | Verified locally for BTC, AAPL and exact catalog identity. Live series activation depends on CHART-04. |
 | CHART-02 | 23-01, 23-03, 23-04 | Verified locally for exact closes, source and basis, gaps, split treatment and comparable changes. |
 | CHART-03 | 23-02, 23-03, 23-04 | Verified locally for sparse, delayed and failed history with current-quote order behavior. |
-| CHART-04 | 23-01, 23-02, 23-04 | Open. The bounded request and cache behavior passed with fixtures. Actual historical permissions, representative coverage and measured limits remain unverified. |
+| CHART-04 | 23-01, 23-02, 23-04 | Open. The bounded request and cache behavior passed with fixtures. The live sample verified all nine windows and observed the Alpaca historical limit headers. The production budget was measured and the related regressions passed. Historical-use scope remains unverified. [Live sample](23-SOURCE-QUALIFICATION.md#live-sample-on-2026-11-27) |

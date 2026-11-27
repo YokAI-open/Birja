@@ -171,13 +171,16 @@ async def test_kraken_history_publishes_once_and_keeps_current_price(
         assert await db.scalar(select(func.count(Trade.id))) == trades_before
 
 
-@pytest.mark.parametrize("reason", ["unknown", "due", "overlap", "revoked", "disabled"])
+@pytest.mark.parametrize(
+    "reason", ["unknown", "due", "overlap", "revoked", "disabled", "ticker_after_reservation"]
+)
 async def test_kraken_history_defers_without_known_capacity_or_fresh_scope(
     reason,
     engine,
     settings,
     redis_client,
     history_server,
+    monkeypatch,
 ) -> None:
     changes = {"aggregate_pair_requests_per_minute": 5} if reason == "overlap" else {}
     scope = crypto_scope(NOW, history_server, **changes)
@@ -190,6 +193,19 @@ async def test_kraken_history_defers_without_known_capacity_or_fresh_scope(
         time[0] += 55
     if reason == "disabled":
         config.market_history_scope_json = None
+    lease_checks = 0
+    if reason == "ticker_after_reservation":
+        current_history_job = market_history.current_history_job
+
+        async def recheck_after_ticker(*args):
+            nonlocal lease_checks
+            result = await current_history_job(*args)
+            lease_checks += 1
+            if lease_checks == 2:
+                tracker.record_ticker_attempt(["XETHZUSD"])
+            return result
+
+        monkeypatch.setattr(market_history, "current_history_job", recheck_after_ticker)
     at = NOW + timedelta(minutes=10) if reason == "revoked" else NOW
     async with httpx.AsyncClient(transport=httpx.MockTransport(forbidden)) as http:
         result = await market_history.run_history_cycle(
@@ -203,6 +219,8 @@ async def test_kraken_history_defers_without_known_capacity_or_fresh_scope(
             now=lambda: at,
         )
     assert result.status == "ok" and result.accepted == 0
+    if reason == "ticker_after_reservation":
+        assert lease_checks == 2
 
 
 async def test_kraken_counts_each_retry_and_pair_fallback(settings, history_server) -> None:
@@ -257,6 +275,19 @@ def test_kraken_ticker_priority_uses_fixed_cadence_after_late_wakeup(history_ser
     assert tracker.next_due == scheduled_start + 60
     clock[0] = scheduled_start + 55
     assert tracker.headroom(scope, PAIR) is None
+
+
+def test_kraken_history_waits_one_second_after_any_ticker_attempt(history_server) -> None:
+    scope = crypto_scope(NOW, history_server).kraken
+    assert scope is not None
+    tracker, clock = ticker_budget()
+    # Another pair's fallback still uses the same request IP.
+    tracker.record_ticker_attempt(["XETHZUSD"])
+    last_attempt = clock[0]
+    clock[0] = last_attempt + 0.999
+    assert tracker.headroom(scope, PAIR) is None
+    clock[0] = last_attempt + 1
+    assert tracker.headroom(scope, PAIR) == (6, 7)
 
 
 async def test_timed_out_history_demand_leaves_the_next_job_claimable(

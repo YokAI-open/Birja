@@ -54,8 +54,9 @@ The tested runtime `775c435` passed 11 isolated browser cases and 1,409
 frontend tests. Four app views were compared with the approved ZIP.
 [Phase 23 verification](phases/23-show-historical-market-prices/23-VERIFICATION.md)
 
-CHART-01 through CHART-03 are verified locally. CHART-04 stays open for
-Kraken and IEX history rights, representative coverage and measured limits.
+All nine representative live chart windows and the shared rate bounds
+passed. CHART-04 stays open for the historical data use scope. The owner
+directed implementation and verification without further approval prompts.
 Live history is disabled by default. [Source qualification](phases/23-show-historical-market-prices/23-SOURCE-QUALIFICATION.md)
 
 Phase 22 passed all four requirements. The final isolated run passed 105

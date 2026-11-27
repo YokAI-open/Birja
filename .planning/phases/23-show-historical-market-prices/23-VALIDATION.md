@@ -16,7 +16,7 @@ coverage. Live provider qualification remains open.
 
 | Task | Requirements | Execution evidence |
 |---|---|---|
-| 23-01-01 | CHART-04 | Published candidate scope documented. Representative live coverage, rights and measured limits remain open. [Source qualification](23-SOURCE-QUALIFICATION.md) |
+| 23-01-01 | CHART-04 | All nine live sample windows passed. IEX historical rate headers and existing production workload were measured. Historical-use scope remains open. [Source qualification](23-SOURCE-QUALIFICATION.md) |
 | 23-01-02 | CHART-01, CHART-02, CHART-04 | 36 provider and normalization tests passed for exact mapping, bounded reads, completion, Decimal changes and gaps. [Plan 01 summary](23-01-SUMMARY.md) |
 | 23-02-01 | CHART-01, CHART-03, CHART-04 | API fixtures passed for authentication, active identity, coalescing, disabled scope and cache failure. [Plan 02 summary](23-02-SUMMARY.md) |
 | 23-02-02 | CHART-03, CHART-04 | 335 scoped backend regression tests passed, with 130 focused cases reaching 100% on both critical scheduler modules. The review fixes passed 85 replay checks and 100% stock route coverage. [Code review](23-REVIEW.md) |
@@ -45,3 +45,12 @@ evidence, quota, freshness, permitted caching and the scope checked.
 Measurement against tenant/provider accounts is conditional on existing
 authorization. Deterministic results may close local behavior but leave
 the applicable live part of CHART-04 unresolved.
+
+## Follow-up validation on 2026-11-27
+
+The 66-point production quota observation and all nine historical windows
+are recorded in the [source qualification](23-SOURCE-QUALIFICATION.md).
+141 chart, quote and scheduler tests passed, including the Kraken
+regressions that defer an OHLC request until one second after any ticker
+attempt and recheck the budget immediately after the final queue lease
+read. Ruff and mypy passed for the affected files.

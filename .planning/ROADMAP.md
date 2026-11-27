@@ -58,7 +58,8 @@
 - [x] 23-03 — Render charts and match the approved Markets layout.
 - [x] 23-04 — Verify independent trading behavior and compare actual-app and ZIP captures.
 
-Live Kraken and IEX history qualification remains open under CHART-04.
+All nine live sample windows and the shared scheduler budget passed.
+CHART-04 remains open for historical data use in production.
 
 [Research](phases/23-show-historical-market-prices/23-RESEARCH.md) · [UI contract](phases/23-show-historical-market-prices/23-UI-SPEC.md) · [Verification](phases/23-show-historical-market-prices/23-VERIFICATION.md)
 
@@ -148,7 +149,7 @@ Live Kraken and IEX history qualification remains open under CHART-04.
 | Phase | Plans complete | Status |
 |---|---|---|
 | 22. Adopt the market workspace | 3/3 | Complete 2026-11-26 |
-| 23. Show historical market prices | 4/4 | Local checks passed. Live qualification pending. |
+| 23. Show historical market prices | 4/4 | Live coverage and rate bounds verified. Production source-use scope pending. |
 | 24. Compare portfolio performance | 8/8 | Complete 2026-11-26 |
 | 25. Finish the trading flows and verify the integrated app | 7/7 | Complete 2026-11-26 |
 
