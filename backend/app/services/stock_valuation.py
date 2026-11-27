@@ -13,7 +13,7 @@ from typing import Any, Literal
 from sqlalchemy import Table, Text, and_, case, cast, exists, func, select
 from sqlalchemy.dialects.postgresql import JSONB
 
-from app.core.config import Settings
+from app.core.config import MarketValuationSettings
 from app.models.corporate_action import (
     StockActionEvent,
     StockActionRevision,
@@ -74,9 +74,25 @@ class StockMark:
 class StockValuation:
     mid: Decimal | None
     mark: StockMark
+    daily_aggregate_allowed: bool = False
 
 
-def catalog_valuation_query(coin_ids: Any, settings: Settings, at: datetime) -> Any:
+def _daily_aggregate_allowed(scope: dict[str, Any]) -> bool:
+    """Honor specific limits within an already-admitted durable mark grant.
+
+    Curated marks require derived use, durable accounting and backup/restore.
+    Catalog marks require derivation, storage and backup for each mark field.
+    A narrower restriction on the derived aggregate can override those uses.
+    Raw quote retention controls whether the mark can be used now. The
+    observation includes only the private rounded total, never the raw mark.
+    """
+    return (
+        scope.get("durable_derived_use", True) is True
+        and scope.get("durable_derived_backup", True) is True
+    )
+
+
+def catalog_valuation_query(coin_ids: Any, settings: MarketValuationSettings, at: datetime) -> Any:
     """Set-based authority projection for the caller's already-owned positive holdings."""
     binding: Table = StockCatalogInstrument.__table__  # type: ignore[assignment]
     listing: Table = StockCatalogListing.__table__  # type: ignore[assignment]
@@ -322,7 +338,9 @@ def _visible_catalog_label(row: dict[str, Any], now: datetime) -> bool:
 CatalogSessions = dict[str, tuple[SessionDecision, RegularSession | None]]
 
 
-def catalog_valuation_sessions(raw: Any, settings: Settings, now: datetime) -> CatalogSessions:
+def catalog_valuation_sessions(
+    raw: Any, settings: MarketValuationSettings, now: datetime
+) -> CatalogSessions:
     """Resolve both reviewed venues once per authoritative snapshot."""
     calendar = admission_rows(raw.admissions or []).get("calendar")
     sessions = session_rows(raw.sessions or [])
@@ -343,7 +361,7 @@ def _catalog_mark_snapshot(
     row: dict[str, Any],
     action: StockActionState,
     sessions: CatalogSessions,
-    settings: Settings,
+    settings: MarketValuationSettings,
     now: datetime,
     *,
     halt: dict[str, str] | None,
@@ -446,6 +464,7 @@ def _catalog_mark_snapshot(
             valid_until=mark.valid_until,
             units_safe=True,
         ),
+        daily_aggregate_allowed=_daily_aggregate_allowed(row["mark_scope"]),
     )
 
 
@@ -465,7 +484,7 @@ def value_catalog_holding(
     *,
     original_sessions: CatalogSessions,
     current_sessions: CatalogSessions,
-    settings: Settings,
+    settings: MarketValuationSettings,
     now: datetime,
 ) -> CatalogHoldingValuation:
     """Value the original owned quote with current scope and unchanged unit evidence."""
@@ -542,9 +561,9 @@ def value_catalog_holding(
     if value.mark.valid_until is None or latest.mark.valid_until is None:
         return holding(StockValuation(None, StockMark(units_safe=True)))
     return holding(
-        StockValuation(
-            value.mid,
-            replace(
+        replace(
+            value,
+            mark=replace(
                 value.mark,
                 valid_until=min(value.mark.valid_until, latest.mark.valid_until),
             ),
@@ -670,6 +689,7 @@ def value_stock(
     )
     if decision.mode == "unavailable":
         return denied(decision.reason, units=units)
+    quote_scope = admission_rows(raw.admissions or [])["quotes"].scope
     return StockValuation(
         decision.mid,
         StockMark(
@@ -685,4 +705,5 @@ def value_stock(
             authority=_authority(replace(snapshot, evidence=e)),
             units_safe=units,
         ),
+        daily_aggregate_allowed=_daily_aggregate_allowed(quote_scope),
     )

@@ -1,15 +1,20 @@
 import asyncio
+import json
 import os
 import signal
 import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from app.core.config import get_scheduler_settings
+from app.core.config import SchedulerSettings, Settings, get_scheduler_settings
 from app.tasks import scheduler
 from app.tasks.scheduler import CycleResult, run
+from tests.test_portfolio_daily_schema import authorize_dev, run_migration, scratch_database
+
+__all__ = ["scratch_database"]
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
@@ -336,6 +341,97 @@ async def test_stock_exception_does_not_kill_crypto_loop(
     assert len(calls) == 3
 
 
+@pytest.mark.parametrize("mode", ["off", "kraken", "iex"])
+async def test_amain_wires_history_with_its_own_cache_and_clients(
+    monkeypatch: pytest.MonkeyPatch, mode: str
+) -> None:
+    from app.core.config import SchedulerSettings
+    from app.schemas.market_history import MarketHistoryScopes
+    from app.tasks import market_history
+    from tests.test_market_history_api import crypto_scope, scope_fields
+
+    now = datetime.now(UTC)
+    scope = None
+    stock_enabled = mode == "iex"
+    if mode == "kraken":
+        scope = crypto_scope(now, "birja")
+    elif stock_enabled:
+        scope = MarketHistoryScopes.model_validate_json(
+            json.dumps(
+                {
+                    "alpaca_iex": {
+                        **scope_fields(now, "birja"),
+                        "account": "birja",
+                        "targets": [
+                            {
+                                "instrument": {"kind": "featured", "symbol": "AAPL"},
+                                "provider_symbol": "AAPL",
+                                "provider_asset_id": "synthetic-apple-id",
+                                "exchange": "NASDAQ",
+                                "identity_since": (now - timedelta(days=30)).isoformat(),
+                            }
+                        ],
+                    },
+                }
+            )
+        )
+    config = SchedulerSettings(
+        env="test",
+        price_source="kraken",
+        market_history_scope_json=scope,
+        catalog_quote_redis_url="redis://127.0.0.1:57379/0",
+        stock_data_enabled=stock_enabled,
+        alpaca_api_key="synthetic-key",
+        alpaca_secret_key="synthetic-secret",
+    )
+    monkeypatch.setattr(scheduler, "get_scheduler_settings", lambda: config)
+    ticker_callbacks = []
+    history_calls = []
+    pairs = ["XXBTZUSD"]
+
+    async def current_ticker(_http, symbols, *, record_attempt):
+        assert symbols == pairs
+        ticker_callbacks.append(record_attempt)
+        if record_attempt is not None:
+            record_attempt(symbols)
+        return {pairs[0]: {}}
+
+    async def current_cycle(**kw: Any) -> CycleResult:
+        assert await kw["source"](pairs) == {pairs[0]: {}}
+        return CycleResult("ok")
+
+    async def history_cycle(**kw: Any) -> CycleResult:
+        assert kw["redis"] is not kw["quota_redis"]
+        assert "APCA-API-KEY-ID" not in kw["http"].headers
+        if stock_enabled:
+            assert kw["stock_http"].headers["APCA-API-KEY-ID"] == "synthetic-key"
+        else:
+            assert kw["stock_http"] is None
+        history_calls.append(kw)
+        return CycleResult("ok")
+
+    async def one_cycle(*, cycle, interval, stop, heartbeat=scheduler.HEARTBEAT_PATH):
+        if cycle.__name__ == "history_cycle":
+            assert heartbeat is None and interval == market_history.HISTORY_CHECK_INTERVAL_SECONDS
+        if cycle.__name__ in {"cycle", "history_cycle"}:
+            await cycle()
+
+    monkeypatch.setattr(scheduler.kraken, "fetch_tickers_isolated", current_ticker)
+    monkeypatch.setattr(scheduler, "run_cycle", current_cycle)
+    monkeypatch.setattr(scheduler, "run", one_cycle)
+    monkeypatch.setattr(market_history, "run_history_cycle", history_cycle)
+    await scheduler.amain(asyncio.Event())
+
+    assert len(ticker_callbacks) == 1 and bool(ticker_callbacks[0]) == (mode == "kraken")
+    assert len(history_calls) == int(mode != "off")
+    if mode == "kraken":
+        tracker = history_calls[0]["tracker"]
+        assert tracker.pairs == frozenset(pairs)
+        assert len(tracker.attempts) == 1 and not tracker.running
+    if mode == "iex":
+        assert history_calls[0]["tracker"] is None and history_calls[0]["stock_http"].is_closed
+
+
 @pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
 def test_compose_stock_keys_only_reach_disabled_scheduler(filename: str) -> None:
     content = (BACKEND_DIR.parent / filename).read_text()
@@ -350,10 +446,74 @@ def test_compose_stock_keys_only_reach_disabled_scheduler(filename: str) -> None
     assert "STOCK_DATA_ENABLED: ${STOCK_DATA_ENABLED:-false}" in stock
     assert "ALPACA_API_KEY: ${ALPACA_API_KEY:-}" in stock
     assert "ALPACA_SECRET_KEY: ${ALPACA_SECRET_KEY:-}" in stock
+    assert "PORTFOLIO_DAILY_CAPTURE_ENABLED: ${PORTFOLIO_DAILY_CAPTURE_ENABLED:-true}" in stock
+    for threshold in (
+        "PRICE_FRESH_SECONDS: ${PRICE_FRESH_SECONDS:-120}",
+        "PRICE_STALE_SECONDS: ${PRICE_STALE_SECONDS:-300}",
+    ):
+        assert threshold in stock and threshold in found["backend"]
     for name, value in found.items():
         if name != "scheduler":
             assert "ALPACA_" not in value
+            assert "PORTFOLIO_DAILY_CAPTURE_ENABLED" not in value
     assert "VITE_ALPACA" not in content
+
+
+def test_shared_valuation_threshold_environment(monkeypatch):
+    monkeypatch.setenv("PRICE_FRESH_SECONDS", "37")
+    monkeypatch.setenv("PRICE_STALE_SECONDS", "45")
+    for config in (SchedulerSettings(), Settings()):
+        assert (config.price_fresh_seconds, config.price_stale_seconds) == (37, 45)
+
+
+@pytest.mark.parametrize("mode", ["disabled", "predecessor", "successor", "unavailable"])
+async def test_amain_admits_private_daily_cycle_only_on_supported_schema(
+    monkeypatch, scratch_database, mode
+):
+    from app.tasks import portfolio_daily_values as daily
+
+    admin, migrator = scratch_database
+    if mode in {"predecessor", "successor"}:
+        revision = "0027" if mode == "predecessor" else "0028"
+        await run_migration(migrator, revision)
+        await authorize_dev(admin, revision)
+    config = SchedulerSettings(
+        price_source="fake",
+        database_url=admin.url.render_as_string(hide_password=False),
+        portfolio_daily_capture_enabled=mode != "disabled",
+    )
+    calls = []
+    schema_checks = []
+    real = daily.daily_capture_schema_available
+
+    async def check(engine):
+        schema_checks.append(engine)
+        return await real(engine)
+
+    async def current_cycle(**kwargs):
+        calls.append("current")
+        return CycleResult("ok")
+
+    async def daily_cycle(**kwargs):
+        assert set(kwargs) == {"sessionmaker", "settings", "cursor"}
+        assert kwargs["settings"] is config
+        assert kwargs["cursor"] == daily.DailyValueCursor()
+        calls.append("daily")
+        return CycleResult("ok")
+
+    async def one_cycle(*, cycle, interval, stop, heartbeat=scheduler.HEARTBEAT_PATH):
+        if cycle.__name__ == "daily_capture_cycle":
+            assert interval == 60 and heartbeat is None
+        await cycle()
+
+    monkeypatch.setattr(scheduler, "get_scheduler_settings", lambda: config)
+    monkeypatch.setattr(scheduler, "run", one_cycle)
+    monkeypatch.setattr(scheduler, "run_cycle", current_cycle)
+    monkeypatch.setattr(daily, "daily_capture_schema_available", check)
+    monkeypatch.setattr(daily, "run_portfolio_daily_capture", daily_cycle)
+    await scheduler.amain(asyncio.Event())
+    assert calls == (["current", "daily"] if mode == "successor" else ["current"])
+    assert len(schema_checks) == int(mode != "disabled")
 
 
 @pytest.mark.parametrize("failure", [False, True])

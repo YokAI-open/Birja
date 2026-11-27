@@ -107,11 +107,11 @@ def authenticate_campaign_images(archive, archive_sha, *, inspect_image=None):
             raise ValueError("private campaign image record required")
         binding = json.loads(record.read_text())
         lane = record.name.removesuffix("-image-binding.json")
-        if lane in {"current0023", "current0026", "current0027", "predecessor0023", "current0020", "current0017",
+        if lane in {"current0023", "current0026", "current0027", "current0028", "predecessor0023", "current0020", "current0017",
                     "retained0020-refusal", "retained0017-refusal"}:
             if lane == "predecessor0023" and binding["source_commit"] != PREDECESSOR_0023:
                 raise ValueError("predecessor image source changed")
-            prefix = ("birja-portfolio-current:" if lane in {"current0023", "current0026", "current0027", "predecessor0023"}
+            prefix = ("birja-portfolio-current:" if lane in {"current0023", "current0026", "current0027", "current0028", "predecessor0023"}
                       else "birja-portfolio-retained:")
             alias = campaign_image_tag(prefix + binding["source_commit"][:12] + "-" + binding["context_sha256"][:20], archive)
         elif lane in sources.FIXED_RELEASES:
@@ -133,14 +133,15 @@ def build_current_runtime(
     workstation image. Only the committed backend tree is sent to Docker;
     neither host source overlays nor an alternate dependency base are used.
     """
-    if revision not in {"0023", "0026", "0027"}:
+    if revision not in {"0023", "0026", "0027", "0028"}:
         raise ValueError("unsupported current runtime schema")
     if predecessor and revision != "0023":
         raise ValueError("exact 0023 predecessor required")
-    if revision in {"0026", "0027"} or predecessor:
+    if revision in {"0026", "0027", "0028"} or predecessor:
         if archive is None:
             raise ValueError("Current catalog runtime requires an exact recovery campaign")
-        profile = "deploy-recovery-v7" if revision == "0026" else "deploy-recovery-v8"
+        profile = {"0026": "deploy-recovery-v7", "0027": "deploy-recovery-v8",
+                   "0028": "deploy-recovery-v9"}["0027" if predecessor else revision]
         load_recovery().bundle_verify(archive, archive_sha, required_profile=profile)
     head = sources.git("rev-parse", "HEAD").decode().strip()
     commit = PREDECESSOR_0023 if predecessor else head
@@ -223,7 +224,7 @@ def build_selected_runtime(
     sources, env, *, revision, archive=None, archive_sha=None, run=subprocess.run
 ):
     profile = sources.profile_for(revision)
-    if revision in {"0023", "0026", "0027"}:
+    if revision in {"0023", "0026", "0027", "0028"}:
         return build_current_runtime(sources, env, archive=archive, archive_sha=archive_sha,
                                      revision=revision, run=run)
     if revision not in {"0017", "0020"}:
@@ -1123,11 +1124,176 @@ def run(*, archive=None, archive_sha=None, cold=False, revision="0023", fresh_bo
                         raise AssertionError("owned portfolio resources leaked")
 
 
+def daily_value_program(mode):
+    """Emit a bounded probe so the selected runtime performs capture and reads."""
+    import inspect
+
+    if mode not in {"capture", "read"}:
+        raise ValueError("unexpected daily value fixture mode")
+    return ("import asyncio\n" + inspect.getsource(daily_value_fixture)
+            + f"\nasyncio.run(daily_value_fixture({mode!r}))\n")
+
+
+async def daily_value_fixture(mode):
+    from datetime import UTC, datetime, time, timedelta
+    from decimal import Decimal
+    from urllib.parse import urlsplit, urlunsplit
+    from uuid import uuid4
+
+    import httpx
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from app.core.config import SchedulerSettings, Settings
+    from app.core.security import create_access_token
+    from app.db.connection import database_connect_args
+    from app.db.schema_contract import require_schema
+    from app.main import create_app
+    from app.services.portfolio_closure import ClosureIntent, close_owned_portfolio
+    from app.services.portfolio_daily_values import capture_portfolio_daily_value
+
+    settings = Settings(price_source="fake")
+    target = urlsplit(settings.database_url)
+    if (settings.env != "test" or (target.hostname, target.port, target.username)
+            != ("postgres", 5432, "birja_test") or target.query
+            or target.path not in {"/birja_test", "/birja_restore_test"}
+            or not settings.database_ssl_ca_file):
+        raise ValueError("owned disposable TLS database required")
+
+    def role_url(user, password):
+        return urlunsplit(target._replace(netloc=f"{user}:{password}@postgres:5432"))
+
+    app_url = role_url("birja_app", "test-app")
+    scheduler_url = role_url("birja_scheduler", "test-scheduler")
+    owner_url = role_url("birja_migrator", "fixture-migrator-only")
+    app_db, scheduler_db, owner_db = (
+        create_async_engine(url, connect_args=database_connect_args(settings))
+        for url in (app_url, scheduler_url, owner_url)
+    )
+    owner = async_sessionmaker(owner_db, expire_on_commit=False)
+    app = async_sessionmaker(app_db, expire_on_commit=False)
+    scheduler = async_sessionmaker(scheduler_db, expire_on_commit=False)
+    capture_settings = SchedulerSettings(database_url=scheduler_url, price_source="fake",
+                                         database_ssl_ca_file=settings.database_ssl_ca_file)
+    primary_email, foreign_email = ("phase24-owner@example.test", "phase24-foreign@example.test")
+    complete = Decimal("10251.00")
+
+    async def capture(uid, root, at):
+        async with scheduler.begin() as db:
+            return await capture_portfolio_daily_value(
+                db, owner_id=uid, portfolio_id=root, expected_day=at.date(),
+                settings=capture_settings, clock=lambda: at,
+            )
+
+    async def seed_user(email):
+        async with owner.begin() as db:
+            uid = await db.scalar(text("INSERT INTO users(email) VALUES (:email) RETURNING id"),
+                                  {"email": email})
+            await db.execute(text("INSERT INTO auth_sessions(user_id) VALUES (:uid)"), {"uid": uid})
+        async with app.begin() as db:
+            root = await db.scalar(text("SELECT public.initialize_portfolio(:uid)"), {"uid": uid})
+        return uid, root
+
+    async def explicit(uid, name):
+        async with app.begin() as db:
+            return await db.scalar(text("SELECT portfolio_id FROM public.create_portfolio(:u,:k,:n,'')"),
+                                   {"u": uid, "k": uuid4(), "n": name})
+
+    async def seed_capture():
+        at = datetime.combine(datetime.now(UTC).date() - timedelta(days=1), time(22, 30), UTC)
+        uid, original = await seed_user(primary_email)
+        other_uid, other = await seed_user(foreign_email)
+        missing = await explicit(uid, "Missing quote")
+        terminal = await explicit(uid, "Terminal observation")
+        async with owner.begin() as db:
+            coins = dict((await db.execute(text(
+                "SELECT symbol,id FROM coins WHERE asset_class='crypto' AND symbol IN ('BTC','ETH')"
+            ))).all())
+            assert set(coins) == {"BTC", "ETH"}
+            await db.execute(text("DELETE FROM prices WHERE coin_id IN (:btc,:eth)"),
+                             {"btc": coins["BTC"], "eth": coins["ETH"]})
+            await db.execute(text(
+                "INSERT INTO prices(coin_id,mid,as_of,source) VALUES (:coin,125.50,:at,'fake')"
+            ), {"coin": coins["BTC"], "at": at})
+            await db.execute(text(
+                "INSERT INTO holdings(portfolio_id,user_id,coin_id,quantity,cost_basis) "
+                "VALUES (:root,:uid,:coin,2,200)"
+            ), [{"root": original, "uid": uid, "coin": coins["BTC"]},
+                {"root": missing, "uid": uid, "coin": coins["ETH"]}])
+        for owned, root in ((uid, original), (uid, missing), (uid, terminal), (other_uid, other)):
+            assert await capture(owned, root, at)
+        async with owner.begin() as db:
+            await db.execute(text("UPDATE prices SET mid=200 WHERE coin_id=:coin"),
+                             {"coin": coins["BTC"]})
+        assert not await capture(uid, original, at + timedelta(minutes=1))
+        assert not await capture(other_uid, original, at)
+        async with app() as db:
+            closed = await close_owned_portfolio(db, ClosureIntent(uid, terminal, uuid4(), "Terminal observation"))
+            assert closed.outcome == "closed" and not closed.replayed
+        assert not await capture(uid, terminal, at + timedelta(days=1))
+
+    async def verify_reads():
+        async with app() as db:
+            rows = (await db.execute(text("""
+                SELECT u.email,a.name,a.closed_at IS NOT NULL AS closed,u.id AS uid,
+                       a.id AS root,s.id AS sid,v.utc_day,v.captured_at,v.starting_cash,
+                       v.total_value,v.valuation_complete
+                FROM users u JOIN accounts a ON a.user_id=u.id
+                JOIN auth_sessions s ON s.user_id=u.id
+                JOIN portfolio_daily_values v ON (v.portfolio_id,v.user_id)=(a.id,u.id)
+                WHERE u.email IN (:primary,:foreign) ORDER BY a.id
+            """), {"primary": primary_email, "foreign": foreign_email})).all()
+        assert len(rows) == 4 and len({row.utc_day for row in rows}) == 1
+        assert [(r.email, r.name, r.closed, r.total_value, r.valuation_complete) for r in rows] == [
+            (primary_email, "My portfolio", False, complete, True),
+            (foreign_email, "My portfolio", False, Decimal("10000.00"), True),
+            (primary_email, "Missing quote", False, None, False),
+            (primary_email, "Terminal observation", True, Decimal("10000.00"), True),
+        ]
+        for row in rows:
+            assert row.starting_cash == Decimal("10000") and row.captured_at == datetime.combine(
+                row.utc_day, time(22, 30), UTC
+            )
+        web = create_app(settings.model_copy(update={"database_url": app_url}))
+        async with web.router.lifespan_context(web):
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=web),
+                                         base_url="https://recovery.test") as client:
+                for wanted in (primary_email, foreign_email):
+                    owned = [row for row in rows if row.email == wanted and not row.closed]
+                    client.cookies.set("bj_access", create_access_token(owned[0].uid, owned[0].sid, settings.jwt_secret))
+                    result = await client.get("/api/v2/portfolios/value-history")
+                    assert result.status_code == 200 and result.headers["cache-control"] == "no-store"
+                    expected = [{"portfolio_id": str(row.root), "points": [{
+                        "utc_day": row.utc_day.isoformat(),
+                        "captured_at": row.captured_at.isoformat().replace("+00:00", "Z"),
+                        "total_value": f"{row.total_value:.2f}" if row.valuation_complete else None,
+                        "valuation_complete": row.valuation_complete,
+                    }]} for row in owned]
+                    assert result.json()["portfolios"] == expected
+
+    try:
+        for role, engine in (("birja_app", app_db), ("birja_scheduler", scheduler_db)):
+            async with engine.connect() as conn:
+                assert (await conn.execute(text(
+                    "SELECT current_user, ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()"
+                ))).one() == (role, True)
+                assert await require_schema(conn, consumer="portfolio_daily") == "0028"
+        if mode == "capture":
+            await seed_capture()
+            print("daily_value_capture_exact=true")
+        await verify_reads()
+        if mode == "read":
+            print("daily_value_restored_owner_reads_exact=true")
+    finally:
+        for engine in (app_db, scheduler_db, owner_db):
+            await engine.dispose()
+
+
 @contextmanager
 def installed_recovery_verifier(archive, archive_sha, *, profile="deploy-recovery-v5"):
     """Keep the authenticated consumer and adjacent retained sources alive."""
     trusted = load_recovery()
-    if profile not in {"deploy-recovery-v5", "deploy-recovery-v7", "deploy-recovery-v8"}:
+    if profile not in {"deploy-recovery-v5", "deploy-recovery-v7", "deploy-recovery-v8", "deploy-recovery-v9"}:
         raise ValueError("unsupported installed campaign profile")
     trusted.bundle_verify(archive, archive_sha, required_profile=profile)
     with tempfile.TemporaryDirectory(prefix="birja-backup-test-verifier-context-") as temporary:

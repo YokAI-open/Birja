@@ -16,6 +16,7 @@ from sqlalchemy import event as sql_event
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.schemas.event_history import EventHistoryFilters
 from app.services.event_history import EventHistoryCursor, encode_cursor, list_event_history
 from app.services.portfolios import OwnedActivePortfolio
 from tests.stock_action_fixtures import synthetic_portfolio_id
@@ -45,7 +46,7 @@ async def page_for(conn, uid, **kw):
         return await list_event_history(db, portfolio=OwnedActivePortfolio(root, uid), **kw)
 
 
-async def fill(conn, uid, stamp, *, cid=None, stock=False, high=False):
+async def fill(conn, uid, stamp, *, cid=None, stock=False, high=False, side="buy"):
     async with AsyncSession(bind=conn) as db:
         root = await synthetic_portfolio_id(db, uid)
     await conn.execute(text("SET CONSTRAINTS ALL DEFERRED"))
@@ -54,7 +55,7 @@ async def fill(conn, uid, stamp, *, cid=None, stock=False, high=False):
     # Projection fixtures are retained immutable facts, not mocked trade execution.
     sql = """INSERT INTO trades (portfolio_id,user_id,coin_id,side,input_kind,input_value,quantity,
         mid_price,price_as_of,exec_price,fee,cash_delta,cash_after,idempotency_key,created_at)
-        VALUES (:p,:u,:c,'buy','quantity',2,2,10,:t,10,0,-20,80,:k,:t) RETURNING id"""
+        VALUES (:p,:u,:c,:side,'quantity',2,2,10,:t,10,0,:cash_delta,80,:k,:t) RETURNING id"""
     if stock:
         sql = sql.replace("quantity',2,2,10,", "quantity',2,2,9.5,")
     if high:
@@ -69,6 +70,8 @@ async def fill(conn, uid, stamp, *, cid=None, stock=False, high=False):
                 "u": uid,
                 "c": cid,
                 "t": stamp,
+                "side": side,
+                "cash_delta": 20 if side == "sell" else -20,
                 "k": uuid4(),
                 "high_id": 9007199254740993 + uid,
             },
@@ -217,6 +220,29 @@ async def test_mixed_tied_time_whole_tuple_owner_paging_and_rename(authority_cas
     if limit == 25:
         # Execute the actual installed TS parser against a real database page.
         await asyncio.to_thread(assert_current_ts_parser, before, tmp_path)
+        sold = await fill(conn, owner, stamp + timedelta(microseconds=2), side="sell")
+        assert (await page_for(conn, owner, limit=1)).items[0].id == f"trade:{sold}"
+        for filters, matching in [
+            (EventHistoryFilters(asset="stock"), [f"trade:{stock}", original.id, f"split:{split}"]),
+            (
+                EventHistoryFilters(asset="crypto"),
+                [f"trade:{sold}", f"trade:{inserted}", f"trade:{crypto}"],
+            ),
+            (EventHistoryFilters(activity="buy", asset="stock"), [f"trade:{stock}"]),
+            (EventHistoryFilters(activity="sell"), [f"trade:{sold}"]),
+            (EventHistoryFilters(activity="split"), [f"split:{split}"]),
+        ]:
+            cursor = None
+            for index, event_id in enumerate(matching):
+                page = await page_for(conn, owner, filters=filters, limit=1, cursor=cursor)
+                assert [item.id for item in page.items] == [event_id]
+                cursor = page.next_cursor
+                assert (cursor is not None) == (index < len(matching) - 1)
+        assert (
+            await page_for(
+                conn, owner, filters=EventHistoryFilters(asset="crypto", activity="split")
+            )
+        ).items == []
 
 
 def assert_current_ts_parser(page, directory):
@@ -264,7 +290,8 @@ async def test_lineage_offpage_actual_hold_dedup_and_owner(authority_case, class
     revised = await successor(conn, ids, classification=classification, eligible=False)
     held = await hold(conn, ids, original.payment_id, revised["revision_fingerprint"])
     assert await hold(conn, ids, original.payment_id, revised["revision_fingerprint"]) == held
-    page = await page_for(conn, ids["user_id"], limit=1)
+    filters = EventHistoryFilters(activity="dividend", asset="stock")
+    page = await page_for(conn, ids["user_id"], filters=filters, limit=1)
     correction = page.items[0]
     assert correction.kind == "dividend_correction"
     assert correction.original == saved and correction.payment_reference == saved.id
@@ -272,11 +299,15 @@ async def test_lineage_offpage_actual_hold_dedup_and_owner(authority_case, class
     assert correction.desired_total is None and correction.proposed_delta is None
     assert Decimal(correction.cash_delta) == Decimal(correction.applied_delta) == 0
     assert page.next_cursor is not None
-    assert (await page_for(conn, ids["user_id"], cursor=page.next_cursor)).items == [saved]
+    assert (
+        await page_for(conn, ids["user_id"], filters=filters, cursor=page.next_cursor)
+    ).items == [saved]
     async with AsyncSession(bind=conn) as db:
         with pytest.raises(HTTPException) as failure:
             await list_event_history(
-                db, portfolio=OwnedActivePortfolio(ids["portfolio_id"], 9223372036854775807)
+                db,
+                portfolio=OwnedActivePortfolio(ids["portfolio_id"], 9223372036854775807),
+                filters=filters,
             )
         assert failure.value.status_code == 404
 
@@ -295,7 +326,9 @@ async def test_lineage_verified_actual_correction_outcomes(authority_case, rate,
     result = await process(conn, revised)
     assert result.outcome == outcome
     assert await process(conn, revised) == result
-    page = await page_for(conn, ids["user_id"], limit=1)
+    page = await page_for(
+        conn, ids["user_id"], filters=EventHistoryFilters(activity="dividend"), limit=1
+    )
     item = page.items[0]
     assert item.outcome == outcome and item.original == saved
     assert item.payment_reference == f"dividend:{original.payment_id}"

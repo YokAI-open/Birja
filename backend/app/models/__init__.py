@@ -12,6 +12,7 @@ from app.models.corporate_action import (
 )
 from app.models.dividend import StockDividendDecision, StockDividendPayment
 from app.models.portfolio_creation import PortfolioCreation, PortfolioInitialization
+from app.models.portfolio_daily_value import PortfolioDailyValue
 from app.models.portfolio_lifecycle import PortfolioClosureIntent, PortfolioLifecycleClosure
 from app.models.price import Coin, Price
 from app.models.stock import StockDataAdmission, StockInstrument, StockQuote, StockSession
@@ -37,6 +38,7 @@ __all__ = [
     "PortfolioClosureIntent",
     "PortfolioLifecycleClosure",
     "PortfolioCreation",
+    "PortfolioDailyValue",
     "PortfolioInitialization",
     "StockDividendPayment",
     "StockDividendDecision",

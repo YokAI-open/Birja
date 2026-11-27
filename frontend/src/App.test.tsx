@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation, useNavigate, useOutletContext, useParams } from "react-router";
 import userEvent from "@testing-library/user-event";
@@ -138,11 +138,13 @@ function deletionApi({
   listFailure = false,
   metadata = () => ({ ...first, description: "Keep this strategy" }),
   rows = () => [first],
+  statement = () => privateJson(cashPortfolio()),
 }: {
   result?: () => Promise<Response>;
   listFailure?: boolean;
   metadata?: () => { id: string; name: string; description: string };
   rows?: () => { id: string; name: string }[];
+  statement?: () => Response;
 } = {}) {
   let closed = false;
   const fetch = vi.fn(async (path: string, init?: RequestInit) => {
@@ -158,7 +160,7 @@ function deletionApi({
       return closed
         ? privateJson({ detail: { code: "portfolio_unavailable" } }, 404)
         : privateJson(metadata());
-    if (path === "/api/v2/portfolios/1") return privateJson(cashPortfolio());
+    if (path === "/api/v2/portfolios/1") return statement();
     if (path === "/api/v2/portfolios")
       return closed && listFailure
         ? privateJson({}, 503)
@@ -192,7 +194,7 @@ it("keeps the deletion lease alive while quarantine removes the financial Outlet
   });
   const { user } = setup("/portfolios/1");
   await user.click(await screen.findByRole("button", { name: "Remove portfolio" }));
-  expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
+  expect(screen.getByRole("button", { name: "Keep portfolio" })).toHaveFocus();
   expect(screen.getByText(/This is your last active portfolio/)).toBeVisible();
   await user.click(screen.getByRole("button", { name: "Delete portfolio" }));
   await waitFor(() => expect(release).toBeTypeOf("function"));
@@ -530,6 +532,56 @@ it("keeps a terminal-refusal same-ID metadata retry visible after fresh proof fa
       .every(([path]) => path === "/api/v2/portfolios/1"),
   ).toBe(true);
 });
+it("uses one managed toolbar in chooser, Edit, Update and Remove tab order", async () => {
+  probes.actualPage = true;
+  const fetch = deletionApi({ rows: () => [first, second] });
+  const { user } = setup("/portfolios/1");
+  await screen.findByRole("region", { name: "Cash" });
+  const toolbar = screen.getByRole("group", { name: "Portfolio controls" });
+  const chooser = within(toolbar).getByRole("combobox", { name: "Open portfolio" });
+  const edit = within(toolbar).getByRole("button", { name: "Edit portfolio" });
+  const update = within(toolbar).getByRole("button", { name: "Update portfolio" });
+  const remove = within(toolbar).getByRole("button", { name: "Remove portfolio" });
+  await waitFor(() => expect(remove).toBeEnabled());
+  expect(screen.getAllByRole("combobox", { name: "Open portfolio" })).toEqual([chooser]);
+  expect(screen.getAllByRole("button", { name: "Update portfolio" })).toEqual([update]);
+  expect([...toolbar.querySelectorAll("select, button")]).toEqual([chooser, edit, update, remove]);
+  expect(update.querySelector("time")).toHaveAttribute("datetime", cashPortfolio().valued_at);
+  await user.click(chooser);
+  await user.tab();
+  expect(edit).toHaveFocus();
+  await user.tab();
+  expect(update).toHaveFocus();
+  await user.tab();
+  expect(remove).toHaveFocus();
+  await user.click(update);
+  await waitFor(() =>
+    expect(fetch.mock.calls.filter(([path]) => path === "/api/v2/portfolios/1")).toHaveLength(2),
+  );
+  expect(fetch.mock.calls.some(([path]) => path === "/api/v2/portfolios/2")).toBe(false);
+});
+
+it("focuses the unavailable heading when a focused Update loses portfolio access", async () => {
+  probes.actualPage = true;
+  let active = true;
+  deletionApi({
+    rows: () => (active ? [first] : []),
+    statement: () =>
+      active
+        ? privateJson(cashPortfolio())
+        : privateJson({ detail: { code: "portfolio_unavailable" } }, 404),
+  });
+  const { user } = setup("/portfolios/1");
+  await screen.findByRole("region", { name: "Cash" });
+  const update = screen.getByRole("button", { name: "Update portfolio" });
+  update.focus();
+  expect(update).toHaveFocus();
+  active = false;
+  await user.keyboard("{Enter}");
+  const heading = await screen.findByRole("heading", { name: "Portfolio unavailable" });
+  expect(heading).toHaveFocus();
+});
+
 it.each(["/portfolios/1", "/portfolios/1/"])(
   "gives real index %s one primary h1 and the persistent management host",
   async (route) => {
@@ -549,8 +601,8 @@ it.each(["/portfolios/1", "/portfolios/1/"])(
       expect(screen.getByRole("button", { name: "Edit portfolio" })).toBeEnabled(),
     );
     await user.click(screen.getByRole("button", { name: "Remove portfolio" }));
-    expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByRole("button", { name: "Keep portfolio" })).toHaveFocus();
+    await user.click(screen.getByRole("button", { name: "Keep portfolio" }));
     expect(screen.getByRole("button", { name: "Remove portfolio" })).toHaveFocus();
     await user.click(screen.getByRole("button", { name: "Remove portfolio" }));
     await user.click(screen.getByRole("button", { name: "Delete portfolio" }));
@@ -594,6 +646,7 @@ it.each(["/portfolios/1/history", "/portfolios/1/trade/BTC", "/portfolios/1/trad
     await screen.findByText(/Private alice@example.test root 1/);
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "Edit portfolio" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Update portfolio" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Remove portfolio" })).toBeNull();
   },
 );
@@ -614,7 +667,7 @@ it("keeps a trailing-slash inaccessible index generic even if stale metadata is 
 
 it("keeps the sign-out door beside three responsive primary destinations", async () => {
   api();
-  setup();
+  const { user } = setup();
   const nav = await screen.findByRole("navigation", { name: "Main" });
   expect(nav.querySelectorAll("a")).toHaveLength(3);
   expect(nav).not.toContainElement(screen.getByRole("button", { name: "Sign out" }));
@@ -623,6 +676,7 @@ it("keeps the sign-out door beside three responsive primary destinations", async
   expect(header).toContainElement(screen.getByText("Birja"));
   expect(header).toContainElement(screen.getByRole("button", { name: "Sign out" }));
   expect(screen.getByRole("heading", { name: "Markets", level: 1 })).toHaveClass("sr-only");
+  await user.click(screen.getByRole("button", { name: "Crypto" }));
   expect(await screen.findByRole("button", { name: /Bitcoin BTC.*81,042.35/ })).toBeVisible();
   expect(screen.getByRole("link", { name: "Trade BTC" })).toHaveAttribute("href", "/trade/BTC");
   expect(screen.getAllByRole("link", { name: "Portfolios" })[0]).toHaveAttribute(
@@ -729,6 +783,7 @@ it("retains verified root through nav, global Markets and trade links", async ()
   await screen.findByRole("heading", { name: "History page" });
   await user.click(screen.getByRole("link", { name: "Markets" }));
   expect(await screen.findByRole("heading", { name: "Markets" })).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "Crypto" }));
   expect(await screen.findByRole("link", { name: "Trade BTC" })).toHaveAttribute(
     "href",
     "/portfolios/2/trade/BTC",
@@ -741,6 +796,79 @@ it("retains verified root through nav, global Markets and trade links", async ()
   expect(await screen.findByRole("heading", { name: "Crypto BTC" })).toBeVisible();
   expect(screen.getByText("Private alice@example.test root 2")).toBeVisible();
 });
+it("changes the trading portfolio in place and carries the selected instrument", async () => {
+  api({ metadata: () => json([first, second]) });
+  const { user } = setup();
+  const chooser = await screen.findByRole("combobox", { name: "Trading portfolio" });
+  await screen.findByRole("option", { name: second.name });
+  expect(screen.getAllByRole("combobox")).toHaveLength(1);
+  expect(chooser).toHaveAccessibleDescription("Select the portfolio for the next trade.");
+  expect(chooser).toHaveValue("");
+  await user.click(screen.getByRole("button", { name: "Crypto" }));
+  const search = screen.getByRole("searchbox");
+  await user.type(search, "bitc");
+  await user.click(await screen.findByRole("button", { name: /Bitcoin BTC/ }));
+  expect(screen.getByRole("link", { name: "Trade BTC" })).toHaveAttribute("href", "/trade/BTC");
+
+  await user.selectOptions(chooser, first.id);
+  await waitFor(() =>
+    expect(screen.getByRole("link", { name: "Trade BTC" })).toHaveAttribute(
+      "href",
+      "/portfolios/1/trade/BTC",
+    ),
+  );
+  await user.selectOptions(chooser, second.id);
+  await waitFor(() =>
+    expect(screen.getByRole("link", { name: "Trade BTC" })).toHaveAttribute(
+      "href",
+      "/portfolios/2/trade/BTC",
+    ),
+  );
+  expect(search).toHaveValue("bitc");
+  expect(screen.getByRole("button", { name: "Crypto" })).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByTestId("location")).toHaveTextContent(/^\/$/);
+  await user.click(screen.getByRole("link", { name: "Trade BTC" }));
+  expect(await screen.findByText("Private alice@example.test root 2")).toBeVisible();
+});
+
+it("keeps quotes visible when a chosen trading portfolio awaits access or becomes unavailable", async () => {
+  let completeRefresh!: (value: Response) => void;
+  let metadata = () => Promise.resolve(json([first, second]));
+  api({ metadata: () => metadata() });
+  const { client, user } = setup();
+  const chooser = await screen.findByRole("combobox", { name: "Trading portfolio" });
+  await screen.findByRole("option", { name: first.name });
+  await user.selectOptions(chooser, first.id);
+  await user.click(screen.getByRole("button", { name: "Crypto" }));
+  expect(await screen.findByRole("link", { name: "Trade BTC" })).toHaveAttribute(
+    "href",
+    "/portfolios/1/trade/BTC",
+  );
+
+  metadata = () =>
+    new Promise<Response>((resolve) => {
+      completeRefresh = resolve;
+    });
+  await act(async () => {
+    void client.invalidateQueries({ queryKey: ["portfolios", "alice@example.test"] });
+  });
+  expect(await screen.findByText("Checking your trading portfolio…")).toBeVisible();
+  expect(screen.queryByRole("link", { name: "Trade BTC" })).toBeNull();
+  expect(screen.getByRole("heading", { name: "Bitcoin" })).toBeVisible();
+  await act(async () => completeRefresh(json([second])));
+
+  const choose = await screen.findByRole("link", { name: "Choose an available portfolio" });
+  expect(choose).toHaveAttribute("href", "/portfolios");
+  expect(chooser).toHaveValue("");
+  expect(screen.queryByRole("link", { name: "Trade BTC" })).toBeNull();
+
+  await user.selectOptions(chooser, second.id);
+  expect(await screen.findByRole("link", { name: "Trade BTC" })).toHaveAttribute(
+    "href",
+    "/portfolios/2/trade/BTC",
+  );
+});
+
 it("focuses route and Back headings without refetch focus theft", async () => {
   api();
   const { client, user } = setup();
@@ -872,6 +1000,7 @@ it("preserves logout CSRF and refuses late identity/root resurrection", async ()
   await waitFor(() => expect(release).toBeTypeOf("function"));
   await user.click(screen.getByRole("button", { name: "Sign out" }));
   expect(await screen.findByRole("button", { name: "Send code" })).toBeVisible();
+  expect(screen.getByLabelText("Email")).toHaveFocus();
   expect(signal.aborted).toBe(true);
   expect(client.getQueryCache().find({ queryKey: ["me"] })).toBe(query);
   const call = fetch.mock.calls.find(([url]) => url === "/api/v1/auth/logout")!;
@@ -882,6 +1011,34 @@ it("preserves logout CSRF and refuses late identity/root resurrection", async ()
   });
   expect(client.getQueryData(["me"])).toBeNull();
   expect(screen.queryByRole("navigation")).toBeNull();
+});
+it("keeps one sign-out request pending and focuses the email field on success", async () => {
+  document.cookie = "bj_csrf=synthetic; path=/";
+  let release!: (response: Response) => void;
+  const base = api();
+  const fetch = vi.fn((path: string) =>
+    path === "/api/v1/auth/logout"
+      ? new Promise<Response>((resolve) => (release = resolve))
+      : base(path),
+  );
+  vi.stubGlobal("fetch", fetch);
+  const { user } = setup("/portfolios/1/history");
+  await screen.findByRole("heading", { name: "History page" });
+  const door = screen.getByRole("button", { name: "Sign out" });
+  act(() => {
+    fireEvent.click(door);
+    fireEvent.click(door);
+  });
+  const busyDoor = await screen.findByRole("button", { name: "Signing out…" });
+  expect(busyDoor).toHaveAttribute("aria-disabled", "true");
+  expect(busyDoor).toHaveAttribute("aria-busy", "true");
+  await user.click(busyDoor);
+  const logoutCalls = () => fetch.mock.calls.filter(([path]) => path === "/api/v1/auth/logout");
+  expect(logoutCalls()).toHaveLength(1);
+  await act(async () => release(new Response(null, { status: 204 })));
+  expect(await screen.findByLabelText("Email")).toHaveFocus();
+  expect(screen.queryByRole("navigation")).toBeNull();
+  expect(logoutCalls()).toHaveLength(1);
 });
 it("keeps the current page and sign-out control usable on failure", async () => {
   document.cookie = "bj_csrf=synthetic; path=/";
@@ -913,6 +1070,8 @@ it("opens the chosen portfolio, preserving the original trade route for Back", a
   const { user } = setup("/portfolios/1/trade/BTC");
   await screen.findByRole("heading", { name: "Crypto BTC" });
   const select = screen.getByRole("combobox", { name: "Open portfolio" });
+  expect(screen.getAllByRole("combobox")).toEqual([select]);
+  expect(select.closest(".trade-chooser-shell")).toBeInTheDocument();
   expect(screen.getByText("Private alice@example.test root 1")).toBeVisible();
   expect(probes.mounted.mock.calls.every(([, target]) => target.portfolioId === "1")).toBe(true);
   await user.selectOptions(select, "2");

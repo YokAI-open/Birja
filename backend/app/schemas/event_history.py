@@ -66,6 +66,15 @@ class WireModel(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
 
+class EventHistoryFilters(WireModel):
+    activity: Literal["all", "buy", "sell", "dividend", "split"] = "all"
+    asset: Literal["all", "stock", "crypto"] = "all"
+
+    @property
+    def filtered(self) -> bool:
+        return (self.activity, self.asset) != ("all", "all")
+
+
 class EventBase(WireModel):
     kind: str
     id: str

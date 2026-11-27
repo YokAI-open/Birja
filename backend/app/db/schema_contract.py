@@ -10,6 +10,7 @@ from app.db.portfolio_bootstrap import (
     ACL_0023_SHA256,
     ACL_0025_SHA256,
     ACL_0026_SHA256,
+    ACL_0028_SHA256,
     ACL_SQL,
     CURRENT_PORTFOLIO_REVISION,
     DEFAULT_ACL_0023_SHA256,
@@ -19,6 +20,7 @@ from app.db.portfolio_bootstrap import (
 
 Consumer = Literal[
     "portfolio",
+    "portfolio_daily",
     "retained0025",
     "retained0024",
     "retained0023",
@@ -30,7 +32,8 @@ Consumer = Literal[
 SUPPORTED = {
     # The additive provenance constraint does not change financial runtime
     # permissions or behavior on the qualified 0026 predecessor.
-    "portfolio": frozenset({"0026", CURRENT_PORTFOLIO_REVISION}),
+    "portfolio": frozenset({"0026", "0027", CURRENT_PORTFOLIO_REVISION}),
+    "portfolio_daily": frozenset({"0028"}),
     "retained0025": frozenset({"0025"}),
     "retained0024": frozenset({"0024"}),
     "retained0023": frozenset({"0023"}),
@@ -72,6 +75,7 @@ async def require_schema(conn: AsyncConnection, *, consumer: Consumer = "portfol
             "0025": ACL_0025_SHA256,
             "0026": ACL_0026_SHA256,
             "0027": ACL_0026_SHA256,
+            "0028": ACL_0028_SHA256,
         }.get(revision, ACL_0023_SHA256)
         try:
             await conn.execute(text(PORTFOLIO_PREFLIGHT_SQL[revision]))

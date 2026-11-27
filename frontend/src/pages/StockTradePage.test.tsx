@@ -14,7 +14,7 @@ function setup(
   options: {
     context?: () => Response;
     catalogue?: () => Response;
-    quote?: () => Response;
+    quote?: () => Response | Promise<Response>;
     trade?: (body: Record<string, unknown>) => Response | Promise<Response>;
     route?: string;
     app?: boolean;
@@ -42,7 +42,7 @@ function setup(
       if (path.endsWith("/context"))
         return scoped(options.context?.() ?? new Response(JSON.stringify(contextFixture())));
       if (path.endsWith("/quote"))
-        return scoped(options.quote?.() ?? Response.json(quoteFixture()));
+        return scoped(await (options.quote?.() ?? Response.json(quoteFixture())));
       if (path === "/api/v2/portfolios/1/stock-trades")
         return scoped(
           await (options.trade?.(body!) ?? new Response(JSON.stringify(fillFixture()))),
@@ -147,6 +147,37 @@ it("requires preview and explicit confirmation, then focuses the immutable histo
   await user.click(screen.getByRole("button", { name: "Trade again" }));
   expect(screen.getByLabelText("Whole-share quantity")).toHaveValue("");
 });
+it("shows the chosen portfolio's actual cash and shares for buys and sells", async () => {
+  const context = { ...contextFixture(), held_quantity: "9", cash: "2500", buy_max_quantity: "24" };
+  const { user } = setup({ context: () => Response.json(context) });
+  const ticket = within(await screen.findByRole("region", { name: "Trade ticket" }));
+  expect(await ticket.findByText("Cash available $2,500.00")).toBeVisible();
+  expect(ticket.getByText("Shares owned 9")).toBeVisible();
+
+  await user.click(ticket.getByRole("radio", { name: "Sell" }));
+  expect(ticket.getByText("Cash available $2,500.00")).toBeVisible();
+  expect(ticket.getByText("Shares owned 9")).toBeVisible();
+  await user.click(ticket.getByRole("button", { name: "Sell all" }));
+  expect(ticket.getByRole("textbox", { name: "Whole-share quantity" })).toHaveValue("9");
+});
+
+it("explains a reported halt and leaves new preview and confirmation disabled", async () => {
+  const context = {
+    ...contextFixture(),
+    execution_enabled: false,
+    execution_reason: "halted",
+    buy_max_quantity: "0",
+    valid_until: null,
+    quote: null,
+  };
+  const { user, calls } = setup({ context: () => Response.json(context) });
+  expect(await screen.findByText("Trading halted. New orders are unavailable.")).toBeVisible();
+  await user.type(screen.getByRole("textbox", { name: "Whole-share quantity" }), "3{Enter}");
+  expect(screen.getByRole("button", { name: "Preview trade" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Confirm buy" })).toBeDisabled();
+  expect(calls.some((call) => call.path.endsWith("/stock-trades/quote"))).toBe(false);
+});
+
 it("discloses the coverage of a current exchange halt report", async () => {
   const c = contextFixture();
   c.status = {
@@ -281,24 +312,51 @@ it("Buy max edits the draft only and side selection highlights ask/bid with keyb
   expect(screen.getByText("Sell price")).toBeVisible();
   expect(screen.getByRole("button", { name: "Sell all" })).toBeDisabled();
 });
+it("announces preview progress and keeps a failed quantity available to retry", async () => {
+  let finish!: (response: Response) => void;
+  const pending = new Promise<Response>((resolve) => {
+    finish = resolve;
+  });
+  let requests = 0;
+  const { user, calls } = setup({
+    quote: () => (++requests === 1 ? pending : Response.json(quoteFixture())),
+  });
+  const input = await screen.findByLabelText("Whole-share quantity");
+  const status = screen.getByRole("status");
+  expect(status).toHaveClass("sr-only");
+  await user.type(input, "2");
+  const previewButton = screen.getByRole("button", { name: "Preview trade" });
+  await user.click(previewButton);
+  expect(status).toHaveTextContent("Preparing the trade preview.");
+  await act(async () => finish(Response.json({}, { status: 503 })));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Couldn’t prepare this preview. Try again.",
+  );
+  expect(screen.queryByText("Enter a quantity to preview this trade.")).toBeNull();
+  expect(screen.queryByRole("button", { name: "Check order result" })).toBeNull();
+  expect(input).toHaveValue("2");
+  expect(previewButton).toBeEnabled();
+  await user.click(previewButton);
+  await waitFor(() => expect(status).toHaveTextContent("Preview ready. Review before confirming."));
+  expect(requests).toBe(2);
+  expect(calls.some((call) => call.path === "/api/v2/portfolios/1/stock-trades")).toBe(false);
+});
+
 it.each(["legacy status", "renewed halt report"])(
   "price changes with %s show old/new values and require reconfirmation",
   async (statusMode) => {
-    const q = quoteFixture();
-    Object.assign(q, {
-      ask: "103",
-      exact_mid: "101.5",
-      exec_price: "103",
-      notional: "206",
-      cash_delta: "-206",
-      cash_after: "9794",
-    });
+    const economics = {
+      ask: "102.00123456",
+      exact_mid: "101.00061728",
+      exec_price: "102.00123456",
+    };
+    const q = { ...quoteFixture(), ...economics };
     const changed = {
       code: "price_changed",
       previous_exec_price: "102",
       previous_cash_delta: "-204",
-      exec_price_change: "1",
-      cash_delta_change: "-2",
+      exec_price_change: "0.00123456",
+      cash_delta_change: "0",
       quote: q,
     };
     const displayedContext = contextFixture();
@@ -323,37 +381,37 @@ it.each(["legacy status", "renewed halt report"])(
       trade: () => {
         count++;
         if (count === 1) return new Response(JSON.stringify({ detail: changed }), { status: 409 });
-        const f = fillFixture();
-        Object.assign(f, {
-          ask: "103",
-          exact_mid: "101.5",
-          exec_price: "103",
-          notional: "206",
-          cash_delta: "-206",
-          cash_after: "9794",
-        });
-        return new Response(JSON.stringify(f));
+        return Response.json({ ...fillFixture(), ...economics });
       },
     });
     await user.type(await screen.findByLabelText("Whole-share quantity"), "2");
+    const status = screen.getByRole("status");
     await user.click(screen.getByRole("button", { name: "Preview trade" }));
     const confirm = screen.getByRole("button", { name: "Confirm buy" });
     await waitFor(() => expect(confirm).toBeEnabled());
+    expect(status).toHaveTextContent("Preview ready. Review before confirming.");
     await user.click(confirm);
     const changes = await screen.findByRole("region", { name: "Price changes" });
     expect(changes).toHaveTextContent("Previous execution price$102.00");
-    expect(changes).toHaveTextContent("New execution price$103.00");
-    expect(changes).toHaveTextContent("Difference−$2.00");
+    expect(changes).toHaveTextContent("New execution price$102.00123456");
+    expect(changes).toHaveTextContent("New cash change−$204.00");
+    expect(status).toHaveTextContent(
+      "Price changed. Review the updated preview and confirm again.",
+    );
+    expect(screen.getAllByRole("status")).toEqual([status]);
     expect(count).toBe(1);
     expect(screen.queryByRole("heading", { name: "Order filled" })).toBeNull();
     await user.click(confirm);
-    await screen.findByRole("heading", { name: "Order filled" });
+    expect(await screen.findByRole("heading", { name: "Order filled" })).toHaveFocus();
+    expect(screen.getByRole("region", { name: "Order filled" })).toHaveTextContent(
+      "Execution price$102.00123456",
+    );
     expect(count).toBe(2);
     const bodies = calls
       .filter((c) => c.path === "/api/v2/portfolios/1/stock-trades")
       .map((c) => c.body!);
     expect(bodies[0].idempotency_key).not.toBe(bodies[1].idempotency_key);
-    expect(bodies[1].expected_exec_price).toBe("103");
+    expect(bodies[1].expected_exec_price).toBe("102.00123456");
   },
 );
 it("unknown response keeps fields frozen and checks the same original body after closure", async () => {

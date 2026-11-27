@@ -1,5 +1,36 @@
 # Birja production runbook
 
+## Daily portfolio value schema 0028 recovery
+
+Select the `deploy-recovery-v9` archive with payload 8 from the successful
+CI run for the exact 0028 candidate. Its receipt binds the tested commit,
+tree, current and retained runtime checks, and seven completed stages to
+one archive. Keep the released v0.8.1 source
+`0c26810fb0bcb15323705a38aae63b531d69b992`, the existing v8 archive
+with payload 7, and their verified 0027 tooling available.
+
+The guarded rehearsal starts at that exact v0.8.1 release. Its
+`--phase 24 --suite recovery-successor` profile uses the 0027 original
+and a separate candidate with its own routing. For a production rollout,
+verify the original volume binding and its final restored recovery point
+while writers are fenced. Migrate the selected candidate from authenticated
+0027. The deployment guard checks that the candidate has reached 0028
+before starting the application and scheduler.
+
+Before the first candidate writer starts, the verified original routing,
+0027 data and matching retained application/tooling remain available for
+recovery. After the first writer starts, retain the 0028 candidate volumes
+and recover with tested 0028-compatible source and a verified recovery
+point. Preserve all daily observations, including null totals and the
+observations retained after portfolio closure. The 0027 runtime refuses the
+candidate schema and a populated daily ledger refuses downgrade.
+
+The encrypted restore replays the exact daily rows, identity sequence and
+restricted grants on fresh PostgreSQL. The application reads restored
+active owner histories through verified TLS. Retain the CI receipt and
+archive together. Production still requires the release-specific operational
+decision and verified host and datastore inputs.
+
 ## Catalog finance and NYSE source schema 0027 recovery
 
 Use the `deploy-recovery-v8` bundle with payload 7 from the successful CI run

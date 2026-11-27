@@ -17,6 +17,7 @@ TICKER_URL = "https://api.kraken.com/0/public/Ticker"
 USER_AGENT = "birja-price-scheduler"
 UNKNOWN_PAIR_ERROR = "Unknown asset pair"
 NON_RETRYABLE_ERRORS = (UNKNOWN_PAIR_ERROR, "EGeneral:Invalid arguments")
+TICKER_ATTEMPTS = 3
 
 logger = logging.getLogger(__name__)
 
@@ -59,14 +60,17 @@ async def fetch_tickers(
     http: httpx.AsyncClient,
     pairs: Sequence[str],
     *,
-    attempts: int = 3,
+    attempts: int = TICKER_ATTEMPTS,
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     jitter: Callable[[], float] = _JITTER,
+    record_attempt: Callable[[Sequence[str]], None] | None = None,
 ) -> dict[str, Any]:
     """GET the Ticker for ``pairs``; returns body["result"] keyed by Kraken's response key."""
     last = KrakenError("no attempts made", retryable=True)
     for attempt in range(attempts):
         try:
+            if record_attempt is not None:
+                record_attempt(pairs)
             response = await http.get(
                 TICKER_URL,
                 params={"pair": ",".join(pairs)},
@@ -90,6 +94,7 @@ async def fetch_tickers_isolated(
     *,
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     jitter: Callable[[], float] = _JITTER,
+    record_attempt: Callable[[Sequence[str]], None] | None = None,
 ) -> dict[str, Any]:
     """Like ``fetch_tickers``, but one unknown pair cannot fail the whole batch.
 
@@ -98,14 +103,18 @@ async def fetch_tickers_isolated(
     and the successes are merged. Raises only when every pair fails.
     """
     try:
-        return await fetch_tickers(http, pairs, sleep=sleep, jitter=jitter)
+        return await fetch_tickers(
+            http, pairs, sleep=sleep, jitter=jitter, record_attempt=record_attempt
+        )
     except KrakenError as exc:
         if len(pairs) < 2 or UNKNOWN_PAIR_ERROR not in str(exc):
             raise
     merged: dict[str, Any] = {}
     for pair in pairs:
         try:
-            merged.update(await fetch_tickers(http, [pair], attempts=1))
+            merged.update(
+                await fetch_tickers(http, [pair], attempts=1, record_attempt=record_attempt)
+            )
         except KrakenError:
             logger.warning("price pair unavailable: pair=%s", pair)
     if not merged:

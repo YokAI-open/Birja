@@ -53,6 +53,8 @@ class CurrentCampaign(unittest.TestCase):
         for argv, stages in ((["--suite", "recovery", "--dry-run"], runner.STAGES),
                              (["--phase", "21", "--suite", "recovery-successor", "--dry-run"],
                               runner.SUCCESSOR_STAGES),
+                             (["--phase", "24", "--suite", "recovery-successor", "--dry-run"],
+                              runner.DAILY_VALUE_STAGES),
                              (["--phase", "15", "--suite", "recovery-current", "--dry-run"], ("current0023-cold",))):
             output = io.StringIO()
             with redirect_stdout(output):
@@ -64,7 +66,8 @@ class CurrentCampaign(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 runner.main(["--suite", "recovery-current", "--dry-run"])
         for suite, phase in (("recovery-successor", 14), ("recovery-successor", 15),
-                             ("recovery", 21), ("recovery-current", 21), ("all-security", 21)):
+                             ("recovery", 21), ("recovery-current", 21), ("all-security", 21),
+                             ("recovery", 24), ("recovery-current", 24), ("all-security", 24)):
             with self.subTest(phase=phase, suite=suite), self.assertRaises(ValueError):
                 runner.validate_selection(suite, phase)
 
@@ -260,6 +263,11 @@ class CurrentCampaign(unittest.TestCase):
                                   stages=runner.SUCCESSOR_STAGES)
 
     def test_successor_receipt_requires_completed_graph_and_exact_source_and_image(self):
+        for phase in (21, 24):
+            with self.subTest(phase=phase):
+                self.check_successor_receipt(phase)
+
+    def check_successor_receipt(self, phase):
         from types import SimpleNamespace
 
         identity = {"tested_source": "a" * 40, "tested_tree": "b" * 40,
@@ -278,15 +286,24 @@ class CurrentCampaign(unittest.TestCase):
             archive = root / "recovery.tar.gz"
             expected = "1" * 64
             (root / "recovery.tar.gz.sha256").write_text(expected + "\n")
-            (root / "current0027-image-binding.json").write_text(json.dumps(binding))
+            profile, version, revision, stages = runner.SUCCESSORS[phase]
+            (root / f"current{revision}-image-binding.json").write_text(json.dumps(binding))
+            predecessor = {"commit": "2" * 40, "app_tree": "3" * 40, "archive_sha256": "4" * 64}
+            predecessor_binding = dict(binding, source_commit=predecessor["commit"],
+                                       app_tree=predecessor["app_tree"],
+                                       context_sha256=predecessor["archive_sha256"])
+            predecessor_record = root / "portfolio0027-image-binding.json"
+            predecessor_data = json.dumps(predecessor_binding).encode()
             complete = {**identity, "archive": str(archive), "archive_sha256": expected,
-                        "phase": 21, "suite": "recovery-successor",
-                        "recovery_profile": "deploy-recovery-v8", "payload_version": 7, "revision": "0027",
-                        "stage_order": list(runner.SUCCESSOR_STAGES), "current_stage": "selected-rollback",
-                        "stages": dict.fromkeys(runner.SUCCESSOR_STAGES, "passed-authenticated"),
+                        "phase": phase, "suite": "recovery-successor",
+                        "recovery_profile": profile, "payload_version": version, "revision": revision,
+                        "stage_order": list(stages), "current_stage": "selected-rollback",
+                        "stages": dict.fromkeys(stages, "passed-authenticated"),
                         "current_image": binding, "ok": True, "whole7": True, "same_archive_final_ci": True}
+            if phase == 24:
+                complete["predecessor_image_sha256"] = hashlib.sha256(predecessor_data).hexdigest()
             fake = SimpleNamespace(r=SimpleNamespace(private=Path, bundle_verify=lambda *a, **k: None),
-                                   portfolio_sources=lambda: None)
+                                   portfolio_sources=lambda: SimpleNamespace(PORTFOLIO0027=predecessor))
             with patch.object(runner, "load", return_value=fake), \
                  patch.object(runner, "successor_source_identity", return_value=identity), \
                  patch.object(runner, "campaign_sources", return_value={}), \
@@ -298,16 +315,50 @@ class CurrentCampaign(unittest.TestCase):
                                  {"current_image": {**binding, "id": "sha256:" + "9" * 64}}):
                     with self.subTest(mutation=mutation), self.assertRaises(ValueError):
                         (root / "status.json").write_text(json.dumps({**complete, **mutation}))
-                        runner.verify_successor_receipt(archive, identity["tested_source"])
+                        runner.verify_successor_receipt(archive, identity["tested_source"], phase=phase)
                 receipt = root / "status.json"
                 receipt.write_text(json.dumps(complete))
                 with self.assertRaisesRegex(ValueError, "hosted source"):
-                    runner.verify_successor_receipt(archive, "f" * 40)
+                    runner.verify_successor_receipt(archive, "f" * 40, phase=phase)
+                if phase == 24:
+                    with self.assertRaises(FileNotFoundError):
+                        runner.verify_successor_receipt(archive, identity["tested_source"], phase=phase)
+                    predecessor_record.write_text(json.dumps(binding))
+                    with self.assertRaisesRegex(ValueError, "tested source"):
+                        runner.verify_successor_receipt(archive, identity["tested_source"], phase=phase)
+                    predecessor_record.write_text(json.dumps({**predecessor_binding, "id": "sha256:" + "6" * 64}))
+                    with self.assertRaisesRegex(ValueError, "authenticated 0027 predecessor image"):
+                        runner.verify_successor_receipt(archive, identity["tested_source"], phase=phase)
+                    predecessor_record.write_bytes(predecessor_data)
                 authenticate.assert_not_called()
-                self.assertEqual(runner.verify_successor_receipt(archive, identity["tested_source"]),
+                self.assertEqual(runner.verify_successor_receipt(archive, identity["tested_source"], phase=phase),
                                  (expected, hashlib.sha256(receipt.read_bytes()).hexdigest()))
                 authenticate.assert_called_once_with(fake, archive, expected, {},
-                                                     successor_identity=identity)
+                                                     successor_identity=identity, phase=phase)
+
+    def test_daily_value_cold_stage_requires_read_after_restore(self):
+        from types import SimpleNamespace
+
+        authority = ["a" * 64, "b" * 64, "c" * 64]
+        output = [
+            "cold_encrypted_0028_exact=true fresh_restore_server=true",
+            "daily_value_upgrade_empty=true",
+            "daily_value_capture_exact=true",
+            "catalog_runtime_verified_tls=true",
+            "catalog_authority=" + json.dumps(authority),
+        ]
+        sources = SimpleNamespace(build_retained_image=lambda *args, **kwargs: None)
+        ops = SimpleNamespace(portfolio_sources=lambda: sources, image_transition=lambda: None)
+        result = SimpleNamespace(returncode=0, stdout="\n".join(output).encode())
+        with patch.object(runner, "load"), patch.object(runner.subprocess, "run", return_value=result):
+            operations = runner.successor_recovery_operations(
+                ops, Path("/tmp/birja-backup-test-receipt-unit/recovery.tar.gz"), "0" * 64, phase=24,
+            )
+            with self.assertRaisesRegex(ValueError, "missing measured catalog result: cold"):
+                operations["current0028-cold"]()
+            result.stdout += b"\ndaily_value_restored_owner_reads_exact=true\n"
+            with redirect_stdout(io.StringIO()):
+                self.assertEqual(operations["current0028-cold"](), authority)
 
     def test_every_stage_including_failed_stage_authenticates_afterward(self):
         for failed in (None, *runner.STAGES):
@@ -477,11 +528,11 @@ class CurrentCampaign(unittest.TestCase):
     def test_dev_diagnostic_uses_current_schema_without_app_account_insert(self):
         module = runner.load('test-dev-bootstrap')
         code = module.financial_program()
-        compile(code, '<dev0027>', 'exec')
-        self.assertIn("version_num FROM alembic_version\")=='0027'", code)
-        self.assertIn("PREFLIGHT_0027_SQL", code)
+        compile(code, '<dev0028>', 'exec')
+        self.assertIn("version_num FROM alembic_version\")=='0028'", code)
+        self.assertIn("PREFLIGHT_0028_SQL", code)
         self.assertIn("version_num='0018'", code)
-        self.assertIn("version_num='0027'", code)
+        self.assertIn("version_num='0028'", code)
         self.assertIn("D('124.45')", code)
         self.assertIn('7777', code)
         self.assertLess(code.index('INSERT INTO accounts'), code.index('SET ROLE birja_app'))

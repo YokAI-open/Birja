@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta, timezone
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from app.schemas.event_history import EventHistoryItem, EventHistoryPage
+from app.schemas.event_history import EventHistoryFilters, EventHistoryItem, EventHistoryPage
 from app.services import history
 from app.services.event_history import (
     EventHistoryCursor,
@@ -43,6 +43,65 @@ VALID = {
 def token(value):
     raw = value if isinstance(value, bytes) else json.dumps(value, separators=(",", ":")).encode()
     return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+
+def test_default_filters_keep_the_existing_v3_bytes():
+    boundary = EventHistoryCursor(datetime.fromisoformat(STAMP), 4, int(VALID["source_id"]), 1)
+    assert encode_cursor(boundary) == token(VALID)
+    assert decode_cursor(token(VALID), expected_portfolio_id=1) == boundary
+
+
+@pytest.mark.parametrize(
+    "filters",
+    [
+        EventHistoryFilters(activity="buy"),
+        EventHistoryFilters(asset="crypto"),
+        EventHistoryFilters(activity="dividend", asset="stock"),
+    ],
+)
+def test_filtered_v4_roundtrip_carries_both_query_filters(filters):
+    boundary = EventHistoryCursor(
+        datetime.fromisoformat(STAMP), 4, int(VALID["source_id"]), 1, filters
+    )
+    encoded = encode_cursor(boundary)
+    assert encoded == token({**VALID, "v": 4, "activity": filters.activity, "asset": filters.asset})
+    assert decode_cursor(encoded, expected_portfolio_id=1, expected_filters=filters) == boundary
+    with pytest.raises(InvalidCursor):
+        decode_cursor(encoded, expected_portfolio_id=2, expected_filters=filters)
+    with pytest.raises(InvalidCursor):
+        decode_cursor(encoded, expected_portfolio_id=1)
+    with pytest.raises(InvalidCursor):
+        decode_cursor(token(VALID), expected_portfolio_id=1, expected_filters=filters)
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"v": 3},
+        {"activity": "sell"},
+        {"asset": "stock"},
+        {"activity": "all", "asset": "all"},
+        {"asset": "fund"},
+        {"activity": " BUY "},
+    ],
+)
+def test_filtered_cursor_refuses_different_or_unrecognized_scope(changes):
+    cursor = token({**VALID, "v": 4, "activity": "buy", "asset": "crypto", **changes})
+    with pytest.raises(InvalidCursor):
+        decode_cursor(
+            cursor,
+            expected_portfolio_id=1,
+            expected_filters=EventHistoryFilters(activity="buy", asset="crypto"),
+        )
+
+
+@pytest.mark.parametrize(
+    "values",
+    [{"activity": "BUY"}, {"asset": ""}, {"asset": 1}, {"activity": None}, {"other": "all"}],
+)
+def test_filters_accept_only_exact_contract_tokens(values):
+    with pytest.raises(ValidationError):
+        EventHistoryFilters.model_validate(values)
 
 
 @pytest.mark.parametrize(

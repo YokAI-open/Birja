@@ -79,8 +79,8 @@ for (const width of [320, 375, 768, 1280]) {
     await expect(selected.getByText("Price unavailable")).toHaveCount(0);
     await expect(selected.getByRole("link", { name: "View details AAPL" })).toBeVisible();
     await expect(selected.getByText(/Quotes come from IEX/)).toHaveCount(0);
-    const allAssets = page.getByRole("button", { name: "All assets" });
-    if (width < 768) await allAssets.click();
+    const backToResults = page.getByRole("button", { name: "Back to results" });
+    if (width < 768) await backToResults.click();
     await expect(region(page).getByText("IEX prices · Midpoint", { exact: false })).toBeVisible();
     await expect(
       region(page).getByText(body.attribution.required_text, { exact: true }),
@@ -126,15 +126,16 @@ test("global monitor loss and repeated healthy refresh cannot clear a persistent
   await signInNewUser(page);
   await page.getByRole("button", { name: "US stocks", exact: true }).click();
   const first = records(page).first();
-  await expect(selectedStock(page)).toContainText("Suspended for corporate-action review.");
-  const announcement = await selectedStock(page).getByRole("status").textContent();
+  const quoteStatus = selectedStock(page).locator(".market-quote").getByRole("status");
+  await expect(quoteStatus).toContainText("Suspended for corporate-action review.");
+  const announcement = await quoteStatus.textContent();
   await page.clock.runFor(1000);
-  expect(await selectedStock(page).getByRole("status").textContent()).toBe(announcement);
+  expect(await quoteStatus.textContent()).toBe(announcement);
   body = snapshot(31);
   hold(body, 0, "unsupported", 2);
   await poll(page);
   await expect(first).not.toContainText(midpoint);
-  await expect(selectedStock(page)).toContainText("Suspended for corporate-action review.");
+  await expect(quoteStatus).toContainText("Suspended for corporate-action review.");
   await expect(records(page).nth(1)).toContainText(midpoint);
   body = snapshot(62);
   for (const item of body.items) {
@@ -153,12 +154,12 @@ test("global monitor loss and repeated healthy refresh cannot clear a persistent
   await expect(region(page).getByText(midpoint)).toHaveCount(0);
   await expect(records(page)).toHaveCount(20);
   await expect(region(page).getByRole("link", { name: /^Trade / })).toHaveCount(0);
-  await expect(selectedStock(page)).toContainText("Corporate-action checks unavailable.");
+  await expect(quoteStatus).toContainText("Corporate-action checks unavailable.");
   body = snapshot(93);
   for (const item of body.items) item.action.epoch = 4;
   hold(body, 0, "unsupported", 4);
   await poll(page);
-  await expect(selectedStock(page)).toContainText("Suspended for corporate-action review.");
+  await expect(quoteStatus).toContainText("Suspended for corporate-action review.");
   await expect(records(page).nth(1)).toContainText(midpoint);
 });
 
@@ -284,7 +285,7 @@ test("200 percent reflow equivalent keeps warnings and crypto keyboard navigatio
     await expect(selectedStock(page)).toContainText(
       "This stock’s identity is changing and needs review.",
     );
-    await page.getByRole("button", { name: "All assets" }).click();
+    await page.getByRole("button", { name: "Back to results" }).click();
     expect(await page.evaluate("document.documentElement.scrollWidth <= innerWidth")).toBe(true);
     expect(await page.evaluate("devicePixelRatio")).toBe(2);
     await page.screenshot({

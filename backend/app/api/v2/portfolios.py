@@ -24,6 +24,7 @@ from app.core.deps import (
 )
 from app.schemas.portfolio import HoldingOut, PortfolioOut
 from app.schemas.portfolio_closure import PortfolioClosureReceipt
+from app.schemas.portfolio_daily_values import PortfolioDailyHistory
 from app.schemas.portfolios import (
     PortfolioCreate,
     PortfolioMetadata,
@@ -35,6 +36,7 @@ from app.schemas.portfolios import (
 from app.schemas.trades import Money
 from app.services.portfolio import get_portfolio, load_portfolio_snapshots
 from app.services.portfolio_closure import ClosureIntent, close_owned_portfolio
+from app.services.portfolio_daily_values import read_portfolio_daily_history
 from app.services.portfolios import (
     create_portfolio,
     get_portfolio_metadata,
@@ -68,6 +70,16 @@ async def overview(
 ) -> list[PortfolioOverview]:
     snapshots = await load_portfolio_snapshots(db, owner_id=user.id, settings=settings)
     return [PortfolioOverview.from_value(value) for value in snapshots]
+
+
+@router.get(
+    "/value-history",
+    response_model=PortfolioDailyHistory,
+    summary="Read daily values for your active portfolios",
+    description="Returns up to thirty UTC days of observations for the signed-in owner's books.",
+)
+async def value_history(user: CurrentUserDep, db: DbDep) -> PortfolioDailyHistory:
+    return await read_portfolio_daily_history(db, owner_id=user.id)
 
 
 @router.get(

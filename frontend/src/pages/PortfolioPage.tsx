@@ -1,5 +1,5 @@
-import { useCallback, useRef } from "react";
-import { RefreshCw } from "lucide-react";
+import { useCallback, useContext, useId, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useLocation, useOutletContext } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,13 +10,17 @@ import { useNow } from "@/hooks/useNow";
 import { PortfolioFreshness } from "@/components/PortfolioFreshness";
 import { PortfolioHoldings } from "@/components/PortfolioHoldings";
 import { PortfolioAllocation } from "@/components/PortfolioAllocation";
+import { PortfolioToolbarSlot } from "@/components/PortfolioToolbarSlot";
 import { formatUsd } from "@/lib/money";
 import { formatAge, freshnessStatus, oldestHoldingAge, statusLabel } from "@/lib/age";
 import { fullLocalTimestamp, outcome, signedPercent, signedUsd } from "@/lib/financialDisplay";
 import type { PortfolioTarget } from "@/hooks/usePortfolioTarget";
+import "./portfolioWorkspace.css";
 
 export default function PortfolioPage() {
   const target = useOutletContext<PortfolioTarget>();
+  const toolbarSlot = useContext(PortfolioToolbarSlot);
+  const freshnessId = useId();
   const { state } = useLocation();
   const { metadata } = usePortfolioManagement(target.portfolioId);
   const { data, isPending, isError, isFetching, refetch, dataUpdatedAt } = usePortfolio(target);
@@ -35,6 +39,7 @@ export default function PortfolioPage() {
     if (!isFetching) void refetch({ cancelRefetch: false });
   }
   const oldest = data ? oldestHoldingAge(data.holdings, elapsed) : null;
+  const freshnessTimestamp = (oldest !== null && data?.prices_as_of) || data?.valued_at;
   const liveStatus =
     data && oldest !== null
       ? freshnessStatus(oldest, data.fresh_seconds, data.stale_seconds)
@@ -53,31 +58,39 @@ export default function PortfolioPage() {
           ? "Incomplete"
           : historical
             ? "Dated prices"
-            : `${liveStatus ? statusLabel(liveStatus) : "Updated"} · ${formatAge(oldest ?? elapsed)}`;
+            : liveStatus && liveStatus !== "fresh"
+              ? `${statusLabel(liveStatus)} · ${formatAge(oldest ?? elapsed)}`
+              : formatAge(oldest ?? elapsed);
+
+  const refreshControl = (
+    <Button
+      ref={refreshButton}
+      variant="secondary"
+      className="min-h-11 min-w-11 flex-wrap gap-x-2 rounded-pill px-4 aria-disabled:opacity-40"
+      aria-label={isFetching ? "Updating portfolio…" : "Update portfolio"}
+      aria-describedby={freshnessId}
+      aria-disabled={isFetching}
+      onClick={refresh}
+    >
+      Update
+      <span id={freshnessId} className="text-xs font-normal text-muted-foreground tabular-nums">
+        {freshnessTimestamp ? (
+          <time dateTime={freshnessTimestamp} title={fullLocalTimestamp(freshnessTimestamp)}>
+            {freshness}
+          </time>
+        ) : (
+          freshness
+        )}
+      </span>
+    </Button>
+  );
 
   return (
     <>
-      <div className="flex min-w-0 shrink-0 items-center gap-1.5 sm:gap-3">
-        <Button
-          ref={refreshButton}
-          variant="secondary"
-          className="min-h-11 min-w-11 gap-2 px-2.5 aria-disabled:opacity-40 sm:px-4"
-          aria-label={isFetching ? "Updating portfolio…" : "Update portfolio"}
-          title="Update portfolio"
-          aria-disabled={isFetching}
-          onClick={refresh}
-        >
-          <RefreshCw aria-hidden="true" className="size-4" />
-          <span className="hidden sm:inline">Update</span>
-        </Button>
-        <span
-          className="max-w-[6ch] text-xs leading-tight text-muted-foreground tabular-nums sm:max-w-none sm:text-sm"
-          title={data && fullLocalTimestamp(data.valued_at)}
-        >
-          {freshness}
-        </span>
-      </div>
-      <div className="col-span-full my-6 flex min-w-0 flex-col gap-7 text-base lg:gap-9">
+      {toolbarSlot === undefined
+        ? refreshControl
+        : toolbarSlot && createPortal(refreshControl, toolbarSlot)}
+      <div className="portfolio-workspace-content">
         {state?.creationResult?.id === target.portfolioId && (
           <p role="status">
             {state.creationResult.replay ? "Original portfolio confirmed." : "Portfolio created."}
@@ -131,75 +144,61 @@ export default function PortfolioPage() {
                 </Button>
               </div>
             )}
-            {data.holdings.some((h) => h.asset_class === "stock") && (
-              <StockAttribution context="valuation" />
-            )}
-            <Card role="region" aria-label="Total portfolio value">
-              {metadata?.description && (
-                <p className="line-clamp-2 text-sm whitespace-pre-line text-muted-foreground">
-                  {metadata.description}
+            <section className="portfolio-summary-panel" aria-label="Total portfolio value">
+              <div className="flex min-w-0 flex-col gap-1">
+                {data.valuation_complete && <p className="text-muted-foreground">Total value</p>}
+                <p className="portfolio-summary-value wrap-anywhere tabular-nums">
+                  {data.valuation_complete
+                    ? data.total_value === null
+                      ? "Unavailable"
+                      : formatUsd(data.total_value)
+                    : data.known_value === null
+                      ? "Value unavailable — refresh required"
+                      : `Known value: ${formatUsd(data.known_value)} — incomplete`}
                 </p>
-              )}
-              <div className="grid min-w-0 gap-7 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:items-start md:gap-10">
-                <div className="flex min-w-0 flex-col gap-4">
-                  <div className="min-w-0">
-                    {data.valuation_complete && <p className="sr-only">Total value</p>}
-                    <p className="text-4xl leading-tight font-semibold tracking-tight wrap-anywhere tabular-nums md:text-5xl">
-                      {data.valuation_complete
-                        ? data.total_value === null
-                          ? "Unavailable"
-                          : formatUsd(data.total_value)
-                        : data.known_value === null
-                          ? "Value unavailable — refresh required"
-                          : `Known value: ${formatUsd(data.known_value)} — incomplete`}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2 text-base tabular-nums">
-                    <div role="region" aria-label="Cash">
-                      <span className="font-medium">{formatUsd(data.cash)}</span>{" "}
-                      <span className="text-muted-foreground">cash</span>
-                    </div>
-                    {data.valuation_complete && data.total_pl !== null && (
-                      <p
-                        className={
-                          returnDirection === "gain"
-                            ? "text-gain-text"
-                            : returnDirection === "loss"
-                              ? "text-loss-text"
-                              : "text-muted-foreground"
-                        }
-                      >
-                        <span className="sr-only">Return: </span>
-                        {signedUsd(data.total_pl)}
-                        {data.total_pl_percent === null ? (
-                          <span className="sr-only">. Percentage return not applicable.</span>
-                        ) : (
-                          ` · ${signedPercent(data.total_pl_percent)}`
-                        )}
-                      </p>
-                    )}
-                  </div>
-                  {!data.valuation_complete && (
-                    <p className="text-sm text-warn-text">
-                      {data.unvalued_holding_count}{" "}
-                      {data.unvalued_holding_count === 1 ? "holding cannot" : "holdings cannot"} be
-                      valued. Overall gain/loss and allocation are unavailable.
-                    </p>
-                  )}
-                  <PortfolioFreshness
-                    portfolio={data}
-                    elapsed={elapsed}
-                    dataUpdatedAt={dataUpdatedAt}
-                    isFetching={isFetching}
-                    isError={isError}
-                  />
-                  <p className="sr-only">
-                    Compared with your {formatUsd(data.starting_cash)} start
+                {data.valuation_complete && data.total_pl !== null && (
+                  <p
+                    className={`wrap-anywhere tabular-nums ${
+                      returnDirection === "gain"
+                        ? "text-gain-text"
+                        : returnDirection === "loss"
+                          ? "text-loss-text"
+                          : "text-muted-foreground"
+                    }`}
+                  >
+                    <span className="sr-only">Return: </span>
+                    {signedUsd(data.total_pl)}
+                    {data.total_pl_percent === null ? (
+                      <span className="sr-only">. Percentage return not applicable.</span>
+                    ) : (
+                      ` (${signedPercent(data.total_pl_percent)})`
+                    )}{" "}
+                    <span className="text-muted-foreground">all time</span>
                   </p>
-                </div>
-                <PortfolioAllocation portfolio={data} />
+                )}
+                {!data.valuation_complete && (
+                  <p className="text-sm text-warn-text">
+                    {data.unvalued_holding_count}{" "}
+                    {data.unvalued_holding_count === 1 ? "holding cannot" : "holdings cannot"} be
+                    valued. Overall gain/loss and allocation are unavailable.
+                  </p>
+                )}
+                {metadata?.description && (
+                  <p className="line-clamp-2 text-sm wrap-anywhere whitespace-pre-line text-muted-foreground">
+                    {metadata.description}
+                  </p>
+                )}
+                <PortfolioFreshness
+                  portfolio={data}
+                  elapsed={elapsed}
+                  dataUpdatedAt={dataUpdatedAt}
+                  isFetching={isFetching}
+                  isError={isError}
+                />
+                <p className="sr-only">Compared with your {formatUsd(data.starting_cash)} start</p>
               </div>
-            </Card>
+              <PortfolioAllocation portfolio={data} />
+            </section>
             <PortfolioHoldings
               target={target}
               holdings={data.holdings}
@@ -207,6 +206,9 @@ export default function PortfolioPage() {
               freshSeconds={data.fresh_seconds}
               staleSeconds={data.stale_seconds}
             />
+            {data.holdings.some((h) => h.asset_class === "stock") && (
+              <StockAttribution context="valuation" />
+            )}
           </>
         )}
       </div>

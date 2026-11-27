@@ -1,7 +1,7 @@
 import { useId, useLayoutEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { createPortal } from "react-dom";
-import { AlertCircle, Trash2 } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { PortfolioMetadata } from "@/api/portfolioManagement";
 import { usePortfolioDeletion } from "@/hooks/usePortfolioDeletion";
@@ -248,7 +248,7 @@ export function PortfolioDeleteForm({
       variant="outline"
       className={
         inToolbar
-          ? "min-h-11 min-w-11 px-2 text-destructive sm:px-3"
+          ? "min-h-11 min-w-11 px-4 text-destructive"
           : `${action} self-start text-destructive`
       }
       aria-label={inToolbar ? "Remove portfolio" : undefined}
@@ -269,14 +269,7 @@ export function PortfolioDeleteForm({
         if (metadata) controller.reviewDeletion(metadata);
       }}
     >
-      {inToolbar ? (
-        <>
-          <Trash2 aria-hidden="true" className="size-4 sm:hidden" />
-          <span className="hidden sm:inline">Remove</span>
-        </>
-      ) : (
-        "Delete portfolio…"
-      )}
+      {inToolbar ? "Remove" : "Delete portfolio…"}
     </Button>
   );
   const showPanel = !inToolbar || review || Boolean(errorText);
@@ -364,7 +357,7 @@ export function PortfolioDeleteForm({
                   className={action}
                   onClick={cancelReview}
                 >
-                  Cancel
+                  Keep portfolio
                 </Button>
                 <Button
                   type="button"

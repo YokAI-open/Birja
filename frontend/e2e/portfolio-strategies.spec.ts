@@ -3,13 +3,14 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { formatUsd } from "../src/lib/money.js";
 import { portfolioId, readCodeFromLogs, signInNewUser } from "./helpers.js";
 import { stockFixture } from "./stock-trade-fixtures.js";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const api = "/api/v2/portfolios";
 const button = (page: Page, name: string) => page.getByRole("button", { name, exact: true });
-function fixture(mode: "economic" | "inspect", email: string) {
+function fixture(mode: "economic" | "inspect" | "daily", email: string, ...args: string[]) {
   expect(process.env.COMPOSE_PROJECT_NAME).toBe("birja-phase09-e2e-test");
   return JSON.parse(
     execFileSync(
@@ -23,6 +24,7 @@ function fixture(mode: "economic" | "inspect", email: string) {
         "/e2e/portfolio-browser-fixture.py",
         mode,
         email,
+        ...args,
       ],
       { cwd: root, encoding: "utf8" },
     ),
@@ -127,8 +129,8 @@ async function cryptoBuy(page: Page, id: string, amount = "100") {
   }
   throw new Error("No fill after bounded explicit confirmations");
 }
-async function stockBuy(page: Page, id: string, quantity: string) {
-  await page.goto(`/portfolios/${id}/trade/stocks/AAPL`);
+async function stockBuy(page: Page, id: string, quantity: string, symbol = "AAPL") {
+  await page.goto(`/portfolios/${id}/trade/stocks/${symbol}`);
   await page.getByLabel("Whole-share quantity").fill(quantity);
   await button(page, "Preview trade").click();
   await expect(button(page, "Confirm buy")).toBeEnabled();
@@ -144,6 +146,362 @@ async function noOverflow(page: Page) {
 }
 
 test.beforeEach(() => stockFixture("fresh"));
+
+function openCard(page: Page, name: string) {
+  return page.getByRole("link", { name, exact: true });
+}
+
+function readPortfolio(page: Page, path: string) {
+  return page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === `${api}${path}` &&
+      response.request().method() === "GET" &&
+      response.status() === 200,
+  );
+}
+
+test("Phase 24 private daily values keep exact gaps, independent retry and closed roots out of active cards", async ({
+  page,
+  browser,
+}) => {
+  test.setTimeout(120_000);
+  const email = await signInNewUser(page);
+  const first = await portfolioId(page);
+  await patch(page, first, { name: "Sparse daily values" });
+  const second = await create(page, "One daily value");
+  const terminal = await create(page, "Terminal daily value");
+  await cryptoBuy(page, first);
+  expect(fixture("daily", email, "sparse", first, second.id, terminal.id)).toEqual({
+    time_basis: "UTC",
+    synthetic_rows: 6,
+  });
+  const before = await page.request.get(`${api}/value-history`);
+  expect(before.status()).toBe(200);
+  expect((await before.json()).portfolios).toContainEqual({
+    portfolio_id: terminal.id,
+    points: [expect.objectContaining({ total_value: "77777.00", valuation_complete: true })],
+  });
+  const closed = await page.request.delete(`${api}/${terminal.id}`, {
+    headers: await headers(page),
+    data: {
+      intent_key: crypto.randomUUID(),
+      confirmation_name: terminal.name,
+      policy_version: "freeze_at_closure_v1",
+    },
+  });
+  expect(closed.status()).toBe(200);
+
+  let failedRequests = 0;
+  const route = `**${api}/value-history`;
+  await page.route(route, (incoming) => {
+    failedRequests++;
+    return incoming.fulfill({ status: 503 });
+  });
+  const currentResponse = readPortfolio(page, "/overview");
+  await overview(page);
+  const current = await (await currentResponse).json();
+  expect(current.map((row: { id: string }) => row.id)).toEqual([first, second.id]);
+  const firstCard = openCard(page, "Sparse daily values");
+  const secondCard = openCard(page, second.name);
+  const retry = button(page, "Retry value history");
+  await expect(retry).toHaveCount(1);
+  await expect(firstCard.getByText("$9,900.00 cash")).toBeVisible();
+  await expect(secondCard.getByText("$10,000.00 cash")).toBeVisible();
+  await expect(firstCard).toHaveAccessibleDescription(/Value history unavailable/);
+  await firstCard.press("Enter");
+  await expect(page).toHaveURL(`/portfolios/${first}`);
+  await expect(page.getByRole("link", { name: "Trade BTC", exact: true })).toHaveAttribute(
+    "href",
+    `/portfolios/${first}/trade/BTC`,
+  );
+  await page.goBack();
+  await expect(retry).toBeVisible();
+  expect(failedRequests).toBeGreaterThanOrEqual(1);
+
+  let restoredRequests = 0;
+  await page.unroute(route);
+  await page.route(route, (incoming) => {
+    restoredRequests++;
+    return incoming.continue();
+  });
+  const historyResponse = readPortfolio(page, "/value-history");
+  await retry.press("Enter");
+  const history = await historyResponse;
+  expect(history.headers()["cache-control"]).toBe("no-store");
+  const data = await history.json();
+  expect(data.portfolios.map((series: { portfolio_id: string }) => series.portfolio_id)).toEqual([
+    first,
+    second.id,
+  ]);
+  expect((Date.parse(data.end_day) - Date.parse(data.start_day)) / 86_400_000).toBe(29);
+  const [series, one] = data.portfolios;
+  expect(series.points.map((point: { total_value: string | null }) => point.total_value)).toEqual([
+    "10550.00",
+    "10475.00",
+    null,
+    "11025.00",
+  ]);
+  expect(series.points[2].valuation_complete).toBe(false);
+  expect(Date.parse(series.points[2].utc_day) - Date.parse(series.points[1].utc_day)).toBe(
+    2 * 86_400_000,
+  );
+  expect(one.points).toHaveLength(1);
+  await expect(firstCard).toHaveAccessibleDescription(
+    /\$10,550\.00.*\$11,025\.00.*no recorded value/,
+  );
+  await expect(secondCard).toHaveAccessibleDescription(/Collecting daily values.*\$9,800\.00/);
+  await expect(secondCard.locator("canvas")).toHaveCount(0);
+  await expect(openCard(page, terminal.name)).toHaveCount(0);
+  await expect(retry).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Portfolios", exact: true })).toBeFocused();
+  expect(restoredRequests).toBe(1);
+
+  // The recorded adjacent pair paints a segment, followed by a missing day.
+  await expect(firstCard.locator("canvas")).toBeVisible();
+  const canvasSelector = `[aria-describedby="portfolio-trend-${first}"] canvas`;
+  const sample = async (dayOffset: number) =>
+    page.evaluate<boolean>(`(() => {
+      const diagram = document.querySelector(${JSON.stringify(canvasSelector)});
+      const context = diagram.getContext("2d");
+      const ratio = diagram.width / diagram.getBoundingClientRect().width;
+      const pad = 4 * ratio;
+      const x = Math.round(pad + ((diagram.width - pad * 2) * ${dayOffset}) / 29);
+      const rgba = context.getImageData(x, 0, 1, diagram.height).data;
+      return rgba.some((channel, index) => index % 4 === 3 && channel > 0);
+    })()`);
+  await expect.poll(() => sample(11.5)).toBe(true);
+  expect(await sample(13)).toBe(false);
+
+  const other = await browser.newPage();
+  try {
+    await signInNewUser(other);
+    const otherId = await portfolioId(other);
+    const response = await other.request.get(`${api}/value-history`);
+    expect(response.status()).toBe(200);
+    expect((await response.json()).portfolios).toEqual([{ portfolio_id: otherId, points: [] }]);
+  } finally {
+    await other.close();
+  }
+});
+
+async function comparePortfolioCapture(page: Page, info: TestInfo, name: string, width: number) {
+  const targets = {
+    overviewGrid: ".portfolio-overview-grid",
+    firstCard: ".portfolio-overview-link",
+    cardName: ".portfolio-overview-link h2",
+    sparkline: ".portfolio-overview-link .portfolio-value-trend",
+    currentValue: ".portfolio-overview-value",
+    cardCash: ".portfolio-overview-cash",
+    newCard: ".portfolio-overview-new",
+    toolbar: ".portfolio-managed-toolbar",
+    picker: ".portfolio-managed-picker select",
+    actions: ".portfolio-managed-actions",
+    summary: ".portfolio-summary-panel",
+    summaryValue: ".portfolio-summary-panel > div",
+    allocationStrip: "[aria-label='Portfolio allocation'] > div",
+    allocation: "[aria-label='Allocation']",
+    holdingsHeading: ".portfolio-holdings-heading",
+    filter: "[aria-label='Filter holdings']",
+    sort: "[aria-label='Sort holdings']",
+    holdingsGrid: ".portfolio-holding-grid",
+    firstHolding: ".portfolio-holding-grid > li",
+  };
+  await page.setViewportSize({ width, height: 1000 });
+  await page.evaluate(
+    "document.fonts.ready.then(() => { document.activeElement?.blur(); scrollTo(0, 0); })",
+  );
+  await noOverflow(page);
+  const layout = await page.evaluate<Record<keyof typeof targets, number[] | null>>(`
+    Object.fromEntries(
+      Object.entries(${JSON.stringify(targets)}).map(([key, selector]) => {
+        const rect = document.querySelector(selector)?.getBoundingClientRect();
+        return [key, rect ? [rect.x, rect.y, rect.width, rect.height] : null];
+      })
+    )
+  `);
+  const desktop = width === 1440;
+  const grid = layout.overviewGrid ?? layout.toolbar!;
+  expect(grid[0]).toBe(desktop ? 40 : 16);
+  expect(grid[2]).toBe(desktop ? 1360 : 358);
+  if (layout.overviewGrid) {
+    await expect(page.locator(targets.cardName).first()).toHaveCSS("font-size", "23px");
+    expect(layout.sparkline![3]).toBe(44);
+    expect(layout.firstCard![3]).toBeGreaterThanOrEqual(desktop ? 245 : 200);
+    expect(layout.cardName![0] - layout.firstCard![0]).toBe(desktop ? 26 : 17);
+    expect(desktop ? layout.newCard![0] : layout.newCard![1]).toBeGreaterThan(
+      desktop ? layout.firstCard![0] : layout.firstCard![1],
+    );
+  } else {
+    expect(layout.summary![1]).toBeGreaterThan(grid[1] + grid[3]);
+    expect(desktop ? layout.allocation![0] : layout.allocation![1]).toBeGreaterThan(
+      desktop ? layout.summaryValue![0] : layout.summaryValue![1] + layout.summaryValue![3],
+    );
+    expect(layout.holdingsHeading![1]).toBeGreaterThan(layout.summary![1] + layout.summary![3]);
+    expect(layout.holdingsGrid![1]).toBeGreaterThan(layout.holdingsHeading![1]);
+  }
+  await page.screenshot({ path: info.outputPath(`${name}-${width}.png`), animations: "disabled" });
+  await writeFile(
+    info.outputPath(`${name}-${width}.json`),
+    JSON.stringify({ width, height: 1000, layout }, null, 2),
+  );
+}
+
+test("Phase 24 real portfolio workspace matches desktop and phone layouts and keeps returns, controls and trade scopes separate", async ({
+  page,
+}, info) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const email = await signInNewUser(page);
+  const first = await portfolioId(page);
+  const firstName = "Long-term strategy";
+  const description = "US stocks and a core Bitcoin position.";
+  await patch(page, first, { name: firstName, description });
+  const second = await create(page, "Tech momentum", "A concentrated tech strategy.");
+  await cryptoBuy(page, first, "1800");
+  await stockBuy(page, first, "10");
+  await stockBuy(page, first, "2", "MSFT");
+  stockFixture("reprice", "AAPL", "112");
+  stockFixture("reprice", "MSFT", "126");
+  await stockBuy(page, second.id, "1");
+  expect(fixture("daily", email, "paired", first, second.id).synthetic_rows).toBe(58);
+
+  const overviewResponse = readPortfolio(page, "/overview");
+  await overview(page);
+  const current = await (await overviewResponse).json();
+  expect(current).toHaveLength(2);
+  const firstCard = openCard(page, firstName);
+  const secondCard = openCard(page, second.name);
+  await expect(firstCard.getByText(description, { exact: true })).toBeVisible();
+  for (const [index, card] of [firstCard, secondCard].entries()) {
+    const row = current[index];
+    await expect(card.getByText(`${formatUsd(row.cash)} cash`, { exact: true })).toBeVisible();
+    await expect(card.getByText(formatUsd(row.total_value), { exact: false })).toBeVisible();
+    await expect(card.locator("canvas")).toBeVisible();
+    await expect(card.getByRole("button")).toHaveCount(0);
+  }
+  expect(current[0].total_pl).not.toMatch(/^-/);
+  expect(current[1].total_pl).toMatch(/^-/);
+  const cards = page.getByRole("list", { name: "Portfolios", exact: true });
+  await expect(cards.getByRole("listitem").last().getByRole("button")).toHaveAccessibleName(
+    "New portfolio",
+  );
+  await comparePortfolioCapture(page, info, "portfolios", 1440);
+  await comparePortfolioCapture(page, info, "portfolios", 390);
+  await page.setViewportSize({ width: 320, height: 1000 });
+  await noOverflow(page);
+  await page.evaluate('document.documentElement.style.fontSize = "200%"');
+  await noOverflow(page);
+  await expect(firstCard).toBeVisible();
+  await expect(firstCard.getByRole("heading")).toHaveCSS("font-size", "46px");
+  await expect(button(page, "New portfolio")).toBeVisible();
+  await page.evaluate('document.documentElement.style.removeProperty("font-size")');
+
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const statementResponse = readPortfolio(page, `/${first}`);
+  // Click the card's bottom-right padding, away from its name link text.
+  const cardBox = (await firstCard.boundingBox())!;
+  await firstCard.click({ position: { x: cardBox.width - 12, y: cardBox.height - 12 } });
+  await expect(page).toHaveURL(`/portfolios/${first}`);
+  const selected = await (await statementResponse).json();
+  const toolbar = page.getByRole("group", { name: "Portfolio controls" });
+  const chooser = toolbar.getByRole("combobox", { name: "Open portfolio" });
+  const edit = toolbar.getByRole("button", { name: "Edit portfolio" });
+  const update = toolbar.getByRole("button", { name: "Update portfolio" });
+  const remove = toolbar.getByRole("button", { name: "Remove portfolio" });
+  await expect(chooser).toHaveValue(first);
+  expect(
+    await toolbar
+      .locator("select,button")
+      .evaluateAll((nodes) => nodes.map((node) => node.getAttribute("aria-label") ?? node.tagName)),
+  ).toEqual(["SELECT", "Edit portfolio", "Update portfolio", "Remove portfolio"]);
+  await chooser.focus();
+  for (const control of [edit, update, remove]) {
+    await page.keyboard.press("Tab");
+    await expect(control).toBeFocused();
+  }
+
+  const refreshed = readPortfolio(page, `/${first}`);
+  await update.press("Enter");
+  const refreshResult = await (await refreshed).json();
+  await expect(update).toHaveAccessibleDescription(/\b\d+[smh] ago/);
+  await expect(update.locator("time")).toHaveAttribute("datetime", refreshResult.prices_as_of);
+  await expect(update).toBeFocused();
+  expect(refreshResult.cash).toBe(selected.cash);
+  const summary = page.getByRole("region", { name: "Total portfolio value" });
+  await expect(summary.locator(".portfolio-summary-value")).toHaveText(
+    formatUsd(refreshResult.total_value),
+  );
+  await expect(summary.locator("p").filter({ hasText: /all time/ })).toContainText(
+    `+${formatUsd(refreshResult.total_pl)}`,
+  );
+  const allocation = summary.getByRole("list", { name: "Allocation" }).getByRole("listitem");
+  const assetClasses = [
+    ["cash", "Cash"],
+    ["stocks", "Stocks"],
+    ["crypto", "Crypto"],
+  ] as const;
+  for (const [index, [key, label]] of assetClasses.entries()) {
+    await expect(allocation.nth(index)).toContainText(label);
+    await expect(allocation.nth(index)).toContainText(
+      `${refreshResult.class_allocation_percent[key]}%`,
+    );
+    await expect(allocation.nth(index)).toContainText(formatUsd(refreshResult.class_values[key]));
+  }
+  const holdingNames = page
+    .getByRole("list", { name: "Holdings" })
+    .getByRole("heading", { level: 3 });
+  const filter = page.getByRole("combobox", { name: "Filter holdings" });
+  const sort = page.getByRole("combobox", { name: "Sort holdings" });
+  await expect(sort).toHaveValue("value");
+  await expect(holdingNames).toHaveText(["BTC", "AAPL", "MSFT"]);
+  await filter.selectOption("stock");
+  await expect(holdingNames).toHaveText(["AAPL", "MSFT"]);
+  await sort.selectOption("return");
+  await expect(holdingNames).toHaveText(["MSFT", "AAPL"]);
+  const profit = (symbol: string) =>
+    refreshResult.holdings.find((holding: { symbol: string }) => holding.symbol === symbol);
+  expect(profit("AAPL")).toMatchObject({ unrealized_pl: "40.00", unrealized_pl_percent: "3.92" });
+  expect(profit("MSFT")).toMatchObject({ unrealized_pl: "22.00", unrealized_pl_percent: "10.78" });
+  await filter.selectOption("crypto");
+  await expect(holdingNames).toHaveText(["BTC"]);
+  await filter.selectOption("all");
+  await sort.selectOption("symbol");
+  await expect(holdingNames).toHaveText(["AAPL", "BTC", "MSFT"]);
+  await sort.selectOption("value");
+  const appleTrade = page.getByRole("link", { name: "Trade AAPL" });
+  await expect(appleTrade).toHaveAttribute("href", `/portfolios/${first}/trade/stocks/AAPL`);
+  await expect(page.getByRole("link", { name: "Trade BTC" })).toHaveAttribute(
+    "href",
+    `/portfolios/${first}/trade/BTC`,
+  );
+  await comparePortfolioCapture(page, info, "portfolio", 1440);
+  await comparePortfolioCapture(page, info, "portfolio", 390);
+  await page.setViewportSize({ width: 320, height: 1000 });
+  await noOverflow(page);
+  await page.evaluate('document.documentElement.style.fontSize = "200%"');
+  await noOverflow(page);
+  for (const control of [chooser, edit, update, remove, filter, sort, appleTrade]) {
+    await expect(control).toBeVisible();
+    await control.focus();
+    await expect(control).toBeFocused();
+  }
+  await page.evaluate('document.documentElement.style.removeProperty("font-size")');
+
+  await chooser.selectOption(second.id);
+  await expect(page).toHaveURL(`/portfolios/${second.id}`);
+  await expect(holdingNames).toHaveText(["AAPL"]);
+  await expect(appleTrade).toHaveAttribute("href", `/portfolios/${second.id}/trade/stocks/AAPL`);
+  await expect(page.getByText("1 AAPL", { exact: false })).toBeVisible();
+  stockFixture("hold");
+  await update.click();
+  await expect(summary.getByText(/Known value: .* incomplete/)).toBeVisible();
+  await expect(summary.getByText(/1 holding cannot be valued/)).toBeVisible();
+  await expect(summary.getByText(/Allocation is unavailable until/)).toBeVisible();
+  await appleTrade.click();
+  await expect(page).toHaveURL(`/portfolios/${second.id}/trade/stocks/AAPL`);
+  await expect(button(page, "Confirm buy")).toBeDisabled();
+});
 
 test("Phase13 create view edit clear and escaped astral metadata preserve immutable finances", async ({
   page,
@@ -227,6 +585,19 @@ test("Phase13 committed lost creation response reload explicitly retries identic
   expect(requests[1]).toEqual(requests[0]);
   expect(fixture("economic", email)).toEqual(before);
   expect((await statement(page, original)).cash).toBe("10000.00");
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Portfolios", exact: true })
+    .click();
+  await expect(page).toHaveURL("/portfolios");
+  const cards = page.getByRole("list", { name: "Portfolios", exact: true });
+  await expect(cards.getByRole("link")).toHaveCount(10);
+  const createCard = cards
+    .getByRole("listitem")
+    .last()
+    .getByRole("button", { name: "New portfolio" });
+  await expect(createCard).toBeDisabled();
+  await expect(createCard).toHaveAccessibleDescription(/10 active portfolios/);
 });
 
 test("Phase13 duplicate name and concurrent tenth-slot refusal retain draft and focus linked error", async ({
@@ -565,12 +936,14 @@ test("Phase13 renamed original unknown trade recovers identical payload without 
   await patch(page, a.id, { name: "Renamed current order root" });
   await page.getByLabel("Open portfolio", { exact: true }).selectOption(b.id);
   await page.getByRole("link", { name: "Markets", exact: true }).click();
+  await page.getByRole("button", { name: "Crypto", exact: true }).click();
   await page.getByRole("list", { name: "Crypto" }).getByRole("button", { name: /BTC/ }).click();
   await page.getByRole("link", { name: "Trade BTC", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/portfolios/${b.id}/trade/BTC$`));
   await expect(button(page, "Check order result")).toHaveCount(0);
   await page.getByLabel("Open portfolio", { exact: true }).selectOption(a.id);
   await page.getByRole("link", { name: "Markets", exact: true }).click();
+  await page.getByRole("button", { name: "Crypto", exact: true }).click();
   await page.getByRole("list", { name: "Crypto" }).getByRole("button", { name: /BTC/ }).click();
   await page.getByRole("link", { name: "Trade BTC", exact: true }).click();
   await expect(button(page, "Check order result")).toBeVisible();
@@ -652,7 +1025,11 @@ test("Phase13 failed refresh suppresses expired stock proof while cash sibling r
     b = await create(page, "Unaffected cash");
   await stockBuy(page, a.id, "1");
   const value = await statement(page, a.id);
-  expect(value.valuation_complete).toBe(true);
+  expect(value).toMatchObject({
+    cash: "9898.00",
+    total_value: "9999.00",
+    valuation_complete: true,
+  });
   const mark = value.holdings[0].stock_mark;
   expect(mark.mark_mode).toBe("fresh");
   expect(Date.parse(mark.valid_until)).toBeGreaterThan(Date.now());
@@ -662,35 +1039,38 @@ test("Phase13 failed refresh suppresses expired stock proof while cash sibling r
   await page.clock.fastForward(31_000);
   await expect(page.getByRole("alert")).toContainText("Couldn't refresh");
   await page.clock.fastForward(Math.max(1, Date.parse(mark.valid_until) - Date.now() + 2000));
-  await expect(page.getByText("Return unavailable", { exact: true })).toBeVisible();
-  const cards = page.getByRole("list", { name: "Portfolios", exact: true }).getByRole("listitem");
-  const expired = cards.filter({
-    has: page.getByRole("link", { name: "Expiring stock evidence", exact: true }),
-  });
+  const expired = openCard(page, "Expiring stock evidence");
+  await expect(expired).toHaveAttribute("href", `/portfolios/${a.id}`);
   await expect(expired.getByText("Value unavailable — refresh required")).toBeVisible();
-  await expect(expired.getByText("$9,898.00", { exact: true })).toHaveCount(1);
-  await expect(expired.getByText("$9,999.00", { exact: true })).toHaveCount(0);
-  const cashSibling = cards.filter({
-    has: page.getByRole("link", { name: "Unaffected cash", exact: true }),
-  });
-  await expect(cashSibling.getByText("$10,000.00", { exact: true })).toHaveCount(2);
-  await expect(page.getByRole("link", { name: "Unaffected cash", exact: true })).toHaveAttribute(
-    "href",
-    `/portfolios/${b.id}`,
+  await expect(expired.getByText("Return unavailable", { exact: true })).toBeVisible();
+  await expect(expired.getByText("1 holding cannot be valued.", { exact: true })).toBeVisible();
+  await expect(expired.getByText(`${formatUsd(value.cash)} cash`, { exact: true })).toBeVisible();
+  await expect(expired.getByText("Total value:", { exact: true })).toHaveCount(0);
+  await expect(expired.locator(".portfolio-overview-value")).not.toContainText(
+    formatUsd(value.total_value),
+  );
+  const cashSibling = openCard(page, "Unaffected cash");
+  await expect(cashSibling).toHaveAttribute("href", `/portfolios/${b.id}`);
+  await expect(cashSibling.getByText("$10,000.00 cash", { exact: true })).toBeVisible();
+  await expect(cashSibling.getByText("Total value:", { exact: true }).locator("..")).toContainText(
+    "$10,000.00",
   );
 });
 
 async function reviewedLayout(page: Page, state: string, width: number) {
   const dimensions: Record<string, number> = {};
   const navigation = page.getByRole("region", { name: "Portfolio navigation", exact: true });
-  if (width < 768 && (await navigation.isVisible())) {
-    const select = navigation.getByLabel("Open portfolio", { exact: true });
+  if (await navigation.isVisible()) {
+    const select = navigation.getByRole("combobox", { name: "Open portfolio", exact: true });
+    await select.click({ trial: true, timeout: 5000 });
+    await expect(select).toBeInViewport();
     const [regionBox, fieldBox] = await Promise.all([
       navigation.boundingBox(),
       select.boundingBox(),
     ]);
-    expect(fieldBox!.width).toBeGreaterThanOrEqual(regionBox!.width - 1);
-    expect(fieldBox!.height).toBeGreaterThanOrEqual(48);
+    if (width < 768) expect(fieldBox!.width).toBeGreaterThanOrEqual(regionBox!.width - 1);
+    // Phase 24 adopted the prototype's 44px minimum for the compact chooser.
+    expect(fieldBox!.height).toBeGreaterThanOrEqual(44);
     await expect(navigation.getByRole("button")).toHaveCount(0);
     await expect(navigation.getByRole("link")).toHaveCount(0);
     Object.assign(dimensions, {

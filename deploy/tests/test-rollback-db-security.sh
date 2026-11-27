@@ -48,7 +48,7 @@ def options(argv):
         assert (inventory.get('recovery_profile'),family.get('version'),family.get('revision')) in {
             ('deploy-recovery-v3',2,'0020'), ('deploy-recovery-v4',3,'0023'),
             ('deploy-recovery-v5',4,'0024'), ('deploy-recovery-v7',6,'0026'),
-            ('deploy-recovery-v8',7,'0027')}
+            ('deploy-recovery-v8',7,'0027'), ('deploy-recovery-v9',8,'0028')}
     return a
 
 

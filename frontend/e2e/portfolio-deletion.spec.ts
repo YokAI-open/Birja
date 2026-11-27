@@ -81,7 +81,7 @@ async function detail(page: Page, id: string) {
 }
 async function review(page: Page) {
   await button(page, "Remove portfolio").click();
-  await expect(button(page, "Cancel")).toBeFocused();
+  await expect(button(page, "Keep portfolio")).toBeFocused();
   await expect(button(page, "Delete portfolio")).toBeEnabled();
 }
 async function unavailable(page: Page) {
@@ -173,7 +173,7 @@ async function assertPrivate(response: APIResponse) {
 }
 test.beforeEach(() => stockFixture("fresh"));
 
-test("Phase14 deletion named Cancel is a no-op; holdings freeze, stale paths refuse and siblings trade", async ({
+test("Phase14 deletion named Keep portfolio is a no-op; holdings freeze, stale paths refuse and siblings trade", async ({
   page,
 }) => {
   test.setTimeout(120000);
@@ -196,7 +196,7 @@ test("Phase14 deletion named Cancel is a no-op; holdings freeze, stale paths ref
   await expect(
     page.getByText("Nothing will be sold or moved to another portfolio.", { exact: false }),
   ).toBeVisible();
-  await button(page, "Cancel").press("Enter");
+  await button(page, "Keep portfolio").press("Enter");
   await expect(button(page, "Remove portfolio")).toBeFocused();
   expect(deletes).toBe(0);
   expect(oracle(email)).toEqual(before);
@@ -593,7 +593,7 @@ for (const width of [320, 375, 768, 1024, 1280, 1440]) {
       await capture("confirmation");
       await expect(page.getByText(/This is your last active portfolio/)).toBeVisible();
       await capture("last-confirmation");
-      await button(page, "Cancel").click();
+      await button(page, "Keep portfolio").click();
       await expect(button(page, "Remove portfolio")).toBeFocused();
       await capture("cancel");
       const longName = "<Long>&" + "🚀".repeat(53);
@@ -602,14 +602,14 @@ for (const width of [320, 375, 768, 1024, 1280, 1440]) {
       await detail(page, id);
       await review(page);
       await capture("confirmation-long");
-      await button(page, "Cancel").click();
+      await button(page, "Keep portfolio").click();
       const sibling = await create(page, "Independent strategy " + width);
       await buyStock(page, id);
       stockFixture("hold");
       await detail(page, id);
       await review(page);
       await capture("uncertain-stock");
-      await button(page, "Cancel").click();
+      await button(page, "Keep portfolio").click();
       stockFixture("fresh");
       await page.route("**" + api + "/" + id, async (route) => {
         if (route.request().method() !== "DELETE") return route.continue();

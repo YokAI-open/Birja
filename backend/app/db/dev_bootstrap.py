@@ -16,6 +16,7 @@ from app.db.portfolio_bootstrap import (
     ACL_0025_SQL,
     ACL_0026_SHA256,
     ACL_0026_SQL,
+    ACL_0028_SHA256,
     ACL_SQL,
     CATALOGUE_FINANCE_TABLES,
     CATALOGUE_TABLES,
@@ -25,6 +26,7 @@ from app.db.portfolio_bootstrap import (
     GRANTS_0023_SQL,
     GRANTS_0025_SQL,
     GRANTS_0026_SQL,
+    GRANTS_0028_SQL,
     PORTFOLIO_PREFLIGHT_SQL,
 )
 
@@ -119,7 +121,7 @@ FUNCTION_SIGNATURES = frozenset(
 
 def migration_objects(revision: str | None) -> tuple[frozenset[str], frozenset[str]]:
     """Finite migration-only inventories, distinct from runtime admission."""
-    if revision is not None and revision not in {f"{n:04}" for n in range(7, 28)}:
+    if revision is not None and revision not in {f"{n:04}" for n in range(7, 29)}:
         raise ValueError("Unsupported migration revision inventory")
     if revision not in {"0021", "0022", *PORTFOLIO_PREFLIGHT_SQL}:
         return TABLES, FUNCTION_SIGNATURES
@@ -138,9 +140,9 @@ def migration_objects(revision: str | None) -> tuple[frozenset[str], frozenset[s
             "close_portfolio(bigint,bigint,uuid,text,text)",
             "check_stock_terminal_clock()",
         }
-    if revision in {"0025", "0026", "0027"}:
+    if revision in {"0025", "0026", "0027", "0028"}:
         tables |= CATALOGUE_TABLES
-    if revision in {"0026", "0027"}:
+    if revision in {"0026", "0027", "0028"}:
         tables |= CATALOGUE_FINANCE_TABLES
         signatures |= {
             "stock_catalog_scope_current(bigint,text,stock_catalog_instruments,"
@@ -150,6 +152,12 @@ def migration_objects(revision: str | None) -> tuple[frozenset[str], frozenset[s
             "stock_catalog_action_context(bigint,bigint,bigint,"
             "timestampwithtimezone,timestampwithtimezone,boolean)",
             "check_stock_catalog_split_movements()",
+        }
+    if revision == "0028":
+        tables |= {"portfolio_daily_values"}
+        signatures |= {
+            "lock_portfolio_daily_value_root(bigint,bigint)",
+            "check_portfolio_daily_value_root()",
         }
     return frozenset(tables), frozenset(signatures)
 
@@ -185,6 +193,7 @@ async def _authorize_portfolios(conn: asyncpg.Connection, revision: str) -> None
         "0025": (GRANTS_0025_SQL, ACL_0025_SQL, ACL_0025_SHA256),
         "0026": (GRANTS_0026_SQL, ACL_0026_SQL, ACL_0026_SHA256),
         "0027": (GRANTS_0026_SQL, ACL_0026_SQL, ACL_0026_SHA256),
+        "0028": (GRANTS_0028_SQL, ACL_SQL, ACL_0028_SHA256),
     }.get(revision, (GRANTS_0023_SQL, ACL_SQL, ACL_0023_SHA256))
     await conn.execute(PORTFOLIO_PREFLIGHT_SQL[revision])
     await conn.execute(grants_sql)
@@ -199,7 +208,7 @@ async def _migrate_dev(conn: asyncpg.Connection, database_url: str) -> None:
     revision = None
     if await conn.fetchval("SELECT to_regclass('public.alembic_version') IS NOT NULL"):
         rows = await conn.fetch("SELECT version_num FROM public.alembic_version")
-        if len(rows) != 1 or rows[0][0] not in {f"{n:04}" for n in range(7, 28)}:
+        if len(rows) != 1 or rows[0][0] not in {f"{n:04}" for n in range(7, 29)}:
             raise ValueError("Unsupported dev migration revision; refusing")
         revision = rows[0][0]
     await conn.execute("SELECT pg_advisory_lock(1026016001)")

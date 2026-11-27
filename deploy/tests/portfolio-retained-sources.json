@@ -41,5 +41,13 @@
     "archive_sha256": "2ecec604674c7b18ef864b32883b9a6f67d42f9a3080b949b6e126dd47810291",
     "app_tree": "98b64d2ade4519aa566f4ad1832aac9b33485691",
     "alembic_tree": "eb240860976eb6f3f04ad69cf9d169089c595e02"
+  },
+  "portfolio0027": {
+    "revision": "0027",
+    "payload_version": 7,
+    "commit": "0c26810fb0bcb15323705a38aae63b531d69b992",
+    "archive_sha256": "c97958efd402c26a4e81452bda8019c066d977625ff12e5507dcf1d1fa3f9daf",
+    "app_tree": "6f4fca6bb9f5915b783c71132db15a5b89c1e485",
+    "alembic_tree": "856cca12c640b84be757ca7d6979c996bd97fb15"
   }
 }

@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "@/App";
 import { renderWithClient } from "@/test/render";
@@ -9,7 +9,7 @@ afterEach(() => {
   document.cookie = "bj_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
 });
 
-type Handler = () => Response;
+type Handler = () => Response | Promise<Response>;
 type Routes = { request?: Handler; verify?: Handler };
 
 const errorResponse = (status: number, code: string, headers: Record<string, string> = {}) =>
@@ -44,12 +44,13 @@ async function toCodeStep(routes: Routes = {}) {
 }
 
 describe("SignInPage email step", () => {
-  it("disables Send code with a helper while the field is empty", () => {
+  it("labels the email field for autofill and disables Send code while empty", () => {
     stubApi({});
     renderWithClient(<SignInPage />);
     expect(screen.getByRole("button", { name: "Send code" })).toBeDisabled();
-    expect(screen.getByText("Enter your email to get a code.")).toBeVisible();
-    expect(screen.getByLabelText("Email")).toHaveAttribute("aria-describedby", "email-help");
+    expect(screen.getByLabelText("Email")).toHaveAttribute("type", "email");
+    expect(screen.getByLabelText("Email")).toHaveAttribute("autocomplete", "email");
+    expect(screen.getByLabelText("Email")).toHaveAttribute("inputmode", "email");
   });
 
   it("moves to the code step with the expiry copy", async () => {
@@ -61,6 +62,31 @@ describe("SignInPage email step", () => {
     expect(input).toHaveAttribute("autocomplete", "one-time-code");
     expect(input).toHaveAttribute("inputmode", "numeric");
     expect(input).toHaveAttribute("maxlength", "6");
+    expect(input).toHaveFocus();
+  });
+
+  it("sends one request when submissions repeat before the pending state renders", async () => {
+    let release!: (response: Response) => void;
+    const fetchMock = stubApi({
+      request: () => new Promise((resolve) => (release = resolve)),
+    });
+    const { user } = renderWithClient(<SignInPage />);
+    const email = screen.getByLabelText("Email");
+    await user.type(email, "a@example.com");
+    await user.tab();
+    const submit = screen.getByRole("button", { name: "Send code" });
+    expect(submit).toHaveFocus();
+    const form = email.closest("form")!;
+    act(() => {
+      fireEvent.submit(form);
+      fireEvent.submit(form);
+    });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole("button", { name: "Sending…" })).toBe(submit);
+    expect(submit).toHaveAttribute("aria-disabled", "true");
+    expect(submit).toHaveFocus();
+    await act(async () => release(ok({ status: "code_sent" }, 202)));
+    expect(await screen.findByLabelText("6-digit code")).toHaveFocus();
   });
 
   it.each([
@@ -117,6 +143,51 @@ describe("SignInPage code step", () => {
     expect(input).toHaveAttribute("aria-describedby", alert.id);
   });
 
+  it.each([false, true])(
+    "retains focus after a failed verification when focus moves: %s",
+    async (moveFocus) => {
+      let release!: (response: Response) => void;
+      const { user } = await toCodeStep({
+        verify: () => new Promise((resolve) => (release = resolve)),
+      });
+      const input = screen.getByLabelText("6-digit code");
+      await user.paste("123456");
+      expect(input).toHaveValue("123456");
+      await user.tab();
+      const submit = screen.getByRole("button", { name: "Sign in" });
+      expect(submit).toHaveFocus();
+      const form = input.closest("form")!;
+      act(() => {
+        fireEvent.submit(form);
+        fireEvent.submit(form);
+      });
+      const verificationCalls = () =>
+        vi.mocked(fetch).mock.calls.filter(([url]) => url === "/api/v2/auth/verify-code");
+      await waitFor(() => expect(verificationCalls()).toHaveLength(1));
+      expect(await screen.findByRole("button", { name: "Signing in…" })).toBe(submit);
+      expect(submit).toHaveAttribute("aria-disabled", "true");
+      expect(submit).toHaveFocus();
+      const resend = screen.getByRole("button", { name: "Send a new code" });
+      expect(resend).toHaveAttribute("aria-disabled", "true");
+      expect(screen.getByRole("button", { name: "Use a different email" })).toHaveAttribute(
+        "aria-disabled",
+        "true",
+      );
+      if (moveFocus) await user.tab();
+      await user.keyboard("{Enter}");
+      expect(verificationCalls()).toHaveLength(1);
+      expect(
+        vi.mocked(fetch).mock.calls.filter(([url]) => url === "/api/v1/auth/request-code"),
+      ).toHaveLength(1);
+      await act(async () => release(errorResponse(503, "service_unavailable")));
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "Sign-in is temporarily unavailable.",
+      );
+      expect(submit).not.toHaveAttribute("aria-disabled");
+      expect(moveFocus ? resend : submit).toHaveFocus();
+    },
+  );
+
   it("does not treat a 422 on the code as an email error", async () => {
     const { user } = await toCodeStep({ verify: () => errorResponse(422, "validation_error") });
     await user.type(screen.getByLabelText("6-digit code"), "123456");
@@ -124,14 +195,36 @@ describe("SignInPage code step", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Something went wrong. Try again.");
   });
 
-  it("re-requests a code for the same email", async () => {
-    const { user } = await toCodeStep();
-    await user.click(screen.getByRole("button", { name: "Send a new code" }));
-    const fetchMock = vi.mocked(fetch);
-    const calls = fetchMock.mock.calls.filter((c) => c[0] === "/api/v1/auth/request-code");
-    expect(calls).toHaveLength(2);
-    expect(calls[1]?.[1]?.body).toBe(JSON.stringify({ email: "a@example.com" }));
-  });
+  it.each([false, true])(
+    "clears the code after keyboard resend when focus moves: %s",
+    async (moveFocus) => {
+      let release!: (response: Response) => void;
+      const request = vi.fn<Handler>().mockReturnValueOnce(ok({ status: "code_sent" }, 202));
+      request.mockImplementation(() => new Promise((resolve) => (release = resolve)));
+      const { user } = await toCodeStep({ request });
+      const input = screen.getByLabelText("6-digit code");
+      await user.type(input, "123456");
+      await user.tab();
+      await user.tab();
+      const resend = screen.getByRole("button", { name: "Send a new code" });
+      expect(resend).toHaveFocus();
+      await user.keyboard("{Enter}");
+      expect(await screen.findByRole("button", { name: "Sending…" })).toBe(resend);
+      expect(resend).toHaveAttribute("aria-disabled", "true");
+      expect(resend).toHaveFocus();
+      await user.keyboard("{Enter}");
+      if (moveFocus) await user.tab();
+      const fetchMock = vi.mocked(fetch);
+      const calls = fetchMock.mock.calls.filter((c) => c[0] === "/api/v1/auth/request-code");
+      expect(calls).toHaveLength(2);
+      expect(calls[1]?.[1]?.body).toBe(JSON.stringify({ email: "a@example.com" }));
+      await act(async () => release(ok({ status: "code_sent" }, 202)));
+      await waitFor(() => expect(input).toHaveValue(""));
+      expect(
+        moveFocus ? screen.getByRole("button", { name: "Use a different email" }) : input,
+      ).toHaveFocus();
+    },
+  );
 
   it("shows a resend error under the code field", async () => {
     let n = 0;
@@ -139,16 +232,21 @@ describe("SignInPage code step", () => {
       request: () =>
         ++n === 1 ? ok({ status: "code_sent" }, 202) : errorResponse(503, "service_unavailable"),
     });
-    await user.click(screen.getByRole("button", { name: "Send a new code" }));
+    const resend = screen.getByRole("button", { name: "Send a new code" });
+    await user.tab();
+    expect(resend).toHaveFocus();
+    await user.keyboard("{Enter}");
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Sign-in is temporarily unavailable.",
     );
+    expect(resend).toHaveFocus();
+    expect(resend).not.toHaveAttribute("aria-disabled");
   });
 
   it("returns to the email step with a different email", async () => {
     const { user } = await toCodeStep();
     await user.click(screen.getByRole("button", { name: "Use a different email" }));
-    expect(screen.getByLabelText("Email")).toBeVisible();
+    expect(screen.getByLabelText("Email")).toHaveFocus();
   });
 
   it("puts the user in the me cache so Markets opens without another /me fetch", async () => {

@@ -6,6 +6,7 @@ import { usePortfolioTarget } from "@/hooks/usePortfolioTarget";
 type SwitcherProps = {
   portfolioId?: string;
   destination?: (id: string) => string;
+  onSelect?: (id: string) => void;
   prominent?: boolean;
   inline?: boolean;
   label?: string;
@@ -14,9 +15,10 @@ type SwitcherProps = {
 export function PortfolioSwitcher({
   portfolioId,
   destination,
+  onSelect,
   prominent = false,
   inline = false,
-  label = destination ? "Trading portfolio" : "Open portfolio",
+  label = destination || onSelect ? "Trading portfolio" : "Open portfolio",
 }: SwitcherProps) {
   const id = useId();
   const navigate = useNavigate();
@@ -44,7 +46,7 @@ export function PortfolioSwitcher({
         {label}
       </label>
       <span id={id + "-action"} className="sr-only">
-        Selecting a portfolio opens it.
+        {onSelect ? "Select the portfolio for the next trade." : "Selecting a portfolio opens it."}
       </span>
       <select
         id={id}
@@ -58,8 +60,12 @@ export function PortfolioSwitcher({
         onChange={(event) => {
           const selected = rows.find((row) => row.id === event.target.value);
           if (!selected || selected.id === portfolioId) return;
-          // The destination route verifies access before it mounts financial content.
-          void navigate(destination ? destination(selected.id) : `/portfolios/${selected.id}`);
+          if (onSelect) {
+            onSelect(selected.id);
+          } else {
+            // The destination route verifies access before it mounts financial content.
+            void navigate(destination ? destination(selected.id) : `/portfolios/${selected.id}`);
+          }
         }}
       >
         <option value="" disabled>

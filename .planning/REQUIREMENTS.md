@@ -1,60 +1,63 @@
-# Requirements — Birja v1.4 Searchable Stock Trading
+# Requirements — Birja v1.5 Market Charts and Workspace Redesign
 
-Defined and approved by the owner on 2026-11-24.
+Scope follows the [approved prototype](ui-reviews/v1.5/README.md).
 
-## Working simulated stock trading
+## Markets workspace
 
-- [x] **SX-01** — A user can preview a whole-share stock order during the regular US session using an on-demand eligible IEX ask for buys or bid for sells. Execution requires a current-session quote whose source timestamp is less than 120 seconds old.
-- [x] **SX-02** — A user sees a specific refusal for closed sessions, exchange-reported halts, or stale or failed market checks. Birja uses a recent official report to block reported stock and market-wide halts. Explain that reporting can lag or omit a halt. The simulator uses fresh regular-session quotes and does not require continuous venue-status verification.
-- [x] **SX-03** — A confirmed fill updates only the selected portfolio. Repricing requires reconfirmation. A retry recovers the original receipt without a duplicate fill. Shares, cash and History match the receipt and stock commission remains zero.
-- [x] **SX-04** — The pricing and halt-data combination is qualified with representative live symbols, observed freshness, quotas and applicable use for Birja. Demonstrate a real app buy and sell using live prices in a disposable portfolio while preserving the existing crypto flow.
+- [x] **WS-01** — Navigation retains the existing Birja branding, one row of Markets, Portfolios and History, the door control and a single portfolio selector where needed. Users can reach the primary controls with a keyboard and on narrow screens.
+- [x] **WS-02** — An empty US stocks search lists the original 20 stocks. Searching by ticker or name still reaches the supported NYSE and Nasdaq catalog. Crypto remains independently browsable.
+- [x] **WS-03** — Selecting a row updates its price, market state, and trade entry beside the list on desktop and in a reachable detail section on mobile. The order opens for the selected portfolio and actual instrument.
+- [x] **WS-04** — A closed stock keeps its last verified display price if one exists. It shows `Market closed` and a countdown to the actual next regular session, while the existing order rules prevent execution.
 
-## Search and new stock onboarding
+## Market charts
 
-- [ ] **SC-01** — Users can search all active NYSE and Nasdaq common stocks by ticker or company name, with exact ticker matches first and a clear empty state. Coverage and exclusions can be checked against the refreshed exchange directory.
-- [x] **SC-02** — The catalog handles verified ticker aliases and distinct share classes. A listing change or delisting preserves its historical identity and blocks an ambiguous or inactive instrument from new orders.
-- [ ] **SC-03** — A user can select a result beyond the original 20, see its company and exchange, request a price and open a trade in the chosen portfolio. If the price is missing or the instrument requires review, the reason is visible.
-- [x] **SC-04** — Search uses local catalog data and bounded results. Selecting a result fetches only the needed price. A failing or rate-limited price source still allows search and keeps the last verified catalog available.
+The completed checks in this section verify local behavior. Live price
+history depends on CHART-04.
 
-## Held stocks and corporate actions
+- [x] **CHART-01** — Users can view actual historical stock and crypto prices for the selected instrument in `1D`, `1W`, and `1M` ranges. `1W` opens by default, and the series identifies its source and time basis.
+- [x] **CHART-02** — The chart and equivalent text communicate dates, prices and a comparable period change. Daily and period change figures appear only when sufficient comparable data exist. Equity sessions, gaps, asset identity and split treatment do not produce fictitious prices or returns.
+- [x] **CHART-03** — When history is sparse, delayed or unreachable, chart states describe the available coverage. The current quote, search, and eligible trading still work independently.
+- [ ] **CHART-04** — Requests for historical data stay within measured free-tier budgets, respect applicable source scope, and are bounded and shared across common reads. Candidate sources are qualified on representative crypto, featured stock and out-of-list symbols.
 
-- [x] **SL-01** — An eligible stock found through search can be bought and sold. Quote refresh is shared and bounded for actively selected and held stocks, and scales without polling every listed stock.
-- [x] **SL-02** — Markets and the stock ticket show the latest permitted timestamped price when the market is closed, if a mark exists. Show the local-time opening countdown and disable execution until a fresh in-session quote is available.
-- [x] **SL-03** — The expanded eligible universe retains exactly-once ordinary USD dividends and supported forward splits. Unresolved or unsupported events pause affected symbols without disturbing other holdings and portfolios.
-- [x] **SL-04** — Mixed stock and crypto holdings retain the correct cash, basis, quantities and valuations after new-symbol fills, action processing, ticker changes and restarts. An unpriced holding keeps the portfolio aggregate visibly incomplete.
+## Portfolio trends and workspace
 
-## Release acceptance
+- [x] **TREND-01** — Fully clickable strategy cards show the name, optional description, cash, total and return under the existing valuation rules. The final `New portfolio` card opens creation and the supported zero-portfolio and limit states still work.
+- [x] **TREND-02** — Each active portfolio can display a sparkline and an accessible summary of its own recorded daily value. Missing valuations produce visible gaps and portfolios without enough observations show their current figures.
+- [x] **TREND-03** — Durable snapshots use exact existing valuation and the original starting cash, remain private, survive restart and restore, and do not duplicate a capture or collect new points after confirmed closure.
+- [x] **TREND-04** — A selected portfolio groups the switcher, Edit, Update with age, and Remove above current value, profit and cash/stock/crypto allocation. Users can filter and sort holdings and open their trade tickets.
 
-- [ ] **SV-01** — Real-browser acceptance covers accessible search, a ticker beyond the original 20, a simulated buy and sell, and matching cash, holdings and History. It also covers market closed, a reported halt, stale data and crypto availability.
-- [ ] **SV-02** — Existing portfolios, ledgers and historical identifiers survive the upgrade. The changed paths pass code review, relevant automated tests and applicable restore and rollback verification.
-- [ ] **SV-03** — Required CI passes on the release candidate. After the approved rollout, a designated synthetic production portfolio can find a stock beyond the original 20 and complete a buy and sell with live IEX data during a regular session. The rollout receipt records outcomes and enables rollback using the existing runbook.
+## Trade, History, sign-in and acceptance
+
+- [x] **FLOW-01** — The stock and crypto tickets retain cash, holdings, current execution context, preview and receipt in the approved layout. Existing stock quantity and crypto dollar/quantity inputs, fees, repricing and exact receipt recovery continue to work without duplicating the portfolio name.
+- [x] **FLOW-02** — In the selected portfolio, users can filter History by activity and asset type, expand an event, and page through results with stable ordering. Existing financial event types and correction details remain accessible.
+- [x] **FLOW-03** — Users can request and enter a real email OTP and sign out via the door control, with accessible loading, validation and failure handling.
+- [x] **FLOW-04** — Code review and required CI cover the integrated screens, real API chart contracts, representative synthetic full-stack trading and portfolio flows, and snapshot migration and recovery. The integrated app matches the approved prototype at desktop and mobile widths.
 
 ## Scope boundaries
 
-Active NYSE and Nasdaq common shares are included, including distinct share
-classes. ETFs, ADRs, preferred stock, warrants, OTC instruments, international
-exchanges, premarket and after-hours trading, and brokerage orders are outside
-the approved scope. The plan targets existing free data access and documented
-public sources. Paid feeds and provider outreach remain separate decisions.
+Chart data is display-only. Existing source eligibility, quote freshness, trade
+rules, portfolio ownership, grants and ledger behavior remain authoritative.
+Daily portfolio history starts when capture is enabled. Historical reconstruction
+before rollout, paid data, brokerage integration, new asset classes and new
+order types are outside this milestone.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |---|---:|---|
-| SX-01 | 18 | Complete |
-| SX-02 | 18 | Complete |
-| SX-03 | 18 | Complete |
-| SX-04 | 18 | Complete |
-| SC-01 | 19 | Live directory coverage pending |
-| SC-02 | 19 | Complete |
-| SC-03 | 19 | Verified on fixtures. Live quote proof pending. |
-| SC-04 | 19 | Complete |
-| SL-01 | 20 | Complete on local fixtures |
-| SL-02 | 20 | Complete on local fixtures |
-| SL-03 | 20 | Complete on local fixtures |
-| SL-04 | 20 | Complete on local fixtures |
-| SV-01 | 21 | Pending |
-| SV-02 | 21 | Pending |
-| SV-03 | 21 | Pending |
-
-Coverage is 15 requirements assigned exactly once.
+| WS-01 | 22 | Complete |
+| WS-02 | 22 | Complete |
+| WS-03 | 22 | Complete |
+| WS-04 | 22 | Complete |
+| CHART-01 | 23 | Verified locally |
+| CHART-02 | 23 | Verified locally |
+| CHART-03 | 23 | Verified locally |
+| CHART-04 | 23 | Live qualification pending |
+| TREND-01 | 24 | Complete |
+| TREND-02 | 24 | Complete |
+| TREND-03 | 24 | Complete |
+| TREND-04 | 24 | Complete |
+| FLOW-01 | 25 | Complete |
+| FLOW-02 | 25 | Complete |
+| FLOW-03 | 25 | Complete |
+| FLOW-04 | 25 | Complete |

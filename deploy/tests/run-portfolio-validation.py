@@ -25,6 +25,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ARCHIVE = Path("/tmp/birja-phase14-proof/recovery.tar.gz")
 PHASE15_ARCHIVE = Path("/tmp/birja-phase15-proof/recovery.tar.gz")
 PHASE21_ARCHIVE = Path("/tmp/birja-backup-test-phase21-proof/recovery.tar.gz")
+PHASE24_ARCHIVE = Path("/tmp/birja-backup-test-phase24-proof/recovery.tar.gz")
 PHASE14_SHA256 = "1a41c8b9a55986998e46ea6341dfea93dd2b7c8da0e0428af08251d21d6b742f"
 PRESERVED_ARCHIVE = Path("/tmp/birja-phase13-proof/recovery.tar.gz")
 PRESERVED_SHA256 = "6fb79a45ddcb10725b18fc756e71bd555c827a6e61a5a4a0bd2d183096114b92"
@@ -33,6 +34,12 @@ STAGES = ("image-transition", "retained-roundtrip", "current0023-cold",
 SUCCESSOR_STAGES = ("image-transition", "retained-roundtrip", "current0027-cold",
                     "roles", "tls-upgraded", "tls-fresh", "selected-rollback")
 SUCCESSOR_PROFILE = "deploy-recovery-v8"
+DAILY_VALUE_STAGES = (*SUCCESSOR_STAGES[:2], "current0028-cold", *SUCCESSOR_STAGES[3:])
+DAILY_VALUE_PREDECESSOR_BINDING = "portfolio0027-image-binding.json"
+SUCCESSORS = {
+    21: (SUCCESSOR_PROFILE, 7, "0027", SUCCESSOR_STAGES),
+    24: ("deploy-recovery-v9", 8, "0028", DAILY_VALUE_STAGES),
+}
 STACK = ["docker", "compose", "--env-file", "/dev/null", "-f", "docker-compose.test.yml"]
 PG = "cgr.dev/chainguard/postgres@sha256:adbf3d8db097696ed6e997b108b51393786be999c04d543502f8959e1bafa8de"
 REDIS = "cgr.dev/chainguard/redis@sha256:26bb2dd4412f902f3decd44fba5dfaef4360d97004d44f6cff7f28d6aba19c48"
@@ -74,17 +81,17 @@ def environment():
 
 
 def archive_for_phase(phase=14):
-    if type(phase) is not int or phase not in {14, 15, 21}:
+    if type(phase) is not int or phase not in {14, 15, 21, 24}:
         raise ValueError("explicit finite qualification phase required")
-    return {14: ARCHIVE, 15: PHASE15_ARCHIVE, 21: PHASE21_ARCHIVE}[phase]
+    return {14: ARCHIVE, 15: PHASE15_ARCHIVE, 21: PHASE21_ARCHIVE, 24: PHASE24_ARCHIVE}[phase]
 
 
 def validate_selection(suite, phase=14):
     archive = archive_for_phase(phase)
     if suite not in {"all-security", "recovery", "recovery-current", "recovery-successor"}:
         raise ValueError("explicit qualification suite required")
-    if (phase == 21) != (suite == "recovery-successor"):
-        raise ValueError("successor recovery requires explicit phase21 and recovery-successor")
+    if (phase in SUCCESSORS) != (suite == "recovery-successor"):
+        raise ValueError("successor recovery requires explicit phase21 or phase24 and recovery-successor")
     if suite == "recovery-current" and phase != 15:
         raise ValueError("current-only recovery requires explicit phase15")
     return archive
@@ -118,8 +125,8 @@ def preflight(suite, *, phase=14, run=subprocess.run, fixture_tail=True):
     sources = load("portfolio-sources")
     sources.validate_matrix()
     recovery = load("portfolio-smoke").load_recovery()
-    if phase == 21:
-        recovery.closure_source(ROOT, revision="0027", allow_successor=False)
+    if phase in SUCCESSORS:
+        recovery.closure_source(ROOT, revision=SUCCESSORS[phase][2], allow_successor=False)
         successor_source_identity(sources)
     else:
         recovery.closure_source(ROOT)
@@ -128,8 +135,8 @@ def preflight(suite, *, phase=14, run=subprocess.run, fixture_tail=True):
             len(fixture["manifest"]["tables"]), len(fixture["manifest"]["identity_state"])) != (3, "0023", 31, 24):
         raise ValueError("exact current31/24 fixture profile required")
     prior = preserved_archive()
-    prior14 = preserved_phase14_archive() if phase == 15 else None
-    if suite != "all-security" and archive.parent.exists():
+    prior14 = preserved_phase14_archive() if phase in {15, 24} else None
+    if suite != "all-security" and (archive.parent.is_symlink() or archive.parent.exists()):
         raise ValueError("exclusive new recovery archive directory must be absent")
     if fixture_tail:
         run(["bash", "deploy/tests/test-db-config.sh"], cwd=ROOT,
@@ -309,13 +316,14 @@ def security_sources():
     return result
 
 
-def campaign_files(recovery, *, successor=False):
-    payload = recovery.PORTFOLIO_PAYLOAD_V7 if successor else recovery.PORTFOLIO_PAYLOAD_V4
+def campaign_files(recovery, *, successor=False, phase=21):
+    version = SUCCESSORS[phase][1] if successor else 4
+    payload = getattr(recovery, "PORTFOLIO_PAYLOAD_V" + str(version))
     return recovery.CORE + recovery.UNITS + payload
 
 
-def campaign_sources(ops, *, successor=False):
-    names = campaign_files(ops.r, successor=successor)
+def campaign_sources(ops, *, successor=False, phase=21):
+    names = campaign_files(ops.r, successor=successor, phase=phase)
     # Complete current application input, separate from fixed retained sources.
     tracked = subprocess.check_output(["git", "ls-files", "backend", "deploy", "docker-compose.ops-test.yml"], cwd=ROOT).decode().splitlines()
     return {name: ops.r.digest(ROOT / name) for name in sorted(set(names + tracked))}
@@ -340,7 +348,7 @@ def require_successor_image(binding, identity):
             or not re.fullmatch(r"sha256:[0-9a-f]{64}", binding.get("id", ""))
             or any(not re.fullmatch(r"[0-9a-f]{64}", binding.get(name, ""))
                    for name in ("config_sha256", "rootfs_sha256"))):
-        raise ValueError("0027 campaign image does not match the tested source")
+        raise ValueError("Campaign image does not match the tested source")
 
 
 def preserved_archive():
@@ -387,7 +395,7 @@ def write_status(path, value):
             Path(temporary).unlink()
 
 
-def authenticate(ops, archive, expected, source, image_records=None, *, successor_identity=None):
+def authenticate(ops, archive, expected, source, image_records=None, *, successor_identity=None, phase=21):
     sources = ops.portfolio_sources()
     sources.verify_archive_binding(archive, expected)
     successor = successor_identity is not None
@@ -398,13 +406,13 @@ def authenticate(ops, archive, expected, source, image_records=None, *, successo
     with tarfile.open(archive, "r:") as retained:
         inventory = json.load(retained.extractfile("INVENTORY.json"))
         payload = inventory.get("portfolio_payload", {})
-        profile = (SUCCESSOR_PROFILE, 7, "0027") if successor else ("deploy-recovery-v5", 4, "0024")
+        profile = SUCCESSORS[phase][:3] if successor else ("deploy-recovery-v5", 4, "0024")
         if (inventory.get("recovery_profile"), payload.get("version"), payload.get("revision")) != profile:
             raise ValueError("current campaign requires successor inventory")
-        for name in campaign_files(ops.r, successor=successor):
+        for name in campaign_files(ops.r, successor=successor, phase=phase):
             if retained.extractfile(name).read() != (ROOT / name).read_bytes():
                 raise ValueError("packaged/current source substitution")
-        for name, digest in ops.r.RETAINED_CLOSURE_SOURCE_PAYLOADS.items():
+        for name, digest in ops.r.retained_closure_sources(profile[1]).items():
             if ops.r.sha_bytes(retained.extractfile(name).read()) != "sha256:" + digest:
                 raise ValueError("fixed retained payload substitution")
     sources.validate_matrix()
@@ -423,9 +431,9 @@ def authenticate(ops, archive, expected, source, image_records=None, *, successo
     load("portfolio-smoke").authenticate_campaign_images(archive, expected,
         inspect_image=lambda ref: json.loads(ops.r.call(["docker", "image", "inspect", ref])))
     if successor:
-        current_record = records.get("current0027-image-binding.json")
+        current_record = records.get("current" + profile[2] + "-image-binding.json")
         if current_record is None:
-            raise ValueError("authenticated current0027 image record required")
+            raise ValueError("authenticated current successor image record required")
         require_successor_image(json.loads(current_record.read_text()), successor_identity)
 
 
@@ -490,18 +498,26 @@ def recovery_operations(ops, archive, expected):
     }
 
 
-def successor_recovery_operations(ops, archive, expected):
+def successor_recovery_operations(ops, archive, expected, *, phase=21):
     smoke = load("portfolio-smoke")
+    profile, _, revision, _ = SUCCESSORS[phase]
 
     def catalog(lane, *, requires=(), authority=False):
         if lane in {"cold", "upgraded", "rollback"}:
-            smoke.build_current_runtime(
-                ops.portfolio_sources(), environment(), archive=archive, archive_sha=expected,
-                revision="0023", predecessor=True,
-            )
+            if phase == 24:
+                with tempfile.TemporaryDirectory(prefix="birja-retained0027-build-") as tmp:
+                    ops.portfolio_sources().build_retained_image(
+                        Path(tmp) / "source", archive=archive, archive_sha=expected, lane="portfolio0027",
+                    )
+            else:
+                smoke.build_current_runtime(
+                    ops.portfolio_sources(), environment(), archive=archive, archive_sha=expected,
+                    revision="0023", predecessor=True,
+                )
         result = subprocess.run(
             ["bash", str(ROOT / "deploy/tests/test-stock-catalog-finance-recovery.sh"),
-             "--lane", lane, "--archive", str(archive), "--sha256", expected],
+             "--lane", lane, "--archive", str(archive), "--sha256", expected,
+             *(["--revision", revision] if phase == 24 else [])],
             cwd=ROOT, env=environment(), capture_output=True, timeout=900,
         )
         if result.returncode:
@@ -522,7 +538,7 @@ def successor_recovery_operations(ops, archive, expected):
         ops.roundtrip(archive)
         for revision in ("0017", "0020"):
             smoke.run(archive=archive, archive_sha=expected, revision=revision, cold=True,
-                      recovery_profile=SUCCESSOR_PROFILE)
+                      recovery_profile=profile)
         catalog("retained0025", requires=("retained_0025_exact=true",))
 
     def roles():
@@ -539,14 +555,17 @@ def successor_recovery_operations(ops, archive, expected):
                        env=environment(), check=True)
         catalog("rollback", requires=(
             "prewrite_predecessor_restarted=true original_volume_and_ledger_exact=true",
-            "postwrite_0027_restarted=true candidate_volume_and_receipts_exact=true predecessor_on_0027_refused=true",
+            f"postwrite_{revision}_restarted=true candidate_volume_and_receipts_exact=true predecessor_on_{revision}_refused=true",
+            *(("daily_value_predecessor_refused=true",) if phase == 24 else ()),
         ))
 
     return {
         "image-transition": ops.image_transition,
         "retained-roundtrip": retained,
-        "current0027-cold": lambda: catalog(
-            "cold", requires=("cold_encrypted_0027_exact=true fresh_restore_server=true",),
+        "current" + revision + "-cold": lambda: catalog(
+            "cold", requires=(f"cold_encrypted_{revision}_exact=true fresh_restore_server=true",
+                              *(("daily_value_upgrade_empty=true", "daily_value_capture_exact=true",
+                                 "daily_value_restored_owner_reads_exact=true") if phase == 24 else ())),
             authority=True,
         ),
         "roles": roles,
@@ -577,28 +596,30 @@ def execute_recovery(*, phase=14, suite="recovery"):
     successor = suite == "recovery-successor"
     identity = successor_source_identity(ops.portfolio_sources()) if successor else None
     prior_archive = preserved_archive()
-    prior14 = preserved_phase14_archive() if phase in {15, 21} else None
+    prior14 = preserved_phase14_archive() if phase in {15, 21, 24} else None
     # Exclusive directory ownership prevents silently reusing an earlier run.
     archive.parent.mkdir(mode=0o700)
     ops.r.private(archive.parent, True)
+    profile, payload, revision, successor_stages = SUCCESSORS[phase] if successor else (
+        "deploy-recovery-v5", 4, "0024", None,
+    )
     if successor:
-        ops.package_current_archive(archive, successor=True)
+        ops.package_current_archive(archive, successor=True, phase=phase)
     else:
         ops.package_current_archive(archive)
     expected = ops.r.digest(archive)
-    profile = SUCCESSOR_PROFILE if successor else "deploy-recovery-v5"
     ops.r.bundle_verify(archive, expected, required_profile=profile)
-    source = campaign_sources(ops, successor=True) if successor else campaign_sources(ops)
+    source = campaign_sources(ops, successor=successor, phase=phase)
     image_records = {}
     ops.bind_source_archive(archive, expected)
     full = suite != "recovery-current"
-    stages = SUCCESSOR_STAGES if successor else STAGES if full else ("current0023-cold",)
+    stages = successor_stages if successor else STAGES if full else ("current0023-cold",)
     status = {"ok": False, "phase": phase, "suite": suite,
               "archive": str(archive), "archive_sha256": expected, "stages": {},
               "whole7": False, "same_archive_final_ci": False}
     status_path = archive.parent / "status.json"
     if successor:
-        status.update(identity, recovery_profile=profile, payload_version=7, revision="0027",
+        status.update(identity, recovery_profile=profile, payload_version=payload, revision=revision,
                       stage_order=list(stages))
     def save_status():
         write_status(status_path, status)
@@ -613,18 +634,18 @@ def execute_recovery(*, phase=14, suite="recovery"):
     def guard():
         if preserved_archive() != prior_archive:
             raise ValueError("preserved archive presence changed")
-        if phase in {15, 21} and preserved_phase14_archive() != prior14:
+        if phase in {15, 21, 24} and preserved_phase14_archive() != prior14:
             raise ValueError("preserved Phase14 archive presence changed")
         if successor:
-            authenticate(ops, archive, expected, source, image_records, successor_identity=identity)
+            authenticate(ops, archive, expected, source, image_records, successor_identity=identity, phase=phase)
         else:
             authenticate(ops, archive, expected, source, image_records)
     try:
         if successor:
-            operations = successor_recovery_operations(ops, archive, expected)
+            operations = successor_recovery_operations(ops, archive, expected, phase=phase)
             smoke = load("portfolio-smoke")
             status["current_image"] = smoke.build_selected_runtime(
-                ops.portfolio_sources(), environment(), revision="0027", archive=archive,
+                ops.portfolio_sources(), environment(), revision=revision, archive=archive,
                 archive_sha=expected)
             require_successor_image(status["current_image"], identity)
             if set(operations) != set(stages):
@@ -636,6 +657,11 @@ def execute_recovery(*, phase=14, suite="recovery"):
             execute_stages(selected, guard, stages=stages)
         else:
             status["authority"] = execute_current_stage(selected, guard)
+        if phase == 24:
+            predecessor_digest = image_records.get(DAILY_VALUE_PREDECESSOR_BINDING)
+            if predecessor_digest is None:
+                raise ValueError("authenticated 0027 predecessor image record required")
+            status["predecessor_image_sha256"] = predecessor_digest
         status["ok"] = True
         status["stages"] = dict.fromkeys(stages, "passed-authenticated")
         status["whole7"] = status["same_archive_final_ci"] = full
@@ -646,7 +672,7 @@ def execute_recovery(*, phase=14, suite="recovery"):
           + " sha256=" + expected, flush=True)
 
 
-def verify_successor_receipt(archive, tested_source):
+def verify_successor_receipt(archive, tested_source, *, phase=21):
     """Return the two staging digests only after rechecking the completed proof."""
     ops = load("ops-fixtures")
     identity = successor_source_identity(ops.portfolio_sources())
@@ -655,29 +681,41 @@ def verify_successor_receipt(archive, tested_source):
     expected = ops.r.private(archive.with_suffix(archive.suffix + ".sha256")).read_text().strip()
     receipt_data = ops.r.private(archive.parent / "status.json").read_bytes()
     receipt = json.loads(receipt_data)
+    profile, payload, revision, stages = SUCCESSORS[phase]
     required = {
         **identity, "archive": str(archive), "archive_sha256": expected,
-        "phase": 21, "suite": "recovery-successor", "recovery_profile": SUCCESSOR_PROFILE,
-        "payload_version": 7, "revision": "0027", "stage_order": list(SUCCESSOR_STAGES),
-        "stages": dict.fromkeys(SUCCESSOR_STAGES, "passed-authenticated"),
-        "current_stage": SUCCESSOR_STAGES[-1],
+        "phase": phase, "suite": "recovery-successor", "recovery_profile": profile,
+        "payload_version": payload, "revision": revision, "stage_order": list(stages),
+        "stages": dict.fromkeys(stages, "passed-authenticated"),
+        "current_stage": stages[-1],
     }
     if (any(receipt.get(name) != value for name, value in required.items())
             or any(receipt.get(name) is not True for name in
                    ("ok", "whole7", "same_archive_final_ci"))):
-        raise ValueError("complete authenticated 0027 recovery receipt required")
-    image = json.loads(ops.r.private(archive.parent / "current0027-image-binding.json").read_text())
+        raise ValueError("complete authenticated " + revision + " recovery receipt required")
+    image = json.loads(ops.r.private(archive.parent / ("current" + revision + "-image-binding.json")).read_text())
     if receipt.get("current_image") != image:
-        raise ValueError("receipt does not match the authenticated current0027 image")
-    ops.r.bundle_verify(archive, expected, required_profile=SUCCESSOR_PROFILE)
-    authenticate(ops, archive, expected, campaign_sources(ops, successor=True),
-                 successor_identity=identity)
+        raise ValueError("receipt does not match the authenticated current successor image")
+    if phase == 24:
+        record = archive.parent / DAILY_VALUE_PREDECESSOR_BINDING
+        pinned = ops.portfolio_sources().PORTFOLIO0027
+        record_data = ops.r.private(record).read_bytes()
+        retained_image = json.loads(record_data)
+        require_successor_image(retained_image, {
+            "tested_source": pinned["commit"], "app_tree": pinned["app_tree"],
+            "context_sha256": pinned["archive_sha256"],
+        })
+        if receipt.get("predecessor_image_sha256") != hashlib.sha256(record_data).hexdigest():
+            raise ValueError("receipt does not match the authenticated 0027 predecessor image")
+    ops.r.bundle_verify(archive, expected, required_profile=profile)
+    authenticate(ops, archive, expected, campaign_sources(ops, successor=True, phase=phase),
+                 successor_identity=identity, phase=phase)
     return expected, hashlib.sha256(receipt_data).hexdigest()
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(allow_abbrev=False)
-    parser.add_argument("--phase", type=int, choices=[14, 15, 21], default=14)
+    parser.add_argument("--phase", type=int, choices=[14, 15, 21, 24], default=14)
     parser.add_argument("--suite", required=True,
                         choices=["all-security", "recovery", "recovery-current", "recovery-successor"])
     mode = parser.add_mutually_exclusive_group()
@@ -692,13 +730,13 @@ def main(argv=None):
     if args.verify_successor_receipt is not None:
         if args.suite != "recovery-successor":
             parser.error("receipt verification requires recovery-successor")
-        print(*verify_successor_receipt(archive, args.verify_successor_receipt))
+        print(*verify_successor_receipt(archive, args.verify_successor_receipt, phase=args.phase))
     elif args.preflight:
         print(json.dumps(preflight(args.suite, phase=args.phase), sort_keys=True))
     elif args.dry_run:
         print(json.dumps(security_commands() if args.suite == "all-security" else
                          {"phase": args.phase, "suite": args.suite, "archive": str(archive),
-                          "stages": SUCCESSOR_STAGES if args.suite == "recovery-successor"
+                          "stages": SUCCESSORS[args.phase][3] if args.suite == "recovery-successor"
                           else STAGES if args.suite == "recovery" else ("current0023-cold",)}, sort_keys=True))
     elif args.suite == "all-security":
         execute_security()

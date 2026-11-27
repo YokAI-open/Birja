@@ -10,7 +10,7 @@ from decimal import Decimal
 from fractions import Fraction
 from typing import Any, cast
 
-from sqlalchemy import Text, literal, select, tuple_, union_all
+from sqlalchemy import Text, false, literal, select, true, tuple_, union_all
 from sqlalchemy import cast as sql_cast
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -26,12 +26,14 @@ from app.models.stock_catalog import StockCatalogListing
 from app.models.stock_catalog_finance import StockCatalogFillEvidence, StockCatalogInstrument
 from app.models.stock_execution import StockFillFacts
 from app.models.trade import Trade
-from app.schemas.event_history import EventDividend, EventHistoryPage
+from app.schemas.event_history import EventDividend, EventHistoryFilters, EventHistoryPage
 from app.services.history import validate_portfolio_read
 from app.services.portfolios import OwnedActivePortfolio
 
 MAX_ID = 9223372036854775807
 TIMESTAMP = re.compile(r"[1-9][0-9]{3}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z")
+DEFAULT_FILTERS = EventHistoryFilters()
+CURSOR_FIELDS = {"v", "recorded_at", "kind_rank", "source_id", "portfolio_id"}
 
 
 class InvalidCursor(ValueError):
@@ -44,6 +46,7 @@ class EventHistoryCursor:
     kind_rank: int
     source_id: int
     portfolio_id: int
+    filters: EventHistoryFilters = DEFAULT_FILTERS
 
 
 def encode_cursor(value: EventHistoryCursor) -> str:
@@ -52,7 +55,7 @@ def encode_cursor(value: EventHistoryCursor) -> str:
     if type(value.source_id) is not int:
         raise InvalidCursor()
     obj = {
-        "v": 3,
+        "v": 4 if value.filters.filtered else 3,
         "portfolio_id": str(value.portfolio_id),
         "recorded_at": value.recorded_at.astimezone(UTC)
         .isoformat(timespec="microseconds")
@@ -60,6 +63,8 @@ def encode_cursor(value: EventHistoryCursor) -> str:
         "kind_rank": value.kind_rank,
         "source_id": str(value.source_id),
     }
+    if value.filters.filtered:
+        obj.update(activity=value.filters.activity, asset=value.filters.asset)
     encoded = (
         base64.urlsafe_b64encode(json.dumps(obj, separators=(",", ":")).encode())
         .decode()
@@ -67,7 +72,7 @@ def encode_cursor(value: EventHistoryCursor) -> str:
     )
     if type(value.portfolio_id) is not int:
         raise InvalidCursor()
-    decode_cursor(encoded, expected_portfolio_id=value.portfolio_id)
+    decode_cursor(encoded, expected_portfolio_id=value.portfolio_id, expected_filters=value.filters)
     return encoded
 
 
@@ -80,7 +85,12 @@ def _object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return obj
 
 
-def decode_cursor(value: str, *, expected_portfolio_id: int) -> EventHistoryCursor:
+def decode_cursor(
+    value: str,
+    *,
+    expected_portfolio_id: int,
+    expected_filters: EventHistoryFilters = DEFAULT_FILTERS,
+) -> EventHistoryCursor:
     try:
         if (
             not isinstance(value, str)
@@ -93,17 +103,20 @@ def decode_cursor(value: str, *, expected_portfolio_id: int) -> EventHistoryCurs
             raise InvalidCursor()
         decoded = raw.decode("utf-8")
         obj = json.loads(decoded, object_pairs_hook=_object)
-        if not isinstance(obj, dict) or set(obj) != {
-            "v",
-            "recorded_at",
-            "kind_rank",
-            "source_id",
-            "portfolio_id",
-        }:
+        expected_fields = (
+            CURSOR_FIELDS | {"activity", "asset"} if expected_filters.filtered else CURSOR_FIELDS
+        )
+        expected_version = 4 if expected_filters.filtered else 3
+        if not isinstance(obj, dict) or set(obj) != expected_fields:
             raise InvalidCursor()
         if json.dumps(obj, separators=(",", ":"), ensure_ascii=True) != decoded:
             raise InvalidCursor()
-        if type(obj["v"]) is not int or obj["v"] != 3:
+        if type(obj["v"]) is not int or obj["v"] != expected_version:
+            raise InvalidCursor()
+        if expected_filters.filtered and (
+            obj["activity"],
+            obj["asset"],
+        ) != (expected_filters.activity, expected_filters.asset):
             raise InvalidCursor()
         portfolio_id = obj["portfolio_id"]
         if (
@@ -124,7 +137,11 @@ def decode_cursor(value: str, *, expected_portfolio_id: int) -> EventHistoryCurs
         if int(identifier) > MAX_ID:
             raise InvalidCursor()
         return EventHistoryCursor(
-            datetime.fromisoformat(stamp), rank, int(identifier), int(portfolio_id)
+            datetime.fromisoformat(stamp),
+            rank,
+            int(identifier),
+            int(portfolio_id),
+            expected_filters,
         )
     except (ValueError, TypeError, UnicodeError, binascii.Error) as exc:
         raise InvalidCursor() from exc
@@ -178,7 +195,12 @@ def _dividend(
 
 
 async def list_event_history(
-    db: AsyncSession, *, portfolio: OwnedActivePortfolio, limit: int = 25, cursor: str | None = None
+    db: AsyncSession,
+    *,
+    portfolio: OwnedActivePortfolio,
+    limit: int = 25,
+    cursor: str | None = None,
+    filters: EventHistoryFilters = DEFAULT_FILTERS,
 ) -> EventHistoryPage:
     if type(limit) is not int or not 1 <= limit <= 100:
         raise ValueError("History limit must be between 1 and 100")
@@ -187,28 +209,50 @@ async def list_event_history(
     if type(user_id) is not int or not 1 <= user_id <= MAX_ID:
         raise ValueError("Invalid History owner")
     boundary = (
-        decode_cursor(cursor, expected_portfolio_id=portfolio_id) if cursor is not None else None
+        decode_cursor(cursor, expected_portfolio_id=portfolio_id, expected_filters=filters)
+        if cursor is not None
+        else None
     )
     await validate_portfolio_read(db, portfolio)
-    # Every source is owner-filtered before the seek and the bounded lookahead.
+    # Owner, asset and activity predicates run before the seek and lookahead.
+    trade_events = select(
+        Trade.created_at.label("recorded_at"),
+        literal(4).label("kind_rank"),
+        Trade.id.label("source_id"),
+    ).where(
+        Trade.user_id == user_id,
+        Trade.portfolio_id == portfolio_id,
+        true() if filters.activity in ("all", "buy", "sell") else false(),
+    )
+    if filters.activity in ("buy", "sell"):
+        trade_events = trade_events.where(Trade.side == filters.activity)
+    if filters.asset != "all":
+        trade_events = trade_events.join(Coin, Coin.id == Trade.coin_id).where(
+            Coin.asset_class == filters.asset
+        )
+    include_dividends = (
+        true() if filters.asset != "crypto" and filters.activity in ("all", "dividend") else false()
+    )
+    include_splits = (
+        true() if filters.asset != "crypto" and filters.activity in ("all", "split") else false()
+    )
     sources = union_all(
-        select(
-            Trade.created_at.label("recorded_at"),
-            literal(4).label("kind_rank"),
-            Trade.id.label("source_id"),
-        ).where(Trade.user_id == user_id, Trade.portfolio_id == portfolio_id),
+        trade_events,
         select(StockDividendPayment.recorded_at, literal(3), StockDividendPayment.id).where(
             StockDividendPayment.user_id == user_id,
             StockDividendPayment.portfolio_id == portfolio_id,
+            include_dividends,
         ),
         select(StockOwnershipMovement.recorded_at, literal(2), StockOwnershipMovement.id).where(
             StockOwnershipMovement.user_id == user_id,
             StockOwnershipMovement.portfolio_id == portfolio_id,
             StockOwnershipMovement.cause_kind == "split",
+            include_splits,
         ),
         select(StockDividendDecision.recorded_at, literal(1), StockDividendDecision.id).where(
             StockDividendDecision.user_id == user_id,
             StockDividendDecision.portfolio_id == portfolio_id,
+            include_dividends,
         ),
     ).subquery("owned_events")
     stmt = select(sources)
@@ -440,7 +484,9 @@ async def list_event_history(
     if len(rows) > limit:
         last = selected[-1]
         next_cursor = encode_cursor(
-            EventHistoryCursor(last.recorded_at, last.kind_rank, last.source_id, portfolio_id)
+            EventHistoryCursor(
+                last.recorded_at, last.kind_rank, last.source_id, portfolio_id, filters
+            )
         )
     await validate_portfolio_read(db, portfolio, final=True)
     return EventHistoryPage(items=items, next_cursor=next_cursor)

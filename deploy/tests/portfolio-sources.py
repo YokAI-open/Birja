@@ -30,6 +30,7 @@ FIXED_FILES = {
     'deploy/tests/dividend-execution-fixture.py': '74c3fda06e53b141cfcecfa92b082419d208fd95',
 }
 FIXED_RELEASES = {
+    "portfolio0027": ("0c26810fb0bcb15323705a38aae63b531d69b992", "c97958efd402c26a4e81452bda8019c066d977625ff12e5507dcf1d1fa3f9daf"),
     "portfolio0020": ("9527e358bc6953cec7580043703324db194ba396", "2ecec604674c7b18ef864b32883b9a6f67d42f9a3080b949b6e126dd47810291"),
     "portfolio0017": ("4b4320b4cc373268a8d598612a563cd5ef199700", "361a0fafbb6f1645d7beb9caeadb8bd46c85abc739d957dce7fc439b64eba248"),
     "retained": (FIXED_COMMIT, "1f3a8539a796aa8fdedbc79153e449035f90a06d715c6b2e4c667caed019ae85"),
@@ -50,6 +51,13 @@ PORTFOLIO0020 = {
     "app_tree": "98b64d2ade4519aa566f4ad1832aac9b33485691",
     "alembic_tree": "eb240860976eb6f3f04ad69cf9d169089c595e02",
 }
+PORTFOLIO0027 = {
+    "revision": "0027", "payload_version": 7,
+    "commit": FIXED_RELEASES["portfolio0027"][0],
+    "archive_sha256": FIXED_RELEASES["portfolio0027"][1],
+    "app_tree": "6f4fca6bb9f5915b783c71132db15a5b89c1e485",
+    "alembic_tree": "856cca12c640b84be757ca7d6979c996bd97fb15",
+}
 CATALOG_FINANCE = {
     "revision": "0026", "payload_version": 6, "profile": "deploy-recovery-v7",
 }
@@ -65,6 +73,8 @@ def profile_for(revision):
         return dict(MATRIX["current"])
     if revision == "0026":
         return dict(CATALOG_FINANCE)
+    if revision == "0028":
+        return {"revision": "0028", "payload_version": 8, "profile": "deploy-recovery-v9"}
     if revision == "0027":
         return {"revision": "0027", "payload_version": 7, "profile": "deploy-recovery-v8"}
     if revision in {f"{n:04}" for n in range(7, 15)}:
@@ -84,6 +94,7 @@ def validate_matrix(matrix=MATRIX):
             "program": "deploy/tests/portfolio-closure-recovery-fixture.py"}
             or matrix.get("portfolio0017") != PORTFOLIO0017
             or matrix.get("portfolio0020") != PORTFOLIO0020
+            or matrix.get("portfolio0027") != PORTFOLIO0027
             or retained["commit"] != FIXED_COMMIT or retained["app_tree"] != FIXED_APP
             or retained["alembic_tree"] != FIXED_ALEMBIC
             or retained['files'] != FIXED_FILES):
@@ -91,7 +102,7 @@ def validate_matrix(matrix=MATRIX):
     if any((matrix[lane]["commit"], matrix[lane]["archive_sha256"]) != identity
            for lane, identity in FIXED_RELEASES.items()):
         raise ValueError("immutable source release substituted")
-    for profile in (PORTFOLIO0017, PORTFOLIO0020):
+    for profile in (PORTFOLIO0017, PORTFOLIO0020, PORTFOLIO0027):
         for key, path in (("app_tree", "backend/app"), ("alembic_tree", "backend/alembic")):
             if git("rev-parse", profile["commit"] + ":" + path).decode().strip() != profile[key]:
                 raise ValueError("retained complete tree substitution")
@@ -123,9 +134,11 @@ def source_archive(lane="retained", *, archive=None, archive_sha=None):
     return data
 
 
-def archive_payloads():
-    return {"sources/" + lane + ".tar": source_archive(lane)
-            for lane in ("retained", "legacy0008", "legacy0007", "portfolio0017", "portfolio0020")}
+def archive_payloads(*, include_0027=False):
+    lanes = ("retained", "legacy0008", "legacy0007", "portfolio0017", "portfolio0020")
+    if include_0027:
+        lanes += ("portfolio0027",)
+    return {"sources/" + lane + ".tar": source_archive(lane) for lane in lanes}
 
 
 def qualified_revision(revision, kind, *, mode=None):
