@@ -17,6 +17,7 @@ from app.core.security import (
 )
 from app.models.auth import AuthSession
 from app.models.user import User
+from app.services.access_list import email_allowed
 from app.services.email import EmailSender
 from app.services.otp import OtpStore
 from app.services.portfolios import OwnedActivePortfolio, resolve_owned_active_portfolio
@@ -108,7 +109,7 @@ async def get_current_user(
             )
         )
     ).scalar_one_or_none()
-    if user is None:
+    if user is None or not await email_allowed(settings.auth_allowed_emails_file, user.email):
         raise _not_authenticated()
     return user
 

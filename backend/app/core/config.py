@@ -142,6 +142,7 @@ class Settings(MarketValuationSettings):
     database_ssl_ca_file: str | None = Field(default=None, repr=False)
     otp_hmac_secret: SecretStr = Field(repr=False)
     jwt_secret: SecretStr = Field(repr=False)
+    auth_allowed_emails_file: str = Field(default="", repr=False)
 
     # Create attempts include retries/rejections; successful grants have a
     # separate durable100/UTC-day ceiling in the serialized SQL authority.

@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 
 import httpx
@@ -34,17 +35,22 @@ async def test_file_controls_code_delivery_and_existing_sessions_without_restart
 ) -> None:
     owner = unique_email("owner")
     newcomer = unique_email("new")
-    allowed_file.write_text(f"  {owner.upper()} \n\n", encoding="utf-8")
+    await asyncio.to_thread(allowed_file.write_text, f"  {owner.upper()} \n\n", encoding="utf-8")
     await sign_in(auth_client, outbox, owner)
     assert (await auth_client.get("/api/v2/me")).status_code == 200
+    assert (
+        await auth_client.post("/api/v1/auth/refresh", headers=await csrf_headers(auth_client))
+    ).status_code == 204
 
     replacement = allowed_file.with_suffix(".new")
-    replacement.write_text(f"{newcomer}\n", encoding="utf-8")
-    replacement.replace(allowed_file)
+    await asyncio.to_thread(replacement.write_text, f"{newcomer}\n", encoding="utf-8")
+    await asyncio.to_thread(replacement.replace, allowed_file)
     assert (await auth_client.get("/api/v2/me")).status_code == 401
 
     headers = await csrf_headers(auth_client)
-    blocked = await auth_client.post("/api/v1/auth/request-code", json={"email": owner}, headers=headers)
+    blocked = await auth_client.post(
+        "/api/v1/auth/request-code", json={"email": owner}, headers=headers
+    )
     assert_registration_closed(blocked)
     never_registered = await auth_client.post(
         "/api/v1/auth/request-code", json={"email": unique_email()}, headers=headers
@@ -64,27 +70,27 @@ async def test_removal_before_verification_denies_pending_code(
     auth_client: httpx.AsyncClient, outbox: OutboxSender, allowed_file: Path
 ) -> None:
     email = unique_email()
-    allowed_file.write_text(email, encoding="utf-8")
+    await asyncio.to_thread(allowed_file.write_text, email, encoding="utf-8")
     code = await request_and_get_code(auth_client, outbox, email)
-    allowed_file.unlink()
+    await asyncio.to_thread(allowed_file.unlink)
     headers = await csrf_headers(auth_client)
     request = {"email": email, "code": code}
     assert_registration_closed(
         await auth_client.post("/api/v2/auth/verify-code", json=request, headers=headers)
     )
     assert (await auth_client.get("/api/v2/me")).status_code == 401
-    allowed_file.write_text(email, encoding="utf-8")
+    await asyncio.to_thread(allowed_file.write_text, email, encoding="utf-8")
     assert (
         await auth_client.post("/api/v2/auth/verify-code", json=request, headers=headers)
     ).status_code == 200
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("bad_data", [b"", b"user@example.com\ninvalid", b"\xff"])
+@pytest.mark.parametrize("bad_data", [b"", b"user@example.com\ninvalid", b"\xff", b" " * 16385])
 async def test_invalid_file_closes_sign_in(
     auth_client: httpx.AsyncClient, outbox: OutboxSender, allowed_file: Path, bad_data: bytes
 ) -> None:
-    allowed_file.write_bytes(bad_data)
+    await asyncio.to_thread(allowed_file.write_bytes, bad_data)
     assert_registration_closed(
         await auth_client.post(
             "/api/v1/auth/request-code",
