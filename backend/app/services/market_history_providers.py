@@ -4,7 +4,7 @@ import json
 import re
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
+from decimal import ROUND_HALF_EVEN, Decimal, localcontext
 from typing import Any
 
 import httpx
@@ -14,12 +14,17 @@ from app.services.stock_catalog_sources import SYMBOL_PATTERN
 
 KRAKEN_OHLC_URL = "https://api.kraken.com/0/public/OHLC"
 IEX_BARS_URL = "https://data.alpaca.markets/v2/stocks/bars"
+COIN_METRICS_HISTORY_URL = "https://community-api.coinmetrics.io/v4/timeseries/asset-metrics"
 MAX_HISTORY_RESPONSE_BYTES = 256 * 1024
 _IEX_ROWS = 1000
 _IEX_PAGES = 2
 _KRAKEN_ROWS = 720
+_COIN_METRICS_ROWS = 1500
+_COIN_METRICS_FREQUENCY = {"1D": "1m", "1W": "1h", "1M": "1d"}
 _JSON_CHUNK_SIZE = 8192
 _CLOSE_PATTERN = re.compile(r"[0-9]{1,18}(?:\.[0-9]{1,12})?")
+_REFERENCE_PATTERN = re.compile(r"[0-9]{1,18}(?:\.[0-9]{1,36})?")
+_HISTORY_CLOSE_SCALE = Decimal("0.000000000001")
 _UTC_TIMESTAMP = re.compile(
     r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
     r"(?:\.[0-9]{1,6}0{0,3})?(?:Z|\+00:00)"
@@ -93,6 +98,78 @@ async def _get_json(
     if not isinstance(body, dict):
         raise HistoryProviderError("invalid history body")
     return body
+
+
+async def fetch_coin_metrics_history(
+    http: httpx.AsyncClient,
+    symbol: str,
+    window: HistoryWindow,
+    *,
+    before_attempt: BeforeHistoryAttempt | None = None,
+    max_bytes: int = MAX_HISTORY_RESPONSE_BYTES,
+) -> HistoryBatch:
+    if window.source != "coin_metrics" or not re.fullmatch(r"[a-z0-9]{1,14}", symbol):
+        raise HistoryProviderError("invalid Coin Metrics history request")
+    daily = window.range == "1M"
+    metric = "PriceUSD" if daily else "ReferenceRateUSD"
+    # PriceUSD is dated by the UTC day it closes. The intraday reference
+    # rates instead carry the actual observation time.
+    offset = window.step if daily else timedelta()
+    first = window.request_start_at + window.step - offset
+    last = window.end_at - offset
+    body = await _get_json(
+        http,
+        COIN_METRICS_HISTORY_URL,
+        {
+            "assets": symbol,
+            "metrics": metric,
+            "frequency": _COIN_METRICS_FREQUENCY[window.range],
+            "start_time": first.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "end_time": last.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "page_size": _COIN_METRICS_ROWS,
+        },
+        before_attempt,
+        max_bytes,
+    )
+    rows = body.get("data")
+    if not isinstance(rows, list) or len(rows) > _COIN_METRICS_ROWS:
+        raise HistoryProviderError("invalid Coin Metrics history rows")
+    bars: list[HistoryBar] = []
+    previous: datetime | None = None
+    for row in rows:
+        if not isinstance(row, dict) or row.get("asset") != symbol:
+            raise HistoryProviderError("unexpected Coin Metrics history identity")
+        stamp = row.get("time")
+        if not isinstance(stamp, str) or not _UTC_TIMESTAMP.fullmatch(stamp):
+            raise HistoryProviderError("invalid Coin Metrics history timestamp")
+        try:
+            observed = datetime.fromisoformat(stamp).astimezone(UTC)
+        except ValueError:
+            raise HistoryProviderError("invalid Coin Metrics history timestamp") from None
+        if not first <= observed <= last or (previous is not None and observed <= previous):
+            raise HistoryProviderError("unordered or out-of-window Coin Metrics history rows")
+        previous = observed
+        close_at = observed + offset
+        # A 5m chart uses only exact reference observations on the 5m grid.
+        # Missing observations stay missing, including a null price.
+        close = row.get(metric)
+        if (close_at - _EPOCH) % window.step or close is None:
+            continue
+        if not isinstance(close, str) or not _REFERENCE_PATTERN.fullmatch(close):
+            raise HistoryProviderError("invalid Coin Metrics historical price")
+        try:
+            value = Decimal(close)
+            exponent = value.as_tuple().exponent
+            if isinstance(exponent, int) and exponent < -12:
+                with localcontext() as ctx:
+                    ctx.prec = 32
+                    value = value.quantize(_HISTORY_CLOSE_SCALE, rounding=ROUND_HALF_EVEN)
+            bars.append(HistoryBar(close_at - window.step, validate_close(value)))
+        except ValueError, ArithmeticError:
+            raise HistoryProviderError("invalid Coin Metrics historical price") from None
+    # One bounded request is enough for the permitted windows. Never follow
+    # a URL supplied by the upstream provider.
+    return HistoryBatch(tuple(bars), complete=not body.get("next_page_url"))
 
 
 def _kraken_bar(row: object) -> HistoryBar:

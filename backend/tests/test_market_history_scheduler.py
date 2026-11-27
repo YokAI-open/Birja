@@ -19,7 +19,11 @@ from app.schemas.market_history import MarketHistoryQuery, MarketHistoryScopes
 from app.services.kraken import TICKER_URL, fetch_tickers_isolated
 from app.services.market_history_authority import resolve_history
 from app.services.market_history_demand import _queue, complete_history, request_history
-from app.services.market_history_providers import IEX_BARS_URL, KRAKEN_OHLC_URL
+from app.services.market_history_providers import (
+    COIN_METRICS_HISTORY_URL,
+    IEX_BARS_URL,
+    KRAKEN_OHLC_URL,
+)
 from app.tasks import market_history, stock_scheduler
 from tests.helpers import put_price, sign_in, unique_email
 from tests.test_market_history_api import BTC, URL, crypto_scope, scope_fields
@@ -74,6 +78,111 @@ async def enqueue(factory, redis, settings, query, now=NOW):
 
 def forbidden(_: httpx.Request) -> httpx.Response:
     pytest.fail("Unexpected provider request from an ineligible chart job")
+
+
+async def test_production_history_switch_disallows_legacy_sources(db, settings, history_server):
+    legacy = crypto_scope(NOW, history_server)
+    config = schedule(settings, legacy).model_copy(update={"env": "prod"})
+    query = MarketHistoryQuery.model_validate(BTC)
+    assert not config.market_history_enabled
+    assert await resolve_history(db, config, query, NOW) is None
+
+    config.market_history_coin_metrics_enabled = True
+    current = await resolve_history(db, config, query, NOW)
+    assert current is not None and current.window.source == "coin_metrics"
+    stock = MarketHistoryQuery.model_validate(
+        {"instrument": {"kind": "featured", "symbol": "AAPL"}, "range": "1W"}
+    )
+    assert await resolve_history(db, config, stock, NOW) is None
+
+
+async def test_coin_metrics_serves_authenticated_chart_and_honors_independent_quota(
+    engine, settings, redis_client, history_server, auth_client, outbox, monkeypatch
+) -> None:
+    from app.api.v2 import market_history as api
+
+    # Freeze the API and worker on the same window, with enough TTL for real Redis.
+    now = datetime.now(UTC) + timedelta(minutes=2)
+
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return now
+
+    monkeypatch.setattr(api, "datetime", Clock)
+    monkeypatch.setattr(settings, "market_history_coin_metrics_enabled", True)
+    config = schedule(settings, None, market_history_coin_metrics_enabled=True)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    await sign_in(auth_client, outbox, unique_email())
+    headers = {"X-CSRF-Token": auth_client.cookies["bj_csrf"]}
+    assert (await auth_client.post(URL, json=BTC, headers=headers)).json()["state"] == "pending"
+    authority = await enqueue(
+        factory, redis_client, config, MarketHistoryQuery.model_validate(BTC), now
+    )
+    attempts = 0
+
+    def upstream(request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        assert str(request.url).split("?")[0] == COIN_METRICS_HISTORY_URL
+        assert request.url.params["assets"] == "btc"
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "asset": "btc",
+                        "time": (slot.start + authority.window.step).isoformat(),
+                        "ReferenceRateUSD": "62000.12345678",
+                    }
+                    for slot in authority.window.slots
+                ],
+            },
+        )
+
+    quota_key = market_history._COIN_METRICS_QUOTA_KEY
+    await redis_client.delete(quota_key)
+    try:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(upstream)) as http:
+            results = await market_history.run_history_cycle(
+                sessionmaker=factory,
+                redis=redis_client,
+                quota_redis=redis_client,
+                http=http,
+                stock_http=None,
+                settings=config,
+                now=lambda: now,
+            )
+            assert results.accepted == 1
+        response = await auth_client.post(URL, json=BTC, headers=headers)
+        assert "no-store" in response.headers["cache-control"]
+        body = response.json()
+        assert body["state"] == "ready"
+        assert body["series"]["source"] == "coin_metrics"
+        assert body["series"]["points"][-1]["close"] == "62000.12345678"
+        assert await redis_client.zcard(quota_key) == attempts == 1
+
+        second_query = MarketHistoryQuery.model_validate({**BTC, "range": "1D"})
+        await enqueue(factory, redis_client, config, second_query, now)
+        limit = market_history._COIN_METRICS_REQUESTS_PER_MINUTE
+        seconds, microseconds = await redis_client.time()
+        timestamp = seconds * 1000 + microseconds // 1000
+        await redis_client.zadd(quota_key, {f"prior-{index}": timestamp for index in range(limit)})
+        async with httpx.AsyncClient(transport=httpx.MockTransport(forbidden)) as http:
+            results = await market_history.run_history_cycle(
+                sessionmaker=factory,
+                redis=redis_client,
+                quota_redis=redis_client,
+                http=http,
+                stock_http=None,
+                settings=config,
+                now=lambda: now,
+            )
+            assert results.accepted == 0 and results.rejected == 1
+        response = await auth_client.post(URL, json={**BTC, "range": "1D"}, headers=headers)
+        assert response.json()["state"] == "unavailable"
+    finally:
+        await redis_client.delete(quota_key)
 
 
 async def test_kraken_history_publishes_once_and_keeps_current_price(

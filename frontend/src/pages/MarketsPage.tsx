@@ -4,6 +4,7 @@ import { Search } from "lucide-react";
 import { MarketHistoryChange, MarketHistoryChart } from "@/components/MarketHistoryChart";
 import { MarketOpening } from "@/components/MarketOpening";
 import { PortfolioSwitcher } from "@/components/PortfolioSwitcher";
+import { StockHistoryChart } from "@/components/StockHistoryChart";
 import { ApiError } from "@/api/client";
 import type { HistoryInstrument, HistoryRange } from "@/api/marketHistory";
 import type { StockCatalogItem } from "@/api/stockCatalog";
@@ -219,17 +220,13 @@ export default function MarketsPage({
   const closingMarkTime = marketClosed
     ? (catalogMark?.quote?.event_at ?? stockQuote?.event_at)
     : undefined;
-  const historyInstrument: HistoryInstrument | null = !asset
-    ? null
-    : catalogListing
-      ? !listingChanged && !missingListing && catalogListing.state === "active"
-        ? {
-            kind: "catalog",
-            catalog_id: catalogListing.catalog_id,
-            listing_version: catalogListing.listing_version,
-          }
-        : null
-      : { kind: stockMarket ? "featured" : "crypto", symbol: asset.symbol };
+  const historyInstrument: HistoryInstrument | null =
+    asset && !stockMarket ? { kind: "crypto", symbol: asset.symbol } : null;
+  const stockChartExchange = catalogListing
+    ? !listingChanged && !missingListing && catalogListing.state === "active"
+      ? catalogListing.listing_exchange
+      : null
+    : stock?.listing_exchange;
   const history = useMarketHistory(historyInstrument, range);
   const dayChange = history.response?.series?.day_change_pct;
   const open =
@@ -620,6 +617,14 @@ export default function MarketsPage({
                 range={range}
                 onRange={setRange}
                 {...history}
+              />
+            )}
+            {stockChartExchange && (
+              <StockHistoryChart
+                exchange={stockChartExchange}
+                ticker={asset.symbol}
+                range={range}
+                onRange={setRange}
               />
             )}
             <div className="market-action-row">

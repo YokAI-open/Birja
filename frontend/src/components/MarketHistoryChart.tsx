@@ -182,6 +182,7 @@ export function MarketHistoryChart({
   const selectedRange = useRef<HTMLButtonElement>(null);
   const series = response?.series;
   const usable = series && series.points.length > 0;
+  const referencePrices = series?.source === "coin_metrics" && series.interval_minutes !== 1440;
   const singleSession = range === "1D" && series?.time_basis === "regular_session";
   const period = singleSession ? "Regular session" : periods[range];
   const stateMessage = loading
@@ -192,9 +193,34 @@ export function MarketHistoryChart({
         ? "History is still loading"
         : "Couldn’t load price history";
   const source =
-    series?.source === "kraken"
-      ? "Kraken · UTC intervals"
-      : "IEX · Regular sessions · Split-adjusted";
+    series?.source === "kraken" ? (
+      "Kraken · UTC intervals"
+    ) : series?.source === "coin_metrics" ? (
+      <>
+        <a
+          className="underline underline-offset-2"
+          href="https://github.com/coinmetrics/product-docs/blob/master/docs/packages/coin-metrics-community-data.md"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Coin Metrics
+        </a>
+        {series.interval_minutes === 1440
+          ? " · Daily USD closes · UTC"
+          : " · USD reference prices · UTC"}
+        {" · "}
+        <a
+          className="underline underline-offset-2"
+          href="https://creativecommons.org/licenses/by-nc/4.0/"
+          target="_blank"
+          rel="noreferrer"
+        >
+          CC BY-NC 4.0
+        </a>
+      </>
+    ) : (
+      "IEX · Regular sessions · Split-adjusted"
+    );
 
   return (
     <section className="market-history" aria-label="Price history">
@@ -240,12 +266,12 @@ export function MarketHistoryChart({
               <summary>Price data</summary>
               <table>
                 <caption className="sr-only">
-                  {symbol} closing prices · {period}
+                  {symbol} {referencePrices ? "reference prices" : "closing prices"} · {period}
                 </caption>
                 <thead>
                   <tr>
                     <th scope="col">Interval end (local)</th>
-                    <th scope="col">Close (USD)</th>
+                    <th scope="col">{referencePrices ? "Reference price (USD)" : "Close (USD)"}</th>
                   </tr>
                 </thead>
                 <tbody>

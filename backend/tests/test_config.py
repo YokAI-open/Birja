@@ -16,6 +16,12 @@ def action_settings(**changes):
     )
 
 
+@pytest.mark.parametrize("raw, enabled", [("true", True), ("false", False), ("treu", False)])
+def test_history_switch_fails_closed_without_stopping_the_scheduler(monkeypatch, raw, enabled):
+    monkeypatch.setenv("MARKET_HISTORY_COIN_METRICS_ENABLED", raw)
+    assert action_settings().market_history_enabled is enabled
+
+
 @pytest.mark.parametrize(
     "changes",
     [

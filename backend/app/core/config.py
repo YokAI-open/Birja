@@ -38,6 +38,34 @@ class _StockSettings(BaseSettings):
     market_history_scope_json: Annotated[MarketHistoryScopes | None, NoDecode] = Field(
         default=None, repr=False
     )
+    market_history_coin_metrics_enabled: bool = False
+
+    @field_validator("market_history_coin_metrics_enabled", mode="before")
+    @classmethod
+    def _decode_coin_metrics_history_switch(cls, value: object) -> bool:
+        if type(value) is bool:
+            return value
+        if type(value) is int:
+            return value == 1
+        return isinstance(value, str) and value.strip().casefold() in {
+            "1",
+            "true",
+            "t",
+            "yes",
+            "y",
+            "on",
+        }
+
+    @property
+    def legacy_market_history_scopes(self) -> MarketHistoryScopes | None:
+        return self.market_history_scope_json if self.env != "prod" else None
+
+    @property
+    def market_history_enabled(self) -> bool:
+        return (
+            self.market_history_coin_metrics_enabled
+            or self.legacy_market_history_scopes is not None
+        )
 
     @field_validator("market_history_scope_json", mode="before")
     @classmethod

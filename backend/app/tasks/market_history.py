@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import SchedulerSettings
 from app.schemas.market_history import (
+    CoinMetricsHistoryScope,
     HistoryCoverage,
     HistoryState,
     IexHistoryScope,
@@ -42,6 +43,7 @@ from app.services.market_history_demand import (
 )
 from app.services.market_history_providers import (
     HistoryProviderError,
+    fetch_coin_metrics_history,
     fetch_iex_history,
     fetch_kraken_history,
 )
@@ -51,6 +53,10 @@ from app.tasks.stock_scheduler import _admissions, account_request_ceiling, rese
 
 HISTORY_CHECK_INTERVAL_SECONDS = 2
 _WALL_SECONDS = 5
+# One attempt per serial 2s history check and at most 20/minute. This is
+# below the Community allowance of 10 requests in a rolling six seconds.
+_COIN_METRICS_REQUESTS_PER_MINUTE = 20
+_COIN_METRICS_QUOTA_KEY = "sim:history-quota:v1:coin-metrics"
 _CACHE_SECONDS = {"1D": 120, "1W": 600, "1M": 600}
 _CACHE_STATES: dict[HistoryCoverage, HistoryState] = {
     "complete": "ready",
@@ -236,6 +242,16 @@ async def _consume(
             raise _HistoryDeferred
         if isinstance(scope, IexHistoryScope):
             permitted = await _reserve_alpaca(quota_redis, settings, scope, evidence, checked_at)
+        elif isinstance(scope, CoinMetricsHistoryScope):
+            permitted = bool(
+                await quota_redis.eval(
+                    _WINDOW,
+                    1,
+                    _COIN_METRICS_QUOTA_KEY,
+                    _COIN_METRICS_REQUESTS_PER_MINUTE,
+                    secrets.token_hex(16),
+                )
+            )
         else:
             permitted = await _reserve_kraken(
                 quota_redis, scope, authority.provider_symbol, tracker
@@ -254,7 +270,15 @@ async def _consume(
                 raise _HistoryDeferred
 
     try:
-        if isinstance(scope, IexHistoryScope) and stock_http is not None:
+        if isinstance(scope, CoinMetricsHistoryScope):
+            batch = await fetch_coin_metrics_history(
+                http,
+                authority.provider_symbol,
+                authority.window,
+                before_attempt=before_attempt,
+                max_bytes=scope.max_response_bytes,
+            )
+        elif isinstance(scope, IexHistoryScope) and stock_http is not None:
             batch = await fetch_iex_history(
                 stock_http,
                 authority.provider_symbol,
@@ -303,7 +327,7 @@ async def run_history_cycle(
     tracker: KrakenHistoryBudget | None = None,
     now: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> CycleResult:
-    if redis is None or settings.market_history_scope_json is None:
+    if redis is None or not settings.market_history_enabled:
         return CycleResult("ok")
     job = None
     failed = False

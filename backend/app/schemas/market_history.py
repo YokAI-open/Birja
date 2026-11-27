@@ -8,7 +8,8 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, PlainSerialize
 from app.schemas.stock_catalog import CatalogIdInput
 
 HistoryRange = Literal["1D", "1W", "1M"]
-HistorySource = Literal["kraken", "alpaca_iex"]
+HistorySource = Literal["kraken", "alpaca_iex", "coin_metrics"]
+HistoryInterval = Literal[5, 30, 60, 240, 1440]
 HistoryCoverage = Literal["complete", "partial", "empty"]
 HistoryTimeliness = Literal["on_time", "delayed", "unknown"]
 HistoryState = Literal["ready", "partial", "empty", "pending", "unavailable"]
@@ -62,7 +63,7 @@ class MarketHistorySeries(HistoryContract):
     currency: Literal["USD"] = "USD"
     time_basis: Literal["utc", "regular_session"]
     adjustment: Literal["raw", "split"]
-    interval_minutes: Literal[5, 30, 60, 240]
+    interval_minutes: HistoryInterval
     start_at: AwareDatetime
     end_at: AwareDatetime
     as_of: AwareDatetime | None
@@ -133,6 +134,14 @@ class KrakenHistoryScope(HistoryScope):
 class IexHistoryScope(HistoryScope):
     account: Annotated[str, Field(min_length=1, max_length=128)]
     targets: Annotated[tuple[EquityHistoryBinding, ...], Field(min_length=1, max_length=2048)]
+
+
+class CoinMetricsHistoryScope(HistoryContract):
+    """Fixed Community chart policy for the noncommercial deployment."""
+
+    generation: Literal[1] = 1
+    retention_seconds: Literal[600] = 600
+    max_response_bytes: Literal[262144] = 262144
 
 
 class MarketHistoryScopes(HistoryContract):

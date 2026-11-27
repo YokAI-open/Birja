@@ -49,3 +49,13 @@ before enabling history. The ready chart includes its actual latest interval
 time. Check any source-specific browser display or retention condition as
 part of live qualification. The current local results do not establish a
 live source scope. [Source qualification](23-SOURCE-QUALIFICATION.md)
+
+## November 27 replacement-source review
+
+The independent review covered exact source identities, decimal and time
+window handling, request and cache bounds, the widget frame policy, and
+independence from quote and order paths. No release-blocking issues were
+found. The follow-up made malformed optional history settings disable the
+feature and stabilized the Redis regression clock across hour boundaries.
+The embedded stock chart owns its data and coverage states. Birja retains
+its native equivalent price table for crypto.
