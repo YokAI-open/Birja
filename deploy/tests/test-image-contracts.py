@@ -610,12 +610,12 @@ class Identity(unittest.TestCase):
 
 class Scans(unittest.TestCase):
     def producer(self):
-        spec = importlib.util.spec_from_file_location("image_exception", ROOT / "deploy/scan-images.py")
+        spec = importlib.util.spec_from_file_location("image_scan", ROOT / "deploy/scan-images.py")
         producer = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(producer)
         return producer
 
-    def accepted_fixture(self):
+    def previous_advisory_fixture(self):
         return {
             "Target": "Node.js", "Class": "lang-pkgs", "Type": "node-pkg",
             "Vulnerabilities": [{
@@ -627,48 +627,17 @@ class Scans(unittest.TestCase):
             }],
         }
 
-    def test_exact_image_advisory_scope_expiry_and_source_binding(self):
+    def test_high_and_critical_findings_are_retained_and_malformed_data_fails(self):
         producer = self.producer()
-        result = self.accepted_fixture()
-        finding = result["Vulnerabilities"][0]
-        now = datetime.datetime(2026, 11, 17, tzinfo=datetime.UTC)
-        source = (ROOT / "frontend/Dockerfile").read_bytes()
-        kwargs = {"now": now, "dockerfile": source}
-        self.assertTrue(producer.accepted_finding("node", result, finding, **kwargs))
-        for target in ["runtime", "builder", "postgres", "redis"]:
-            self.assertFalse(producer.accepted_finding(target, result, finding, **kwargs))
-        for field, value in [
-            ("Severity", "CRITICAL"), ("VulnerabilityID", "CVE-2026-119170"),
-            ("VendorIDs", []), ("VendorIDs", ["GHSA-other-advisory"]),
-            ("PkgName", "python-3.14"), ("PkgID", "picomatch@4.0.7"),
-            ("InstalledVersion", "4.0.7"), ("PkgPath", "app/node_modules/picomatch/package.json"),
-        ]:
-            with self.subTest(field=field, value=value):
-                self.assertFalse(producer.accepted_finding("node", result, {**finding, field: value}, **kwargs))
-        for field, value in [("Target", "Python"), ("Class", "os-pkgs"), ("Type", "apk")]:
-            self.assertFalse(producer.accepted_finding("node", {**result, field: value}, finding, **kwargs))
-        for changed in [source + b"\n", b"", source.replace(b"11.21.2", b"11.21.3")]:
-            self.assertFalse(producer.accepted_finding("node", result, finding, now=now, dockerfile=changed))
-        for expired in [datetime.datetime(2026, 12, 17, tzinfo=datetime.UTC), datetime.datetime(2027, 1, 1, tzinfo=datetime.UTC), datetime.datetime(2026, 11, 17)]:
-            self.assertFalse(producer.accepted_finding("node", result, finding, now=expired, dockerfile=source))
-
-    def test_accepted_image_risk_keeps_other_findings_and_rejects_malformed_data(self):
-        producer = self.producer()
-        result = self.accepted_fixture()
-        kwargs = {"now": datetime.datetime(2026, 11, 17, tzinfo=datetime.UTC)}
-        findings, accepted = producer.classify_findings("node", [result], **kwargs)
-        self.assertEqual((len(findings), len(accepted)), (1, 1))
-        python = {"VulnerabilityID": "CVE-2026-119170", "Severity": "HIGH", "PkgName": "python-3.14"}
-        for extra in [python, {"Severity": "HIGH", "VulnerabilityID": "new"}, {"Severity": "CRITICAL", "VulnerabilityID": "new"}]:
-            mixed = {**result, "Vulnerabilities": result["Vulnerabilities"] + [extra]}
-            findings, accepted = producer.classify_findings("node", [mixed], **kwargs)
-            self.assertEqual((len(findings), len(accepted)), (2, 1))
-        for target in ["runtime", "builder", "postgres", "redis"]:
-            findings, accepted = producer.classify_findings(target, [result], **kwargs)
-            self.assertEqual((len(findings), len(accepted)), (1, 0))
-        for malformed in [None, [], [{}], [{"Target": "x", "Vulnerabilities": {}}], [{"Target": "x", "Vulnerabilities": [{"Severity": "unexpected"}]}]]:
+        result = self.previous_advisory_fixture()
+        original = result["Vulnerabilities"][0]
+        critical = {"Severity": "CRITICAL", "VulnerabilityID": "critical-fixture"}
+        result["Vulnerabilities"] += [critical, {"Severity": "MEDIUM"}]
+        self.assertEqual(producer.blocking_findings([result]), [original, critical])
+        for malformed in [None, [], [{}], [{"Target": "x", "Vulnerabilities": {}}],
+                          [{"Target": "x", "Vulnerabilities": [{"Severity": "unexpected"}]}]]:
             with self.subTest(malformed=malformed), self.assertRaises((ValueError, KeyError)):
-                producer.classify_findings("node", malformed, **kwargs)
+                producer.blocking_findings(malformed)
 
     def workflow_handoff(self, root, unavailable, inputs):
         """Execute the actual CI scan shell with one missing built image."""
@@ -736,9 +705,9 @@ class Scans(unittest.TestCase):
         }
         for mode in [
             "clean",
-            "accepted-node",
-            "accepted-node-error",
-            "accepted-node-mixed",
+            "previous-advisory",
+            "previous-advisory-error",
+            "previous-advisory-mixed",
             "high",
             "critical",
             "scanner",
@@ -854,12 +823,12 @@ class Scans(unittest.TestCase):
                     ],
                 }
                 status = 0
-                if archive.stem == "node" and mode.startswith("accepted-node"):
-                    doc["Results"] = [self.accepted_fixture()]
+                if archive.stem == "node" and mode.startswith("previous-advisory"):
+                    doc["Results"] = [self.previous_advisory_fixture()]
                     status = 1
-                    if mode == "accepted-node-error":
+                    if mode == "previous-advisory-error":
                         status = 2
-                    elif mode == "accepted-node-mixed":
+                    elif mode == "previous-advisory-mixed":
                         doc["Results"][0]["Vulnerabilities"].append({
                             "Severity": "HIGH", "VulnerabilityID": "CVE-2026-119170", "PkgName": "python-3.14"
                         })
@@ -899,17 +868,15 @@ class Scans(unittest.TestCase):
                         result = producer.main()
                 else:
                     result = producer.run_scans(Path(tmp), selected)
-                self.assertEqual(result, 0 if mode in {"clean", "accepted-node"} else 1, mode)
+                self.assertEqual(result, 0 if mode == "clean" else 1, mode)
                 evidence = json.loads((Path(tmp) / "status.json").read_text())
-                if mode.startswith("accepted-node"):
+                if mode.startswith("previous-advisory"):
                     node = evidence["targets"]["node"]
-                    self.assertEqual(node["risk_status"], "accepted-risk")
-                    self.assertEqual(node["accepted_findings"], 1)
-                    self.assertEqual(node["blocking_findings"], 1 if mode == "accepted-node-mixed" else 0)
-                    self.assertEqual(node["qualifying_findings"], 2 if mode == "accepted-node-mixed" else 1)
-                    self.assertEqual(node["accepted_risk"]["issue"], producer.IMAGE_EXCEPTION["issue"])
+                    expected = 2 if mode == "previous-advisory-mixed" else 1
+                    self.assertEqual(node["blocking_findings"], expected)
+                    self.assertEqual(node["qualifying_findings"], expected)
                     self.assertIn("CVE-2026-112366", (Path(tmp) / "node.json").read_text())
-                    self.assertEqual(node["ok"], mode == "accepted-node")
+                    self.assertFalse(node["ok"])
                 self.assertEqual(set(evidence["targets"]), set(inputs))
                 self.assertEqual(
                     len(seen),

@@ -1,46 +1,21 @@
 #!/usr/bin/env node
-// Owner-approved, temporary exception: https://github.com/YokAI-open/Birja/issues/35
-// This reports accepted risk; it does not remediate or hide the advisory.
-import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-export const POLICY = Object.freeze({
-  issue: "https://github.com/YokAI-open/Birja/issues/35",
-  advisory: "https://github.com/advisories/GHSA-fc5q-39xc-vjpf",
-  expires: "2026-12-17T00:00:00.000Z",
-  manifestSha256:
-    "11809dab95c6a39fece6c2e2c76ee8276efb678a98705cde69ff809c9be471e6",
-  lockSha256:
-    "48ed8101bd77b94e7b776c1e68a684325ae581a77151299f88a3431f279bf7b7",
-});
 const LEVELS = ["info", "low", "moderate", "high", "critical"];
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const hash = (value) => createHash("sha256").update(value).digest("hex");
 const object = (value) =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 const demand = (condition, message) => {
   if (!condition) throw new Error(message);
 };
 
-export function evaluateAudit(
-  report,
-  { status, manifest, lock, now = new Date() },
-) {
+export function evaluateAudit(report, { status, lock }) {
   demand(
     Number.isInteger(status) && (status === 0 || status === 1),
     "npm audit did not produce a successful audit response",
-  );
-  demand(
-    Number.isFinite(now.valueOf()) && now < new Date(POLICY.expires),
-    "Accepted-risk review expired or clock invalid",
-  );
-  demand(
-    hash(manifest) === POLICY.manifestSha256 &&
-      hash(lock) === POLICY.lockSha256,
-    "Dependency files changed; accepted risk requires fresh review",
   );
   const locked = JSON.parse(lock);
   demand(object(locked.packages), "Invalid locked package inventory");
@@ -58,8 +33,6 @@ export function evaluateAudit(
   );
   const entries = Object.entries(report.vulnerabilities);
   const counts = Object.fromEntries(LEVELS.map((level) => [level, 0]));
-  const references = new Map();
-  const roots = new Set();
   for (const [name, entry] of entries) {
     demand(
       object(entry) && entry.name === name && LEVELS.includes(entry.severity),
@@ -82,26 +55,20 @@ export function evaluateAudit(
       "Invalid vulnerability effects",
     );
     counts[entry.severity] += 1;
-    demand(
-      entry.severity !== "critical",
-      `Critical finding is not excepted: ${name}`,
-    );
     for (const node of entry.nodes) {
       demand(
         typeof node === "string" &&
           Object.hasOwn(locked.packages, node) &&
           node.endsWith(`node_modules/${name}`),
-        "Audit node does not match the reviewed lock",
+        "Audit node does not match the lock",
       );
     }
-    const edges = [];
     for (const cause of entry.via) {
       if (typeof cause === "string") {
         demand(
           Object.hasOwn(report.vulnerabilities, cause),
           "Broken vulnerability cause reference",
         );
-        edges.push(cause);
       } else {
         demand(
           object(cause) &&
@@ -117,33 +84,8 @@ export function evaluateAudit(
           LEVELS.indexOf(entry.severity) >= LEVELS.indexOf(cause.severity),
           "Advisory severity is hidden by its entry",
         );
-        demand(
-          cause.severity !== "critical",
-          "Critical advisory cause is not excepted",
-        );
-        if (cause.severity === "high") {
-          demand(
-            name === "picomatch" &&
-              cause.name === "picomatch" &&
-              cause.dependency === "picomatch" &&
-              cause.url === POLICY.advisory &&
-              cause.range.replaceAll(" ", "") === "<=4.0.7",
-            `Unaccepted HIGH advisory: ${cause.url}`,
-          );
-          demand(
-            entry.nodes.every((node) =>
-              [
-                "node_modules/picomatch",
-                "node_modules/micromatch/node_modules/picomatch",
-              ].includes(node),
-            ),
-            "Unreviewed picomatch path",
-          );
-          roots.add(name);
-        }
       }
     }
-    references.set(name, edges);
   }
   for (const level of LEVELS) {
     demand(
@@ -156,44 +98,18 @@ export function evaluateAudit(
     report.metadata.vulnerabilities.total === entries.length,
     "Audit total count is inconsistent",
   );
+  const blocking = counts.high + counts.critical;
   demand(
-    status === (counts.high ? 1 : 0),
-    "npm exit status contradicts HIGH findings",
+    status === (blocking ? 1 : 0),
+    "npm exit status contradicts HIGH/CRITICAL findings",
   );
-  // Reachability to an actual allowed leaf handles legitimate parent cycles,
-  // while a disconnected cycle can never manufacture accepted risk.
-  const reachesRoot = (start) => {
-    const seen = new Set();
-    const pending = [start];
-    while (pending.length) {
-      const name = pending.pop();
-      if (roots.has(name)) return true;
-      if (!seen.has(name)) {
-        seen.add(name);
-        pending.push(...references.get(name));
-      }
-    }
-    return false;
-  };
-  for (const [name, entry] of entries) {
-    if (entry.severity === "high")
-      demand(
-        reachesRoot(name),
-        `HIGH finding has no accepted advisory root: ${name}`,
-      );
-  }
-  return {
-    status: counts.high ? "accepted-risk" : "no-blocking-findings",
-    counts,
-    issue: POLICY.issue,
-    expires: POLICY.expires,
-  };
+  demand(blocking === 0, "npm audit found HIGH or CRITICAL vulnerabilities");
+  return { status: "no-blocking-findings", counts };
 }
 
 export function runAudit({
   run = spawnSync,
   read = readFileSync,
-  now = new Date(),
   stdout = process.stdout,
   stderr = process.stderr,
 } = {}) {
@@ -221,9 +137,7 @@ export function runAudit({
     );
     const verdict = evaluateAudit(JSON.parse(result.stdout), {
       status: result.status,
-      manifest: read(join(directory, "package.json")),
       lock: read(join(directory, "package-lock.json")),
-      now,
     });
     stdout.write(JSON.stringify(verdict) + "\n");
     return 0;

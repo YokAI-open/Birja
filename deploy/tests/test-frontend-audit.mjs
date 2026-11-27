@@ -2,22 +2,18 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { evaluateAudit, main, POLICY, runAudit } from "../audit-frontend.mjs";
+import { evaluateAudit, main, runAudit } from "../audit-frontend.mjs";
 
-const manifest = readFileSync(
-  fileURLToPath(new URL("../../frontend/package.json", import.meta.url)),
-);
 const lock = readFileSync(
   fileURLToPath(new URL("../../frontend/package-lock.json", import.meta.url)),
 );
-const now = new Date("2026-11-17T20:00:00Z");
-const context = { status: 1, manifest, lock, now };
+const context = { status: 1, lock };
 const advisory = () => ({
   source: 1247710,
   name: "picomatch",
   dependency: "picomatch",
   severity: "high",
-  url: POLICY.advisory,
+  url: "https://github.com/advisories/GHSA-fc5q-39xc-vjpf",
   range: "<=4.0.7",
 });
 const node = (
@@ -58,11 +54,8 @@ function report(
 const evaluate = (value, overrides = {}) =>
   evaluateAudit(value, { ...context, ...overrides });
 
-test("accepted leaf and inherited parent cycle stay visible as accepted risk", () => {
-  const value = evaluate(report());
-  assert.equal(value.status, "accepted-risk");
-  assert.equal(value.counts.high, 4);
-  assert.equal(value.issue, "https://github.com/YokAI-open/Birja/issues/35");
+test("the previously excepted advisory and its inherited findings block", () => {
+  assert.throws(() => evaluate(report()), /HIGH or CRITICAL/);
 });
 test("moderate and clean reports retain original audit-level behavior", () => {
   const moderate = node(
@@ -94,7 +87,7 @@ test("another HIGH on the same package and mixed inherited roots are blocked", (
     ...advisory(),
     url: "https://github.com/advisories/GHSA-unaccepted",
   });
-  assert.throws(() => evaluate(value), /Unaccepted HIGH/);
+  assert.throws(() => evaluate(value), /HIGH or CRITICAL/);
   const roots = report({
     picomatch: node("picomatch", [advisory()]),
     vite: node("vite", [
@@ -107,15 +100,15 @@ test("another HIGH on the same package and mixed inherited roots are blocked", (
       },
     ]),
   });
-  assert.throws(() => evaluate(roots), /Unaccepted HIGH/);
+  assert.throws(() => evaluate(roots), /HIGH or CRITICAL/);
 });
-test("critical entry or direct cause can never use the exception", () => {
+test("critical entries and advisory causes block", () => {
   assert.throws(
     () =>
       evaluate(
         report({ picomatch: node("picomatch", [advisory()], "critical") }),
       ),
-    /Critical/,
+    /CRITICAL/,
   );
   assert.throws(
     () =>
@@ -126,13 +119,13 @@ test("critical entry or direct cause can never use the exception", () => {
           ]),
         }),
       ),
-    /severity|Critical/,
+    /severity|CRITICAL/,
   );
 });
-test("matching URL on another package, changed range, or unreviewed node is refused", () => {
+test("the former advisory URL grants no allowance and lock paths must match", () => {
   assert.throws(
     () => evaluate(report({ vite: node("vite", [advisory()]) })),
-    /Unaccepted HIGH/,
+    /HIGH or CRITICAL/,
   );
   assert.throws(
     () =>
@@ -141,7 +134,7 @@ test("matching URL on another package, changed range, or unreviewed node is refu
           picomatch: node("picomatch", [{ ...advisory(), range: "*" }]),
         }),
       ),
-    /Unaccepted HIGH/,
+    /HIGH or CRITICAL/,
   );
   assert.throws(
     () =>
@@ -155,7 +148,7 @@ test("matching URL on another package, changed range, or unreviewed node is refu
     /lock/,
   );
 });
-test("cycle without any accepted leaf and broken cause references are refused", () => {
+test("inherited high findings and broken cause references are refused", () => {
   assert.throws(
     () =>
       evaluate(
@@ -164,7 +157,7 @@ test("cycle without any accepted leaf and broken cause references are refused", 
           vitest: node("vitest", ["vite"]),
         }),
       ),
-    /no accepted advisory root/,
+    /HIGH or CRITICAL/,
   );
   assert.throws(
     () => evaluate(report({ vite: node("vite", ["missing"]) })),
@@ -195,25 +188,14 @@ test("malformed report, causes, severity counts and hidden severity fail closed"
   });
   assert.throws(() => evaluate(hidden), /hidden/);
 });
-test("changed manifest/lock, expired review and invalid time are refused", () => {
-  assert.throws(
-    () => evaluate(report(), { manifest: Buffer.from("changed") }),
-    /Dependency files changed/,
+test("the current lock inventory is validated without a pinned hash", () => {
+  assert.equal(
+    evaluate(report({}), { status: 0, lock: Buffer.from('{"packages":{}}') }).status,
+    "no-blocking-findings",
   );
-  assert.throws(
-    () => evaluate(report(), { lock: Buffer.from("changed") }),
-    /Dependency files changed/,
-  );
-  assert.throws(
-    () => evaluate(report(), { now: new Date(POLICY.expires) }),
-    /expired/,
-  );
-  assert.throws(
-    () => evaluate(report(), { now: new Date("invalid") }),
-    /expired/,
-  );
+  assert.throws(() => evaluate(report({}), { status: 0, lock: Buffer.from("{}") }), /inventory/);
 });
-test("npm status must agree with complete HIGH findings", () => {
+test("npm status must agree with complete HIGH and CRITICAL findings", () => {
   for (const status of [null, 2, 127, 0])
     assert.throws(() => evaluate(report(), { status }));
   assert.throws(() => evaluate(report({}), { status: 1 }), /contradicts/);
@@ -228,8 +210,7 @@ function run(result, overrides = {}) {
       invocation = args;
       return result;
     },
-    read: (path) => (path.endsWith("package-lock.json") ? lock : manifest),
-    now,
+    read: () => lock,
     stdout: {
       write: (chunk) => {
         out += chunk;
@@ -245,16 +226,16 @@ function run(result, overrides = {}) {
   return { status, out, err, invocation };
 }
 test("CLI runner preserves raw reports and executes full bounded audit", () => {
-  const raw = JSON.stringify(report());
+  const raw = JSON.stringify(report({}));
   const result = run({
-    status: 1,
+    status: 0,
     stdout: raw,
     stderr: "notice",
     signal: null,
   });
   assert.equal(result.status, 0);
   assert.ok(result.out.startsWith(raw));
-  assert.match(result.out, /accepted-risk/);
+  assert.match(result.out, /no-blocking-findings/);
   assert.equal(result.err, "notice");
   assert.equal(result.invocation[0], "npm");
   assert.deepEqual(result.invocation[1], [
@@ -266,6 +247,13 @@ test("CLI runner preserves raw reports and executes full bounded audit", () => {
   assert.equal(result.invocation[2].maxBuffer, 8 * 1024 * 1024);
   assert.equal(result.invocation[2].env.NPM_CONFIG_OMIT, "");
   assert.equal(result.invocation[2].env.NPM_CONFIG_INCLUDE, "dev");
+});
+test("a blocking audit still retains the original advisory report", () => {
+  const raw = JSON.stringify(report());
+  const result = run({ status: 1, stdout: raw });
+  assert.equal(result.status, 1);
+  assert.ok(result.out.startsWith(raw));
+  assert.match(result.err, /HIGH or CRITICAL/);
 });
 test("network errors, timeout, bad JSON and exit status remain fatal with output retained", () => {
   const inputs = [
