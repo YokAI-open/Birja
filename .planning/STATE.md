@@ -48,6 +48,12 @@ recovery contract in hosted CI. Phase 23's CHART-04 live qualification
 remains open.
 [Phase 24 verification](phases/24-compare-portfolio-performance/24-VERIFICATION.md)
 
+
+Phase 25 and the Kraken scheduling fix merged into develop through
+[PR #55](https://github.com/YokAI-open/Birja/pull/55) after all six checks
+and source-bound recovery passed. The release keeps live historical
+chart activation open under CHART-04.
+
 ## Prior phase evidence
 
 The tested runtime `775c435` passed 11 isolated browser cases and 1,409
