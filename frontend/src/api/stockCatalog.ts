@@ -144,7 +144,7 @@ const text = (value: unknown, limit: number): value is string =>
 const oneOf = <T extends string>(value: unknown, choices: readonly T[]): value is T =>
   typeof value === "string" && choices.some((choice) => choice === value);
 
-function timestamp(value: unknown): value is string {
+export function isCanonicalUtcTimestamp(value: unknown): value is string {
   if (
     typeof value !== "string" ||
     !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|\+00:00)$/.test(value)
@@ -155,7 +155,8 @@ function timestamp(value: unknown): value is string {
     Number.isFinite(instant.getTime()) && instant.toISOString().slice(0, 19) === value.slice(0, 19)
   );
 }
-const nullableTime = (value: unknown): value is string | null => value === null || timestamp(value);
+const nullableTime = (value: unknown): value is string | null =>
+  value === null || isCanonicalUtcTimestamp(value);
 
 function isListing(value: unknown): value is StockCatalogItem {
   return (
@@ -201,7 +202,7 @@ function isSearchResult(value: unknown): value is CatalogSearchResult {
   return (
     value.state === "ready" &&
     isCatalogId(value.generation_id) &&
-    timestamp(value.published_at) &&
+    isCanonicalUtcTimestamp(value.published_at) &&
     (!value.has_more || value.items.length === 20) &&
     value.items.every(
       (item): item is StockCatalogItem => isListing(item) && item.state === "active",
@@ -234,9 +235,9 @@ function isPrice(value: unknown, nextOpen: string | null): value is CatalogPrice
     value.currency !== "USD" ||
     value.source !== "alpaca" ||
     value.feed !== "iex" ||
-    !timestamp(value.event_at) ||
-    !timestamp(value.collected_at) ||
-    !timestamp(value.valid_until)
+    !isCanonicalUtcTimestamp(value.event_at) ||
+    !isCanonicalUtcTimestamp(value.collected_at) ||
+    !isCanonicalUtcTimestamp(value.valid_until)
   )
     return false;
   const bid = priceUnits(value.bid),
@@ -425,7 +426,7 @@ export function isCatalogPreview(v: unknown): v is CatalogPreview {
     !record(v) ||
     !stockExact(v, ECONOMIC_FIELDS + " valid_until preview_token") ||
     !catalogEconomics(v) ||
-    !timestamp(v.valid_until) ||
+    !isCanonicalUtcTimestamp(v.valid_until) ||
     !previewToken(v.preview_token)
   )
     return false;
@@ -444,7 +445,7 @@ function isCatalogFill(v: unknown): v is CatalogFill {
     !catalogEconomics(v) ||
     v.schema_version !== 1 ||
     !isCatalogId(v.trade_id) ||
-    !timestamp(v.executed_at)
+    !isCanonicalUtcTimestamp(v.executed_at)
   )
     return false;
   const filled = stockInstant(v.executed_at);

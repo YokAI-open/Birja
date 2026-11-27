@@ -527,6 +527,9 @@ it("shows stock identity, quantity, value, return and the scoped trade action on
     "/portfolios/1/trade/stocks/AAPL",
   );
   expect(cards.querySelector("time")).toHaveAttribute("datetime", "2026-11-10T15:00:00Z");
+  expect(
+    screen.getByRole("button", { name: "Update portfolio" }).querySelector("time"),
+  ).toHaveAttribute("datetime", "2026-11-10T15:00:00Z");
   expect(screen.getByRole("note", { name: "Stock valuation price source" })).toHaveTextContent(
     "IEX prices",
   );
@@ -625,21 +628,25 @@ it.each(["closed", "halted"] as const)(
     expect(table.querySelector("time")?.getAttribute("title")).toMatch(/2026/);
   },
 );
-it("uses exactly three server allocation bars and no balancing arithmetic", async () => {
+it("labels each allocation segment with the exact server percentage and value", async () => {
   show();
   const list = await screen.findByRole("list", { name: "Allocation" });
   const rows = within(list).getAllByRole("listitem");
   expect(rows).toHaveLength(3);
-  for (const [i, label, percent] of [
-    [0, "Cash", "97.98"],
-    [1, "Crypto", "0.00"],
-    [2, "Stocks", "2.02"],
+  for (const [i, key, label, percent, value] of [
+    [0, "cash", "Cash", "97.98", "$9,796.00"],
+    [1, "stocks", "Stocks", "2.02", "$202.00"],
+    [2, "crypto", "Crypto", "0.00", "$0.00"],
   ] as const) {
-    expect(rows[i]).toHaveTextContent(label + percent + "%");
-    expect(rows[i].querySelector("[data-allocation-fill]")).toHaveStyle({ width: percent + "%" });
+    expect(within(rows[i]).getByText(label)).toBeVisible();
+    expect(within(rows[i]).getByText(`${percent}%`)).toBeVisible();
+    expect(within(rows[i]).getByText(value)).toBeVisible();
+    expect(document.querySelector(`[data-allocation-fill="${key}"]`)).toHaveStyle({
+      width: `${percent}%`,
+    });
   }
 });
-it("keeps crypto fees, fractional units and route independent, with alphabetical identities", async () => {
+it("sorts holdings by value, ticker or percentage return and preserves owned trade links", async () => {
   const p = mixedPortfolio(),
     crypto = {
       ...stockHolding(),
@@ -651,7 +658,10 @@ it("keeps crypto fees, fractional units and route independent, with alphabetical
       stock_mark: null,
       quantity: "0.12345678",
       current_value: "300.00",
+      unrealized_pl: "60.00",
+      unrealized_pl_percent: "2.00",
     };
+  Object.assign(p.holdings[0], { unrealized_pl: "40.00", unrealized_pl_percent: "20.00" });
   p.holdings = [crypto, p.holdings[0]];
   const { user } = show(p);
   const table = await screen.findByRole("list", { name: "Holdings" });
@@ -659,18 +669,44 @@ it("keeps crypto fees, fractional units and route independent, with alphabetical
     within(table)
       .getAllByRole("listitem")
       .map((row) => within(row).getByRole("link").getAttribute("aria-label")),
-  ).toEqual(["Trade AAPL", "Trade BTC"]);
+  ).toEqual(["Trade BTC", "Trade AAPL"]);
   expect(table).toHaveTextContent("Crypto");
   expect(table).toHaveTextContent("0.12345678");
   expect(within(table).getByRole("link", { name: "Trade BTC" })).toHaveAttribute(
     "href",
     "/portfolios/1/trade/BTC",
   );
-  await user.selectOptions(screen.getByRole("combobox", { name: "Sort holdings" }), "value");
-  expect(within(table).getAllByRole("link")[0]).toHaveAccessibleName("Trade BTC");
+  await user.selectOptions(screen.getByRole("combobox", { name: "Sort holdings" }), "symbol");
+  expect(within(table).getAllByRole("link")[0]).toHaveAccessibleName("Trade AAPL");
+  await user.selectOptions(screen.getByRole("combobox", { name: "Sort holdings" }), "return");
+  expect(within(table).getAllByRole("link")[0]).toHaveAccessibleName("Trade AAPL");
   await user.selectOptions(screen.getByRole("combobox", { name: "Filter holdings" }), "stock");
   expect(within(table).getAllByRole("listitem")).toHaveLength(1);
   expect(within(table).getByRole("link")).toHaveAccessibleName("Trade AAPL");
+});
+it("sorts unavailable amounts last and resolves ties by exact asset ID", async () => {
+  const p = incomplete();
+  const crypto = {
+    ...stockHolding(),
+    symbol: "BTC",
+    coin_id: "9007199254740992",
+    name: "First Bitcoin holding",
+    asset_class: "crypto" as const,
+    provider_asset_id: null,
+    stock_mark: null,
+    allocation_percent: null,
+  };
+  p.holdings.push({ ...crypto, coin_id: "9007199254740993", name: "Second Bitcoin holding" });
+  p.holdings.push(crypto);
+  const { user } = show(p);
+  const cards = await screen.findByRole("list", { name: "Holdings" });
+  for (const option of ["value", "return"]) {
+    await user.selectOptions(screen.getByRole("combobox", { name: "Sort holdings" }), option);
+    const rows = within(cards).getAllByRole("listitem");
+    expect(rows[0]).toHaveTextContent("First Bitcoin holding");
+    expect(rows[1]).toHaveTextContent("Second Bitcoin holding");
+    expect(rows[2]).toHaveTextContent("Apple Inc.");
+  }
 });
 it("preserves stored starting cash, realised cash and a truthful empty state", async () => {
   const p = cashPortfolio();

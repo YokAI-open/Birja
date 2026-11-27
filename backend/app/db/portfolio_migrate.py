@@ -24,6 +24,12 @@ from app.db.portfolio_bootstrap import (
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 SOURCE = {
+    "alembic/versions/0028_portfolio_daily_values.py": (
+        "99ad0ef275fc877225ea13408b5c7c407465b5fb3cbae1b6ca1aefcaa80f0879"
+    ),
+    "alembic/sql/0028_portfolio_daily_values.sql": (
+        "6982dea7fb2590633d622f53e856a079f15510766f3043bc4dda808458846954"
+    ),
     "alembic/versions/0027_stock_catalog_nyse_source.py": (
         "9ebf379351b670ac376100bb6922d5fda8a27bcecb44d031cf9db080c105c427"
     ),
@@ -145,7 +151,7 @@ async def require_migrator(conn: AsyncConnection, *, fresh: bool = False) -> str
         versions = (
             (await conn.execute(text("SELECT version_num FROM alembic_version"))).scalars().all()
         )
-        if len(versions) != 1 or versions[0] not in {f"{n:04}" for n in range(7, 28)}:
+        if len(versions) != 1 or versions[0] not in {f"{n:04}" for n in range(7, 29)}:
             raise ValueError("Unsupported portfolio migration revision")
         revision = versions[0]
     elif not fresh:

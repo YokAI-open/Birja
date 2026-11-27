@@ -471,10 +471,14 @@ describe("TradePage", () => {
   it("sells by quantity and shows the holding", async () => {
     ctx.holding = "0.00099501";
     const { user } = show();
+    expect(await screen.findByText("Cash available $10,000.00")).toBeVisible();
+    expect(await screen.findByText("You hold 0.00099501 BTC")).toBeVisible();
+    expect(screen.getByText("Cash available $10,000.00")).toBeVisible();
     await user.click(await screen.findByRole("radio", { name: "Sell" }));
     expect(screen.getByRole("radio", { name: "Sell" })).toHaveAttribute("aria-checked", "true");
     expect(screen.queryByRole("button", { name: "Amount (USD)" })).toBeNull();
     expect(await screen.findByText("You hold 0.00099501 BTC")).toBeVisible();
+    expect(screen.getByText("Cash available $10,000.00")).toBeVisible();
     await enter(user, "0.0005", "Quantity");
     await waitFor(() => {
       expect(quotePosts()).toHaveLength(1);

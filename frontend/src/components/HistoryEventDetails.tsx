@@ -1,7 +1,7 @@
 import { useCallback, useId, useRef, useState, type ReactNode } from "react";
 import type { DividendTerms, EventHistoryItem } from "@/api/eventHistory";
 import { Button } from "@/components/ui/button";
-import { formatQuantity, formatUnitPrice, formatUsd } from "@/lib/money";
+import { formatQuantity, formatStockPrice, formatUnitPrice, formatUsd } from "@/lib/money";
 import type { PortfolioTarget } from "@/hooks/usePortfolioTarget";
 import { PortfolioContext } from "@/components/PortfolioContext";
 
@@ -137,7 +137,9 @@ function OwnedEventDetails({
               {formatQuantity(item.quantity)}
             </Detail>
             <Detail label={item.asset_type === "stock" ? "IEX execution price" : "Execution price"}>
-              {formatUnitPrice(item.exec_price)}
+              {item.asset_type === "stock"
+                ? formatStockPrice(item.exec_price)
+                : formatUnitPrice(item.exec_price)}
             </Detail>
             <Detail label={item.asset_type === "stock" ? "Commission" : "Fee"}>
               {formatUsd(item.fee)}

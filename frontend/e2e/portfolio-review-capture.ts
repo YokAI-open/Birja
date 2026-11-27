@@ -12,7 +12,7 @@ async function reviewedLayout(page: Page, _state: string, width: number) {
   await expect(headings).toHaveCount(1);
   const actions = page.getByRole("button").filter({
     hasText:
-      /^(Cancel|Delete portfolio|Remove portfolio|Check deletion result|Review latest portfolio)$/,
+      /^(Keep portfolio|Delete portfolio|Remove(?: portfolio)?|Check deletion result|Review latest portfolio)$/,
   });
   const boxes = [];
   for (const action of await actions.all()) {

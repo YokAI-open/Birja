@@ -32,13 +32,14 @@ def source_git(*args):
     return r.call(["git", "-c", "safe.directory=" + str(ROOT), "-C", str(ROOT), *args])
 
 
-def package_current_archive(archive, *, successor=False):
+def package_current_archive(archive, *, successor=False, phase=21):
     """Use the explicit successor producer; the old V1 packager stays immutable."""
     spec = importlib.util.spec_from_file_location('current_bundle_producer', ROOT / 'deploy/backup-snapshot.py')
     producer = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(producer)
     if successor:
-        producer.bundle_package_v7(archive, recovery=r)
+        package = {21: producer.bundle_package_v7, 24: producer.bundle_package_v8}[phase]
+        package(archive, recovery=r)
     else:
         producer.bundle_package_v4(archive, recovery=r)
 
@@ -52,7 +53,8 @@ def archive_profile(archive, sha):
                       ('deploy-recovery-v4', 3, '0023'),
                       ('deploy-recovery-v5', 4, '0024'),
                       ('deploy-recovery-v7', 6, '0026'),
-                      ('deploy-recovery-v8', 7, '0027')}:
+                      ('deploy-recovery-v8', 7, '0027'),
+                      ('deploy-recovery-v9', 8, '0028')}:
         raise ValueError('unsupported authenticated campaign family')
     return family[0]
 

@@ -175,6 +175,7 @@ def test_postmigration_cli_mode_is_explicit(monkeypatch):
         "0025",
         "0026",
         "0027",
+        "0028",
     ],
 )
 async def test_postmigration_portfolio_revision_dispatch_is_explicit(revision):
@@ -186,7 +187,7 @@ async def test_postmigration_portfolio_revision_dispatch_is_explicit(revision):
         patch("app.db.dev_bootstrap._authorize_portfolios", new_callable=AsyncMock) as final,
         patch("app.db.dev_bootstrap._authorize_dividends", new_callable=AsyncMock) as legacy,
     ):
-        if revision in {"0023", "0024", "0025", "0026", "0027"}:
+        if revision in {"0023", "0024", "0025", "0026", "0027", "0028"}:
             await bootstrap("dev", URL, after_migrations=True)
             final.assert_awaited_once_with(conn, revision)
         else:
@@ -291,10 +292,10 @@ async def test_finite_dev_migration_never_leaves_login_enabled(outcome, capsys):
     ):
         if outcome == "success":
             await dev_bootstrap._migrate_dev(conn, URL)
-            authorize.assert_awaited_once_with(conn, "0027")
+            authorize.assert_awaited_once_with(conn, "0028")
             assert (
                 capsys.readouterr().out
-                == "dev_final_migration=true source_revision=0014 final=0027\n"
+                == "dev_final_migration=true source_revision=0014 final=0028\n"
             )
             assert "birja_migrator:ephemeral@" in spawn.call_args.kwargs["env"]["DATABASE_URL"]
         else:
@@ -341,7 +342,7 @@ async def test_finite_dev_migration_fresh_database_reports_none(capsys):
         patch.object(dev_bootstrap, "_authorize_portfolios", new_callable=AsyncMock),
     ):
         await dev_bootstrap._migrate_dev(conn, URL)
-    assert "source_revision=None final=0027" in capsys.readouterr().out
+    assert "source_revision=None final=0028" in capsys.readouterr().out
 
 
 async def test_portfolio_authorization_runs_actual_final_sql(engine, migrated):
@@ -350,7 +351,7 @@ async def test_portfolio_authorization_runs_actual_final_sql(engine, migrated):
 
     async with engine.connect() as conn, conn.begin():
         raw = await conn.get_raw_connection()
-        await dev_bootstrap._authorize_portfolios(raw.driver_connection, "0027")
+        await dev_bootstrap._authorize_portfolios(raw.driver_connection, "0028")
         assert not (
             await conn.execute(
                 text("SELECT has_table_privilege('birja_scheduler','accounts','UPDATE')")

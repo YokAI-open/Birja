@@ -5,6 +5,9 @@ import { stocks } from "./stock-fixtures.js";
 const section = (page: Page) => page.getByRole("region", { name: "Find an asset" });
 const records = (page: Page) => page.getByRole("list", { name: "US stocks" }).getByRole("listitem");
 const selected = (page: Page) => page.locator('section[aria-labelledby="market-asset"]');
+const sessionStatus = (page: Page) =>
+  selected(page).locator(".market-detail-heading").getByRole("status");
+const quoteStatus = (page: Page) => selected(page).locator(".market-quote").getByRole("status");
 const midpoint = "$101.00";
 async function refocus(page: Page) {
   // Exercise the real TanStack focus/refetch path without reloading its cache.
@@ -46,7 +49,7 @@ test.describe("market reopening", () => {
       await page.getByRole("button", { name: "US stocks", exact: true }).click();
 
       const detail = selected(page);
-      await expect(detail.getByRole("status")).toHaveText("Market closed");
+      await expect(sessionStatus(page)).toHaveText("Market closed");
       const opening = detail.locator(`time[datetime="${nextOpen}"]`);
       await expect(opening).toHaveText("Opens in 2 hr");
       await expect(detail.getByText("Price unavailable")).toHaveCount(0);
@@ -133,13 +136,13 @@ for (const width of [320, 375, 768, 1280])
       "datetime",
       "2026-11-10T14:59:50.000Z",
     );
-    if (width < 768) await page.getByRole("button", { name: "All assets" }).click();
+    if (width < 768) await page.getByRole("button", { name: "Back to results" }).click();
     expect(await page.evaluate("document.documentElement.scrollWidth <= innerWidth")).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`stocks-${width}.png`), fullPage: true });
     // Half the effective viewport width is the browser-zoom reflow equivalent.
     if (width === 1280) {
       await page.setViewportSize({ width: 640, height: 450 });
-      await page.getByRole("button", { name: "All assets" }).click();
+      await page.getByRole("button", { name: "Back to results" }).click();
       await expect(section(page).getByRole("listitem")).toHaveCount(20);
       expect(await page.evaluate("document.documentElement.scrollWidth <= innerWidth")).toBe(true);
     }
@@ -216,12 +219,13 @@ test("source 119.999 to120 stays nonexecutable and does not announce each second
   await signInNewUser(page);
   await page.getByRole("button", { name: "US stocks", exact: true }).click();
   await expect(records(page).first()).not.toContainText(midpoint); // full RTT cannot extend source age
-  await expect(selected(page).getByRole("status")).toContainText("This quote is out of date");
+  const status = quoteStatus(page);
+  await expect(status).toContainText("This quote is out of date");
   await expect(selected(page).getByRole("link", { name: /^Trade / })).toHaveCount(0);
   await page.clock.install();
-  const before = await selected(page).getByRole("status").textContent();
+  const before = await status.textContent();
   await page.clock.fastForward(1000);
-  expect(await selected(page).getByRole("status").textContent()).toBe(before);
+  expect(await status.textContent()).toBe(before);
 });
 
 test("source age crossing120 changes the contextual announcement only at the boundary", async ({
@@ -232,14 +236,15 @@ test("source age crossing120 changes the contextual announcement only at the bou
   await signInNewUser(page);
   await page.getByRole("button", { name: "US stocks", exact: true }).click();
   await expect(records(page).first()).toContainText(midpoint);
-  const recent = await selected(page).getByRole("status").textContent();
+  const status = quoteStatus(page);
+  const recent = await status.textContent();
   await page.clock.runFor(1000);
   await expect(records(page).first()).not.toContainText(midpoint);
-  await expect(selected(page).getByRole("status")).toContainText("This quote is out of date");
-  const stale = await selected(page).getByRole("status").textContent();
+  await expect(status).toContainText("This quote is out of date");
+  const stale = await status.textContent();
   expect(stale).not.toBe(recent);
   await page.clock.runFor(1000);
-  expect(await selected(page).getByRole("status").textContent()).toBe(stale);
+  expect(await status.textContent()).toBe(stale);
 });
 
 test("missing, previous-session, early-close, DST and unknown calendars remain separate from status", async ({
@@ -280,16 +285,12 @@ test("missing, previous-session, early-close, DST and unknown calendars remain s
   await signInNewUser(page);
   await page.getByRole("button", { name: "US stocks", exact: true }).click();
   await expect(records(page)).toHaveCount(20);
-  await expect(selected(page).getByRole("status")).toContainText(
-    "Waiting for a verified IEX quote",
-  );
+  await expect(quoteStatus(page)).toContainText("Waiting for a verified IEX quote");
   await expect(records(page).nth(1)).not.toContainText(midpoint);
   await records(page).nth(2).getByRole("button").click();
-  await expect(selected(page).getByRole("status")).toContainText(
-    "Market hours haven’t been confirmed.",
-  );
+  await expect(quoteStatus(page)).toContainText("Market hours haven’t been confirmed.");
   await records(page).nth(3).getByRole("button").click();
-  await expect(selected(page).getByRole("status")).toContainText("Market closed");
+  await expect(sessionStatus(page)).toHaveText("Market closed");
   await records(page).nth(4).getByRole("button").click();
   await expect(selected(page).locator("time")).toHaveAttribute(
     "datetime",
@@ -297,6 +298,6 @@ test("missing, previous-session, early-close, DST and unknown calendars remain s
   );
   await page.clock.fastForward(2000);
   await page.clock.runFor(100);
-  await expect(selected(page).getByRole("status")).toContainText("Market closed");
+  await expect(sessionStatus(page)).toHaveText("Market closed");
   await expect(selected(page).getByRole("link", { name: "View details GOOGL" })).toBeVisible();
 });

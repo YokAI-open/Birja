@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import { useInfiniteQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { ApiError } from "@/api/client";
 import { fetchEventHistory } from "@/api/eventHistory";
+import { DEFAULT_EVENT_HISTORY_FILTERS, type EventHistoryFilters } from "@/api/history";
 import type { PortfolioTarget } from "./usePortfolioTarget";
 import { financialScope, revokePortfolioTarget } from "./useQuote";
 
@@ -36,7 +37,10 @@ export function eventHistorySession(client: QueryClient) {
   return { email, epoch };
 }
 
-export function useEventHistory(target: PortfolioTarget | null) {
+export function useEventHistory(
+  target: PortfolioTarget | null,
+  { activity, asset }: EventHistoryFilters = DEFAULT_EVENT_HISTORY_FILTERS,
+) {
   const client = useQueryClient();
   const guard = guardFor(client);
   const subscribe = useCallback(
@@ -49,8 +53,8 @@ export function useEventHistory(target: PortfolioTarget | null) {
     portfolioId = scope.portfolioId;
   const seenKey = JSON.stringify([email, portfolioId, epoch]);
   const key = useMemo(
-    () => ["eventHistory", email, portfolioId, epoch] as const,
-    [email, portfolioId, epoch],
+    () => ["eventHistory", email, portfolioId, epoch, activity, asset] as const,
+    [email, portfolioId, epoch, activity, asset],
   );
   const query = useInfiniteQuery({
     queryKey: key,
@@ -61,32 +65,29 @@ export function useEventHistory(target: PortfolioTarget | null) {
     queryFn: async ({ signal, pageParam }) => {
       if (target === null || !scope.current()) throw new Error("Portfolio target changed");
       const owner = client.getQueryCache().find({ queryKey: key, exact: true });
+      const isCurrentRequest = () =>
+        !signal.aborted &&
+        scope.current() &&
+        guard.epoch === epoch &&
+        client.getQueryCache().find({ queryKey: key, exact: true }) === owner;
       try {
-        const page = await fetchEventHistory(target.portfolioId, { cursor: pageParam }, signal);
+        const page = await fetchEventHistory(
+          target.portfolioId,
+          { cursor: pageParam, activity, asset },
+          signal,
+        );
         signal.throwIfAborted();
-        if (
-          !scope.current() ||
-          guard.epoch !== epoch ||
-          client.getQueryCache().find({ queryKey: key, exact: true }) !== owner
-        )
-          throw new Error("History session changed");
+        if (!isCurrentRequest()) throw new Error("History session changed");
         return page;
       } catch (error) {
-        if (
-          scope.current() &&
-          error instanceof ApiError &&
-          error.code === "portfolio_unavailable"
-        ) {
-          guard.seen.delete(seenKey);
-          revokePortfolioTarget(client, target);
+        if (isCurrentRequest() && error instanceof ApiError) {
+          if (error.code === "portfolio_unavailable") {
+            guard.seen.delete(seenKey);
+            revokePortfolioTarget(client, target);
+          } else if (error.status === 401) {
+            client.setQueryData(["me"], null);
+          }
         }
-        if (
-          scope.current() &&
-          guard.epoch === epoch &&
-          error instanceof ApiError &&
-          error.status === 401
-        )
-          client.setQueryData(["me"], null);
         throw error;
       }
     },
@@ -121,6 +122,7 @@ export function useEventHistory(target: PortfolioTarget | null) {
   return {
     ...query,
     data: scope.current() && guard.epoch === epoch ? query.data : undefined,
+    discardPages: () => client.removeQueries({ queryKey: key, exact: true }),
     refetch: (options?: Parameters<typeof query.refetch>[0]) =>
       scope.current()
         ? query.refetch(options)

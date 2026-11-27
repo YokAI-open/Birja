@@ -1,5 +1,12 @@
 import type { Portfolio } from "@/api/portfolio";
 import { outcome } from "@/lib/financialDisplay";
+import { formatUsd } from "@/lib/money";
+
+const assetClasses = [
+  { key: "cash", label: "Cash", fill: "bg-border" },
+  { key: "stocks", label: "Stocks", fill: "bg-data-fill" },
+  { key: "crypto", label: "Crypto", fill: "bg-muted-foreground" },
+] as const;
 
 /** Lexically bound CSS percentages: no conversion, scaling or residual arithmetic. */
 function validAllocation(value: string | null): value is string {
@@ -7,16 +14,8 @@ function validAllocation(value: string | null): value is string {
 }
 
 export function PortfolioAllocation({ portfolio }: { portfolio: Portfolio }) {
-  const rows = [
-    { key: "cash", label: "Cash", percent: portfolio.class_allocation_percent.cash },
-    { key: "crypto", label: "Crypto", percent: portfolio.class_allocation_percent.crypto },
-    { key: "stocks", label: "Stocks", percent: portfolio.class_allocation_percent.stocks },
-  ];
   return (
-    <section
-      aria-label="Portfolio allocation"
-      className="flex min-w-0 flex-col gap-3 border-t border-border pt-4 md:border-t-0 md:border-l md:pt-0 md:pl-7"
-    >
+    <section aria-label="Portfolio allocation" className="flex min-w-0 flex-col gap-3">
       {portfolio.valuation_complete &&
         portfolio.cash_allocation_percent === null &&
         portfolio.total_value !== null &&
@@ -26,28 +25,39 @@ export function PortfolioAllocation({ portfolio }: { portfolio: Portfolio }) {
       {!portfolio.valuation_complete && (
         <p>Allocation is unavailable until every holding can be valued.</p>
       )}
-      <ul aria-label="Allocation" className="flex flex-col gap-3">
-        {rows.map(({ key, label, percent }) => {
+      <div aria-hidden="true" className="flex h-3 overflow-hidden rounded-sm bg-muted">
+        {assetClasses.map(({ key, fill }) => {
+          const percent = portfolio.class_allocation_percent[key];
+          return portfolio.valuation_complete && validAllocation(percent) ? (
+            <span
+              key={key}
+              data-allocation-fill={key}
+              className={`shrink-0 ${fill}`}
+              style={{ width: `${percent}%` }}
+            />
+          ) : null;
+        })}
+      </div>
+      <ul aria-label="Allocation" className="grid min-w-0 grid-cols-3 gap-2">
+        {assetClasses.map(({ key, label, fill }) => {
+          const percent = portfolio.class_allocation_percent[key];
+          const value = portfolio.class_values[key];
           const valid = portfolio.valuation_complete && validAllocation(percent);
           return (
-            <li key={key} className="flex min-w-0 flex-col gap-1">
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <span className="min-w-0 wrap-anywhere text-muted-foreground">{label}</span>
-                <span className="font-medium tabular-nums">
-                  {valid ? `${percent}%` : "Unavailable"}
-                </span>
-              </div>
+            <li key={key} className="flex min-w-0 flex-col gap-0.5 wrap-anywhere">
+              <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                <span aria-hidden="true" className={`size-2 shrink-0 rounded-[2px] ${fill}`} />
+                {label}
+              </span>
+              <span className="font-semibold tabular-nums">
+                {valid ? `${percent}%` : "Unavailable"}
+              </span>
               <div
-                aria-hidden="true"
-                className="h-2 overflow-hidden rounded-[var(--radius-bar)] bg-muted"
+                role={key === "cash" ? "region" : undefined}
+                aria-label={key === "cash" ? label : undefined}
+                className="text-sm text-muted-foreground tabular-nums"
               >
-                {valid && (
-                  <div
-                    data-allocation-fill
-                    className="h-full rounded-[var(--radius-bar)] bg-data-fill"
-                    style={{ width: `${percent}%` }}
-                  />
-                )}
+                {value === null ? null : formatUsd(value)}
               </div>
             </li>
           );

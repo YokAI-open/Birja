@@ -1,10 +1,11 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { focusManager, useQueryClient } from "@tanstack/react-query";
 import { act, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CatalogQuoteView, StockCatalogItem } from "@/api/stockCatalog";
 import type { StockItem } from "@/api/stocks";
 import { renderWithClient } from "@/test/render";
+import { fullLocalTimestamp } from "@/lib/financialDisplay";
 import MarketsPage from "./MarketsPage";
 
 const stockFixtures = vi.hoisted(() => ({ useStocks: vi.fn() }));
@@ -59,13 +60,19 @@ const payload = (items = COINS) => ({
 
 const ok = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body)));
 
+function renderCryptoMarkets(portfolioId?: string) {
+  const rendered = renderWithClient(<MarketsPage portfolioId={portfolioId} />);
+  fireEvent.click(screen.getByRole("button", { name: "Crypto" }));
+  return rendered;
+}
+
 describe("MarketsPage", () => {
   it("shows the curated coins in source order with formatted prices", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(() => ok(payload())),
     );
-    renderWithClient(<MarketsPage />);
+    renderCryptoMarkets();
     expect(screen.getByRole("heading", { level: 1, name: "Markets" })).toBeVisible();
     const assets = await screen.findByRole("list", { name: "Crypto" });
     const rows = within(assets).getAllByRole("button");
@@ -81,7 +88,7 @@ describe("MarketsPage", () => {
       "fetch",
       vi.fn(() => ok(payload())),
     );
-    const { user } = renderWithClient(<MarketsPage portfolioId="1" />);
+    const { user } = renderCryptoMarkets("1");
     const search = screen.getByRole("searchbox", { name: "Search by name or symbol" });
     const trade = await screen.findByRole("link", { name: "Trade BTC" });
     expect(trade).toHaveAttribute("href", "/portfolios/1/trade/BTC");
@@ -106,7 +113,7 @@ describe("MarketsPage", () => {
       "fetch",
       vi.fn(() => ok(payload())),
     );
-    renderWithClient(<MarketsPage />);
+    renderCryptoMarkets();
     expect(await screen.findByRole("link", { name: "Trade BTC" })).toHaveAttribute(
       "href",
       "/trade/BTC",
@@ -118,7 +125,7 @@ describe("MarketsPage", () => {
       "fetch",
       vi.fn(() => new Promise<Response>(() => {})),
     );
-    renderWithClient(<MarketsPage />);
+    renderCryptoMarkets();
     expect(screen.getByText("Loading prices…")).toBeVisible();
   });
 
@@ -127,7 +134,7 @@ describe("MarketsPage", () => {
       "fetch",
       vi.fn(() => ok(payload([]))),
     );
-    renderWithClient(<MarketsPage />);
+    renderCryptoMarkets();
     expect(
       await screen.findByText("Prices are loading. They appear within a minute."),
     ).toBeVisible();
@@ -142,7 +149,7 @@ describe("MarketsPage", () => {
         return calls === 1 ? Promise.resolve(new Response("{}", { status: 500 })) : ok(payload());
       }),
     );
-    const { user } = renderWithClient(<MarketsPage />);
+    const { user } = renderCryptoMarkets();
     expect(await screen.findByText("Couldn’t load this market.")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByRole("list", { name: "Crypto" })).toBeVisible();
@@ -158,7 +165,7 @@ describe("MarketsPage", () => {
         return calls === 2 ? Promise.resolve(new Response("{}", { status: 502 })) : ok(payload());
       }),
     );
-    renderWithClient(<MarketsPage />);
+    renderCryptoMarkets();
     await screen.findByRole("list", { name: "Crypto" });
     expect(screen.queryByText(/Couldn’t refresh/)).toBeNull();
 
@@ -190,7 +197,7 @@ describe("MarketsPage", () => {
       "fetch",
       vi.fn(() => Promise.resolve(new Response("{}", { status: 500 }))),
     );
-    renderWithClient(<MarketsPage />);
+    renderCryptoMarkets();
     expect(await screen.findByText("Couldn’t load this market.")).toBeVisible();
     expect(screen.queryByText(/Couldn’t refresh/)).toBeNull();
     expect(screen.queryByRole("list", { name: "Crypto" })).toBeNull();
@@ -200,7 +207,7 @@ describe("MarketsPage", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const fetchMock = vi.fn(() => ok(payload()));
     vi.stubGlobal("fetch", fetchMock);
-    renderWithClient(<MarketsPage />);
+    renderCryptoMarkets();
     await screen.findByRole("list", { name: "Crypto" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     await act(async () => {
@@ -242,7 +249,7 @@ describe("MarketsPage", () => {
           ),
         ),
       );
-      renderWithClient(<MarketsPage />);
+      renderCryptoMarkets();
       expect(await screen.findByText("Updated 42s ago")).toBeVisible();
       expect(screen.getByText("Delayed")).toBeVisible();
       expect(screen.getByText("Stale")).toBeVisible();
@@ -262,7 +269,7 @@ describe("MarketsPage", () => {
           ),
         ),
       );
-      renderWithClient(<MarketsPage />);
+      renderCryptoMarkets();
       await screen.findByText("Updated 42s ago");
       await tick(10_000);
       expect(screen.getByText("Updated 52s ago")).toBeVisible();
@@ -279,7 +286,7 @@ describe("MarketsPage", () => {
           return ok(aged([["BTC", calls === 1 ? 42 : 3, "fresh"]]));
         }),
       );
-      renderWithClient(<MarketsPage />);
+      renderCryptoMarkets();
       await screen.findByText("Updated 42s ago");
       await tick(30_000);
       expect(await screen.findByText(/^Updated [0-9]s ago$/)).toBeVisible();
@@ -351,6 +358,8 @@ function catalogOk(body: unknown, status = 200) {
   });
 }
 
+const catalogDetails = () => within(screen.getByRole("region", { name: "Fixture Company" }));
+
 function stockFetch(
   search: (term: string, init: RequestInit) => Response | Promise<Response>,
   quote: (path: string, init: RequestInit) => Response | Promise<Response> = () => {
@@ -386,9 +395,23 @@ describe("MarketsPage stock catalog", () => {
     const search = vi.fn(() => catalogOk(catalog([stock])));
     const fetchMock = stockFetch(search, request);
     vi.stubGlobal("fetch", fetchMock);
-    const page = await openCatalog("50");
+    function SelectedPortfolio() {
+      const [portfolioId, setPortfolioId] = useState("50");
+      return (
+        <>
+          <button onClick={() => setPortfolioId("51")}>Select second portfolio</button>
+          <MarketsPage portfolioId={portfolioId} />
+        </>
+      );
+    }
+    const page = renderWithClient(
+      <SignedIn>
+        <SelectedPortfolio />
+      </SignedIn>,
+    );
+    const input = screen.getByRole("searchbox", { name: "Search stocks" });
     expect(search).not.toHaveBeenCalled();
-    await page.user.type(page.search, "F");
+    await page.user.type(input, "F");
     const row = await screen.findByRole("button", {
       name: /Fixture Company FQA · NASDAQ · Class A/,
     });
@@ -397,7 +420,8 @@ describe("MarketsPage stock catalog", () => {
     expect(request).not.toHaveBeenCalled();
     row.focus();
     await page.user.keyboard("{Enter}");
-    expect(await screen.findByText("$10.20")).toBeVisible();
+    expect(await catalogDetails().findByText("$10.20")).toBeVisible();
+    expect(within(row).getByText("$10.20")).toBeVisible();
     expect(screen.getByText(/IEX midpoint/)).toBeVisible();
     expect(screen.getByRole("link", { name: "View details FQA" })).toHaveAttribute(
       "href",
@@ -407,6 +431,15 @@ describe("MarketsPage stock catalog", () => {
     expect(init.method).toBe("POST");
     expect(init.body).toBe(JSON.stringify({ listing_version: "17" }));
     expect(new Headers(init.headers).get("X-CSRF-Token")).toBe("fixture-token");
+
+    await page.user.click(screen.getByRole("button", { name: "Select second portfolio" }));
+    expect(input).toHaveValue("F");
+    expect(catalogDetails().getByText("$10.20")).toBeVisible();
+    expect(screen.getByRole("link", { name: "View details FQA" })).toHaveAttribute(
+      "href",
+      "/portfolios/51/trade/catalog/9007199254740993",
+    );
+    expect(request).toHaveBeenCalledTimes(1);
   });
 
   it("waits for IME composition, limits the result list and shows settled empty feedback", async () => {
@@ -516,10 +549,8 @@ describe("MarketsPage stock catalog", () => {
 
   it("keeps a permitted cached mark while closed, clears it at the deadline and restores focus", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    vi.stubGlobal(
-      "matchMedia",
-      vi.fn(() => ({ matches: true })),
-    );
+    const matchMedia = vi.fn(() => ({ matches: true }));
+    vi.stubGlobal("matchMedia", matchMedia);
     const stock = listing();
     const request = vi.fn(() => catalogOk(displayed(stock, Date.now(), true)));
     vi.stubGlobal(
@@ -537,9 +568,14 @@ describe("MarketsPage stock catalog", () => {
     await act(async () => vi.advanceTimersByTimeAsync(300));
     const row = await screen.findByRole("button", { name: /FQA/ });
     fireEvent.click(row);
+    expect(matchMedia).toHaveBeenCalledWith("(width < 48rem)");
     expect(await screen.findByText("Market closed")).toBeVisible();
-    expect(screen.getByText("Opens in 1 hr")).toBeVisible();
-    const price = screen.getByText("$10.20");
+    const opening = screen.getByText("Opens in 1 hr");
+    const openingAt = opening.getAttribute("datetime")!;
+    expect(opening).toBeVisible();
+    expect(opening).toHaveAttribute("title", fullLocalTimestamp(openingAt));
+    expect(screen.getByText(/Local opening time/)).toHaveTextContent(fullLocalTimestamp(openingAt));
+    const price = catalogDetails().getByText("$10.20");
     expect(price).toBeVisible();
     expect(price.querySelector("time.sr-only")).toHaveAttribute("datetime", expect.any(String));
     expect(screen.queryByText(/IEX midpoint/)).toBeNull();
@@ -547,7 +583,7 @@ describe("MarketsPage stock catalog", () => {
     expect(screen.queryByText("$10.20")).toBeNull();
     expect(screen.getByText("Market closed")).toBeVisible();
     expect(screen.getByRole("heading", { name: "Fixture Company" })).toHaveFocus();
-    fireEvent.click(screen.getByRole("button", { name: "All assets" }));
+    fireEvent.click(screen.getByRole("button", { name: "Back to results" }));
     await act(async () => vi.advanceTimersByTimeAsync(32));
     expect(row).toHaveFocus();
     expect(input).toHaveValue("FQA");
@@ -557,13 +593,16 @@ describe("MarketsPage stock catalog", () => {
   it("checks the selected listing once at its verified closing and once at reopening", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const item = listing();
-    const request = vi.fn(() => catalogOk(displayed(item, Date.now())));
+    const request = vi.fn<() => Response | Promise<Response>>();
+    let completeReopening!: (value: Response) => void;
     let openingAt = "";
     request.mockImplementationOnce(() => {
       const initial = displayed(item, Date.now());
       initial.session.closes_at = iso(Date.now() + 10_000);
       openingAt = iso(Date.now() + 20_000);
       initial.session.next_open_at = openingAt;
+      initial.read_only = false;
+      initial.execution_reason = "available";
       return catalogOk(initial);
     });
     request.mockImplementationOnce(() => {
@@ -571,6 +610,12 @@ describe("MarketsPage stock catalog", () => {
       updated.session.next_open_at = openingAt;
       return catalogOk(updated);
     });
+    request.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          completeReopening = resolve;
+        }),
+    );
     vi.stubGlobal(
       "fetch",
       stockFetch(() => catalogOk(catalog([item])), request),
@@ -586,7 +631,8 @@ describe("MarketsPage stock catalog", () => {
     });
     await act(async () => vi.advanceTimersByTimeAsync(300));
     fireEvent.click(await screen.findByRole("button", { name: /FQA/ }));
-    expect(await screen.findByText("$10.20")).toBeVisible();
+    expect(await catalogDetails().findByText("$10.20")).toBeVisible();
+    expect(screen.getByRole("link", { name: "Trade FQA" })).toBeVisible();
     await act(async () => vi.advanceTimersByTimeAsync(5_000));
     expect(request).toHaveBeenCalledTimes(1);
     expect(screen.queryByText("$10.20")).toBeNull();
@@ -594,9 +640,22 @@ describe("MarketsPage stock catalog", () => {
     expect(await screen.findByText("Market closed")).toBeVisible();
     expect(request).toHaveBeenCalledTimes(2);
     await act(async () => vi.advanceTimersByTimeAsync(10_000));
-    expect(await screen.findByText("$10.20")).toBeVisible();
-    expect(screen.queryByText("Market closed")).toBeNull();
     expect(request).toHaveBeenCalledTimes(3);
+    expect(screen.queryByText(/^Opens in /)).toBeNull();
+    expect(screen.queryByText("$10.20")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Trade FQA" })).toBeNull();
+    await act(async () =>
+      completeReopening(
+        catalogOk({
+          ...displayed(item, Date.now()),
+          read_only: false,
+          execution_reason: "available",
+        }),
+      ),
+    );
+    expect(await catalogDetails().findByText("$10.20")).toBeVisible();
+    expect(screen.queryByText("Market closed")).toBeNull();
+    expect(screen.getByRole("link", { name: "Trade FQA" })).toBeVisible();
   });
 
   it.each(["unchanged", "failed"])(
@@ -627,7 +686,7 @@ describe("MarketsPage stock catalog", () => {
       });
       await act(async () => vi.advanceTimersByTimeAsync(300));
       fireEvent.click(await screen.findByRole("button", { name: /FQA/ }));
-      expect(await screen.findByText("$10.20")).toBeVisible();
+      expect(await catalogDetails().findByText("$10.20")).toBeVisible();
       expect(request).toHaveBeenCalledTimes(1);
       await act(async () => vi.advanceTimersByTimeAsync(10_500));
       expect(request).toHaveBeenCalledTimes(2);
@@ -637,33 +696,202 @@ describe("MarketsPage stock catalog", () => {
   );
 });
 
-it("keeps curated stock search and its own ticket when the catalog is unavailable", async () => {
-  const closed: StockItem = {
-    id: 1,
-    symbol: "AAPL",
-    company_name: "Apple",
-    currency: "USD",
-    listing_exchange: "NASDAQ",
-    quote: null,
-    session: {
-      state: "closed",
-      opens_at: null,
-      closes_at: null,
-      next_open_at: null,
-      valid_until: null,
-      timezone: "America/New_York",
+it("derives the selected row change only from comparable history and leaves its current trade usable", async () => {
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      disconnect() {}
     },
-    status: { state: "unknown", observed_at: null, valid_until: null },
-    action: { state: "current", reason: "none", epoch: 1, checked_at: null, valid_until: null },
-    valuation_reason: "quote_unavailable",
-    execution_reason: "market_closed",
-    execution_enabled: false,
-    quote_reason: "session_unavailable",
-    session_reason: "closed",
-    status_reason: "unknown",
-  };
+  );
+  const sent: unknown[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string, init: RequestInit) => {
+      if (url === "/api/v1/auth/csrf") {
+        document.cookie = "bj_csrf=fixture-token";
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
+      if (url !== "/api/v2/market-history/query") return ok(payload());
+      const request = JSON.parse(String(init.body));
+      sent.push(request);
+      if (request.range !== "1W")
+        return Promise.resolve(catalogOk({ ...request, state: "unavailable", series: null }));
+      return Promise.resolve(
+        catalogOk({
+          ...request,
+          state: "ready",
+          series: {
+            source: "kraken",
+            currency: "USD",
+            time_basis: "utc",
+            adjustment: "raw",
+            interval_minutes: 60,
+            start_at: "2026-11-26T09:00:00Z",
+            end_at: "2026-11-26T11:00:00Z",
+            as_of: "2026-11-26T11:00:00Z",
+            expected_through_at: "2026-11-26T11:00:00Z",
+            timeliness: "on_time",
+            coverage: "complete",
+            day_change_pct: "2.26",
+            period_change_pct: "3.15",
+            points: [
+              {
+                starts_at: "2026-11-26T09:00:00Z",
+                ends_at: "2026-11-26T10:00:00Z",
+                close: "78000.50",
+                gap_before: null,
+              },
+              {
+                starts_at: "2026-11-26T10:00:00Z",
+                ends_at: "2026-11-26T11:00:00Z",
+                close: "80000.25",
+                gap_before: null,
+              },
+            ],
+          },
+        }),
+      );
+    }),
+  );
+  const app = renderWithClient(
+    <SignedIn>
+      <MarketsPage portfolioId="50" />
+    </SignedIn>,
+  );
+  await app.user.click(screen.getByRole("button", { name: "Crypto" }));
+  const list = within(await screen.findByRole("list", { name: "Crypto" }));
+  const details = within(screen.getByRole("region", { name: "Bitcoin" }));
+  expect(await details.findByText("+2.26%")).toBeVisible();
+  expect(
+    within(list.getByRole("button", { name: /Bitcoin BTC/ })).getByText("+2.26%"),
+  ).toBeVisible();
+  expect(
+    within(list.getByRole("button", { name: /Ethereum ETH/ })).queryByText("+2.26%"),
+  ).toBeNull();
+  expect(sent).toEqual([{ instrument: { kind: "crypto", symbol: "BTC" }, range: "1W" }]);
+  await app.user.click(details.getByRole("button", { name: "1M" }));
+  expect(await details.findByText("Couldn’t load price history")).toBeVisible();
+  expect(details.queryByText("+2.26%")).toBeNull();
+  expect(details.getByText("$81,042.35")).toBeVisible();
+  expect(details.getByRole("link", { name: "Trade BTC" })).toHaveAttribute(
+    "href",
+    "/portfolios/50/trade/BTC",
+  );
+});
+
+const closedCuratedStock: StockItem = {
+  id: 1,
+  symbol: "AAPL",
+  company_name: "Apple",
+  currency: "USD",
+  listing_exchange: "NASDAQ",
+  quote: null,
+  session: {
+    state: "closed",
+    opens_at: null,
+    closes_at: null,
+    next_open_at: null,
+    valid_until: null,
+    timezone: "America/New_York",
+  },
+  status: { state: "unknown", observed_at: null, valid_until: null },
+  action: { state: "current", reason: "none", epoch: 1, checked_at: null, valid_until: null },
+  valuation_reason: "quote_unavailable",
+  execution_reason: "market_closed",
+  execution_enabled: false,
+  quote_reason: "session_unavailable",
+  session_reason: "closed",
+  status_reason: "unknown",
+};
+
+it.each([
+  {
+    name: "weekend",
+    now: "2026-11-28T16:00:00Z",
+    closeMark: "2026-11-27T17:59:00Z",
+    nextOpen: "2026-11-30T14:30:00Z",
+    duration: "46 hr 30 min",
+  },
+  {
+    name: "early close",
+    now: "2026-11-27T18:00:00Z",
+    closeMark: "2026-11-27T17:59:00Z",
+    nextOpen: "2026-11-30T14:30:00Z",
+    duration: "68 hr 30 min",
+  },
+  {
+    name: "holiday",
+    now: "2026-11-26T16:00:00Z",
+    closeMark: "2026-11-25T20:59:00Z",
+    nextOpen: "2026-11-27T14:30:00Z",
+    duration: "22 hr 30 min",
+  },
+])(
+  "displays the verified curated mark and next opening after $name",
+  ({ now, closeMark, nextOpen, duration }) => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(Date.parse(now));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => ok(payload())),
+    );
+    const closed: StockItem = {
+      ...closedCuratedStock,
+      valuation_reason: "available",
+      quote: {
+        bid: "249.90",
+        ask: "250.10",
+        mid: "250.00",
+        event_at: closeMark,
+        collected_at: iso(Date.parse(closeMark) + 1000),
+        age_seconds: (Date.parse(now) - Date.parse(closeMark)) / 1000,
+        source: "alpaca",
+        feed: "iex",
+      },
+      session: { ...closedCuratedStock.session, next_open_at: nextOpen },
+    };
+    stockFixtures.useStocks.mockReturnValue({
+      data: {
+        items: [closed],
+        admission: { state: "approved" },
+        attribution: { required_text: "" },
+      },
+      isPending: false,
+      isError: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    renderWithClient(<MarketsPage portfolioId="50" />);
+    const details = within(screen.getByRole("region", { name: "Apple" }));
+    expect(details.getByText("Market closed")).toBeVisible();
+    const price = details.getByText("$250.00");
+    expect(price).toBeVisible();
+    expect(price.querySelector("time")).toHaveAttribute("datetime", closeMark);
+    const opening = details.getByText(`Opens in ${duration}`);
+    expect(opening).toHaveAttribute("datetime", nextOpen);
+    expect(opening).toHaveAttribute("title", fullLocalTimestamp(nextOpen));
+    expect(details.getByRole("link", { name: "View details AAPL" })).toHaveAttribute(
+      "href",
+      "/portfolios/50/trade/stocks/AAPL",
+    );
+    expect(details.queryByRole("link", { name: "Trade AAPL" })).toBeNull();
+  },
+);
+
+it("keeps curated stock search and its own ticket when the catalog is unavailable", async () => {
+  const closed = closedCuratedStock;
+  const curated = [
+    closed,
+    ...Array.from({ length: 19 }, (_, i) => ({
+      ...closed,
+      id: i + 2,
+      symbol: `ORIGINAL${i}`,
+      company_name: `Original fixture ${i}`,
+    })),
+  ];
   stockFixtures.useStocks.mockReturnValue({
-    data: { items: [closed], admission: { state: "approved" } },
+    data: { items: curated, admission: { state: "approved" } },
     isPending: false,
     isError: false,
     isFetching: false,
@@ -693,8 +921,14 @@ it("keeps curated stock search and its own ticket when the catalog is unavailabl
   );
   vi.stubGlobal("fetch", stockFetch(search, quote));
   const page = await openCatalog();
+  expect(screen.getByRole("button", { name: "US stocks" })).toHaveAttribute("aria-pressed", "true");
+  const curatedList = screen.getByRole("list", { name: "US stocks" });
+  expect(within(curatedList).getAllByRole("button")).toHaveLength(20);
   const original = screen.getByRole("link", { name: "View details AAPL" });
   expect(original).toHaveAttribute("href", "/trade/stocks/AAPL");
+  expect(screen.getByText("Market closed")).toBeVisible();
+  expect(screen.queryByText(/^Opens in /)).toBeNull();
+  expect(screen.queryByText(/\$\d/)).toBeNull();
   expect(search).not.toHaveBeenCalled();
   await page.user.type(page.search, "Apple");
   expect(await screen.findByText(/Catalog search is unavailable/)).toBeVisible();
@@ -713,6 +947,9 @@ it("keeps curated stock search and its own ticket when the catalog is unavailabl
     "href",
     "/trade/catalog/400",
   );
+  const detail = screen.getByRole("heading", { name: "Fixture Company" });
+  detail.focus();
+  expect(detail).toHaveFocus();
   admitted = false;
   await act(async () => {
     focusManager.setFocused(false);
@@ -720,9 +957,12 @@ it("keeps curated stock search and its own ticket when the catalog is unavailabl
   });
   expect(await screen.findByText(/Catalog search is unavailable/)).toBeVisible();
   expect(screen.queryByRole("link", { name: "View details AAPL" })).toBeNull();
+  await vi.waitFor(() => expect(page.search).toHaveFocus());
   await page.user.click(screen.getByRole("button", { name: /Apple AAPL/ }));
   expect(screen.getByRole("link", { name: "View details AAPL" })).toHaveAttribute(
     "href",
     "/trade/stocks/AAPL",
   );
+  await page.user.clear(page.search);
+  expect(within(curatedList).getAllByRole("button")).toHaveLength(20);
 });

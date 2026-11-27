@@ -7,6 +7,8 @@ import re
 import runpy
 import subprocess
 import sys
+from datetime import UTC, datetime, time, timedelta
+from decimal import Decimal
 
 sys.path.insert(0, "/app")
 from sqlalchemy import text
@@ -16,10 +18,62 @@ from sqlalchemy.ext.asyncio import create_async_engine
 helper = runpy.run_path('/e2e/stock-trade-fixture.py', run_name='private_browser_helper')
 
 
-async def main(mode, email=None):
+async def daily_observations(db, uid, variant, first, second, *terminal):
+    ids = (first, second, *terminal)
+    if len(set(ids)) != len(ids) or any(
+        re.fullmatch(r'[1-9][0-9]{0,17}', value) is None for value in ids
+    ):
+        raise ValueError('Distinct exact synthetic portfolio IDs required')
+    if variant == 'sparse' and len(terminal) == 1:
+        series = (
+            ((18, 10550), (17, 10475), (15, None), (12, 11025)),
+            ((16, 9800),),
+            ((13, 77777),),
+        )
+    elif variant == 'paired' and not terminal:
+        steps = (0, -73, 110, -17, 144, -24, 95)
+        series = (
+            tuple((age, 9960 + index * 28 + steps[index % len(steps)])
+                  for index, age in enumerate(range(29, 0, -1))),
+            tuple((age, 10140 - index * 12 - steps[index % len(steps)])
+                  for index, age in enumerate(range(29, 0, -1))),
+        )
+    else:
+        raise ValueError('Unknown synthetic daily observation variant')
+    day = await db.scalar(text("SELECT (clock_timestamp() AT TIME ZONE 'UTC')::date"))
+    for portfolio_id, values in zip(ids, series, strict=True):
+        pid = int(portfolio_id)
+        baseline = await db.scalar(text('''
+            SELECT starting_cash FROM accounts
+            WHERE id=:p AND user_id=:u AND closed_at IS NULL
+        '''), {'p': pid, 'u': uid})
+        if baseline is None:
+            raise ValueError('Only active portfolios of this synthetic owner may receive observations')
+        for age, amount in values:
+            observed_day = day - timedelta(days=age)
+            await db.execute(text('''
+                INSERT INTO portfolio_daily_values
+                    (portfolio_id, user_id, utc_day, captured_at, starting_cash,
+                     total_value, valuation_complete)
+                VALUES (:p, :u, :day, :captured, :baseline, :amount, :complete)
+            '''), {
+                'p': pid,
+                'u': uid,
+                'day': observed_day,
+                'captured': datetime.combine(observed_day, time(22, 15), UTC),
+                'baseline': baseline,
+                'amount': None if amount is None else Decimal(amount),
+                'complete': amount is not None,
+            })
+    print(json.dumps({'time_basis': 'UTC', 'synthetic_rows': sum(map(len, series))}))
+
+
+async def main(mode, email=None, *arguments):
     helper['guard']()
-    if mode not in {'legacy', 'inspect', 'economic', 'lifecycle', 'sibling', 'name', 'price-tick'}:
+    if mode not in {'legacy', 'inspect', 'economic', 'lifecycle', 'sibling', 'name', 'price-tick', 'daily'}:
         raise ValueError('Unknown synthetic portfolio operation')
+    if mode != 'daily' and arguments:
+        raise ValueError('Unexpected synthetic portfolio arguments')
     if mode != 'legacy' and (not email or re.fullmatch(r'e2e-[a-z0-9-]+@example\.com', email) is None):
         raise ValueError('Synthetic owner required')
     engine = create_async_engine(os.environ['DATABASE_URL'])
@@ -65,6 +119,9 @@ async def main(mode, email=None):
             uid = await db.scalar(text('SELECT id FROM users WHERE email=:e'), {'e': email})
             if uid is None:
                 raise ValueError('Sign in with actual OTP first')
+            if mode == 'daily':
+                await daily_observations(db, uid, *arguments)
+                return
             original = await db.scalar(text('SELECT min(id) FROM accounts WHERE user_id=:u'), {'u': uid})
             if mode == 'sibling':
                 # Retained historical opening, never represented as a new grant.

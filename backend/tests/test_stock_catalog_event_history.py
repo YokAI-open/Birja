@@ -11,7 +11,7 @@ from pydantic import ValidationError
 from sqlalchemy import text
 
 from app.models.corporate_action import StockOwnershipMovement
-from app.schemas.event_history import EventDividendCorrection, EventTrade
+from app.schemas.event_history import EventDividendCorrection, EventHistoryFilters, EventTrade
 from app.services.corporate_actions import apply_due_actions
 from app.services.event_history import list_event_history
 from app.services.portfolios import OwnedActivePortfolio
@@ -78,6 +78,11 @@ async def test_owned_catalog_fills_keep_original_ticker_after_reuse(
                 str(binding.catalog_id),
             )
             assert Decimal(event.cash_delta) == receipt.cash_delta
+        filtered = await list_event_history(
+            db, portfolio=root, filters=EventHistoryFilters(activity="sell", asset="stock")
+        )
+        assert filtered.items == first.items
+        assert filtered.next_cursor is None
         sibling = OwnedActivePortfolio(market["sibling"], market["u"])
         assert (await list_event_history(db, portfolio=sibling)).items == []
         with pytest.raises(HTTPException) as refused:

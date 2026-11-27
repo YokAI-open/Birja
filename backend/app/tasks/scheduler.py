@@ -60,14 +60,22 @@ class CycleResult:
     rejected: int = 0
 
 
-def build_source(settings: SchedulerSettings, http: httpx.AsyncClient) -> TickerSource:
+def build_source(
+    settings: SchedulerSettings,
+    http: httpx.AsyncClient,
+    *,
+    before_tickers: Callable[[Sequence[str]], None] | None = None,
+    record_attempt: Callable[[Sequence[str]], None] | None = None,
+) -> TickerSource:
     if settings.price_source == "fake":
         if settings.env == "prod":
             raise RuntimeError("price_source 'fake' is not allowed in prod")
         return make_fake_source(lambda: datetime.now(UTC))
 
     async def source(pairs: Sequence[str]) -> dict[str, Any]:
-        return await kraken.fetch_tickers_isolated(http, pairs)
+        if before_tickers is not None:
+            before_tickers(pairs)
+        return await kraken.fetch_tickers_isolated(http, pairs, record_attempt=record_attempt)
 
     return source
 
@@ -295,7 +303,31 @@ async def amain(stop: asyncio.Event | None = None) -> None:
     action_http: httpx.AsyncClient | None = None
     halt_http: httpx.AsyncClient | None = None
     try:
-        source = build_source(settings, http)
+        from app.tasks.market_history import (
+            HISTORY_CHECK_INTERVAL_SECONDS,
+            KrakenHistoryBudget,
+            run_history_cycle,
+        )
+
+        history_scopes = settings.market_history_scope_json
+        ticker_budget = (
+            KrakenHistoryBudget(settings.price_poll_interval_seconds)
+            if history_scopes is not None
+            and history_scopes.kraken is not None
+            and settings.price_source == "kraken"
+            and catalog_redis is not None
+            else None
+        )
+        source = (
+            build_source(settings, http)
+            if ticker_budget is None
+            else build_source(
+                settings,
+                http,
+                before_tickers=ticker_budget.set_pairs,
+                record_attempt=ticker_budget.record_ticker_attempt,
+            )
+        )
         candidates: dict[int, Candidate] = {}
         logger.info(
             "price scheduler started source=%s interval=%s",
@@ -304,13 +336,19 @@ async def amain(stop: asyncio.Event | None = None) -> None:
         )
 
         async def cycle() -> CycleResult:
-            return await run_cycle(
-                sessionmaker=sessionmaker,
-                redis=redis,
-                source=source,
-                settings=settings,
-                candidates=candidates,
-            )
+            if ticker_budget is not None:
+                ticker_budget.start_ticker()
+            try:
+                return await run_cycle(
+                    sessionmaker=sessionmaker,
+                    redis=redis,
+                    source=source,
+                    settings=settings,
+                    candidates=candidates,
+                )
+            finally:
+                if ticker_budget is not None:
+                    ticker_budget.finish_ticker()
 
         loops: list[tuple[Callable[[], Awaitable[CycleResult]], float]] = [
             (cycle, settings.price_poll_interval_seconds)
@@ -431,6 +469,37 @@ async def amain(stop: asyncio.Event | None = None) -> None:
                     return CycleResult("source_error")
 
             loops.append((dividend_cycle, settings.stock_actions_poll_interval_seconds))
+        if history_scopes is not None and catalog_redis is not None:
+
+            async def history_cycle() -> CycleResult:
+                return await run_history_cycle(
+                    sessionmaker=sessionmaker,
+                    redis=catalog_redis,
+                    quota_redis=redis,
+                    http=http,
+                    stock_http=stock_http,
+                    settings=settings,
+                    tracker=ticker_budget,
+                )
+
+            background_checks.append((history_cycle, HISTORY_CHECK_INTERVAL_SECONDS))
+        if settings.portfolio_daily_capture_enabled:
+            from app.tasks.portfolio_daily_values import (
+                CHECK_INTERVAL_SECONDS,
+                DailyValueCursor,
+                daily_capture_schema_available,
+                run_portfolio_daily_capture,
+            )
+
+            if await daily_capture_schema_available(engine):
+                daily_cursor = DailyValueCursor()
+
+                async def daily_capture_cycle() -> CycleResult:
+                    return await run_portfolio_daily_capture(
+                        sessionmaker=sessionmaker, settings=settings, cursor=daily_cursor
+                    )
+
+                background_checks.append((daily_capture_cycle, CHECK_INTERVAL_SECONDS))
         async with asyncio.TaskGroup() as group:
             for callback, interval in loops:
                 group.create_task(run(cycle=callback, interval=interval, stop=stop))

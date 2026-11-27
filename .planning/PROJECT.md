@@ -3,9 +3,9 @@
 ## What This Is
 
 Birja is a virtual-money investing simulator for private strategy portfolios.
-Users can trade crypto with independent virtual cash in each portfolio. The
-redesigned interface is deployed. US stock orders remain blocked in production,
-and the current stock catalog is limited to 20 entries.
+Users can manage independent virtual portfolios and trade crypto. The
+integration baseline also includes simulated US stock trading and searchable
+NYSE and Nasdaq listings. The v1.4 closeout tracks stock acceptance.
 
 ## Core Value
 
@@ -81,12 +81,19 @@ Making a trade at a real, recent market price and then seeing what it's worth no
   isolated live AAPL round trip, crypto control, and affected recovery.
   [Phase 18 verification](phases/18-make-simulated-stock-trades-work/18-VERIFICATION.md)
 
+- [x] Approved Markets workspace with stock-first discovery, selected-asset
+  details, owned portfolio routing, and server-provided reopening countdowns
+  (WS-01–WS-04). [Phase 22 verification](phases/22-adopt-the-market-workspace/22-VERIFICATION.md)
+
+- [x] Approved trade, History and sign-in workspaces, filtered private
+  ledger and exact hosted candidate verification (FLOW-01–FLOW-04).
+  [Phase 25 verification](phases/25-finish-the-trading-flows-and-verify-the-integrated-app/25-VERIFICATION.md)
+
 ### Active
 
-- [ ] Let users search active NYSE and Nasdaq common stocks by name or ticker
-  and trade eligible results beyond the original 20.
-- [ ] Preserve exact portfolio and History behavior while qualifying the new
-  stock flow with live data and the existing release process.
+- [ ] Adopt the approved portfolio workspace and strategy comparison.
+- [ ] Chart actual market prices for stocks and crypto and record daily
+  values for private portfolio trends.
 
 ### Carried Work Across Milestones
 
@@ -96,12 +103,11 @@ limits supplements the preserved measurements and implementation proof. See
 [DEFERRED.md](DEFERRED.md) for provenance. Historical archives remain unchanged.
 The [live verification](quick/20261124-stock-activation/SUMMARY.md) isolated the
 remaining production blocker. v1.4 owns the stock activation outcome under
-the newly approved simulator rules.
+the approved simulator rules. Preserve its [open closeout handoff](milestones/v1.4-OPEN-HANDOFF.md).
 
 ### Out of Scope
 
 - Gold/metals, FX and bonds: deferred. US stocks are now selected for v1.1; other asset classes remain outside its scope.
-- Portfolio value-over-time chart: v2. It needs a snapshot job and stored history.
 - Limit/stop orders: v2+. They need a background matcher. Market orders cover the core loop.
 - Short selling, leverage, margin: not planned. Too complex for a learning tool aimed at beginners.
 - Leaderboard and social features: deferred. Portfolios remain private to their owner.
@@ -120,6 +126,13 @@ the newly approved simulator rules.
 - The design system lives in `design-system/birja/MASTER.md`; existing Tailwind/shadcn components and Node 24 were established in Phase 1. Codex discovers maintained skills through `.agents/skills/`; shared project rules remain in CLAUDE.md.
 
 ## Current State
+
+Phases 22, 24 and 25 are complete on the v1.5 feature branch. PR #55
+passed all six required jobs and the authenticated seven-stage recovery
+on its exact GitHub checkout. Phase 23's local charts are verified, with
+live historical data qualification still open under CHART-04.
+[Phase 25 verification](phases/25-finish-the-trading-flows-and-verify-the-integrated-app/25-VERIFICATION.md) ·
+[Phase 24 verification](phases/24-compare-portfolio-performance/24-VERIFICATION.md)
 
 Production is verified online at main7d236e4/schema0023 (v0.6.2), with exact
 post-rollout encrypted recovery, original-data preservation and refreshed
@@ -310,7 +323,7 @@ Phases 16 and 17 are verified, and the interface is deployed in the `07d3aa5`
 production baseline. See the [verified requirements snapshot](milestones/v1.3-REQUIREMENTS.md),
 [roadmap snapshot](milestones/v1.3-ROADMAP.md) and [audit](v1.3-MILESTONE-AUDIT.md).
 
-## Current Milestone: v1.4 Searchable Stock Trading
+## Previous Milestone: v1.4 Searchable Stock Trading
 
 **Goal:** A user can find any supported NYSE or Nasdaq common stock and
 complete a simulated buy and sell using current market data.
@@ -327,6 +340,24 @@ Phase 18 verified live Alpaca IEX pricing and exchange-reported halts for the
 original 20-stock scope. Coverage, quotas, permitted use and retention for
 the broader universe are part of the remaining stock discovery and activation
 work. [Research](research/v1.4/SUMMARY.md)
+
+## Current Milestone: v1.5 Market Charts and Workspace Redesign
+
+**Goal:** Bring the approved prototype into Birja and let users see actual
+market price history and how each strategy changes in value over time.
+
+- Keep the existing Birja branding, typography, and compact navigation.
+  Use the approved split Markets layout with search, selected quote and chart.
+- Show real stock and crypto history in 1D, 1W and 1M ranges. Capture daily
+  portfolio values from rollout for each strategy's sparkline.
+- Bring the portfolio cards, selected portfolio, trade, History and sign-in
+  flows into the approved layout using the authenticated application.
+- Preserve current money, portfolio, calendar and order behavior. Verify the
+  integrated experience and the new snapshot data with existing release checks.
+
+The owner approved the design and requested this milestone on 2026-11-26.
+[Design reference](ui-reviews/v1.5/README.md) · [Research](research/v1.5/SUMMARY.md) ·
+[Requirements](REQUIREMENTS.md) · [Roadmap](ROADMAP.md)
 
 ## Constraints
 
@@ -381,4 +412,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-24 after Phase 18 verification.*
+*Last updated: 2026-11-26 after hosted Phase 25 verification.*

@@ -4,10 +4,11 @@ import re
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import ValidationError
 
 from app.api.v1.stock_trades import PrivateRoute
 from app.core.deps import DbDep, OwnedActivePortfolioDep
-from app.schemas.event_history import EventHistoryPage
+from app.schemas.event_history import EventHistoryFilters, EventHistoryPage
 from app.schemas.history import HistoryPage
 from app.services import event_history, history
 
@@ -56,12 +57,25 @@ async def trades(
     description="Reads owned trades, dividends, splits, corrections and their private originals.",
 )
 async def events(
-    portfolio: OwnedActivePortfolioDep, db: DbDep, limit: Limit = "25", cursor: Cursor = None
+    portfolio: OwnedActivePortfolioDep,
+    db: DbDep,
+    limit: Limit = "25",
+    cursor: Cursor = None,
+    activity: Annotated[
+        str, Query(description="Activity: all, buy, sell, dividend or split")
+    ] = "all",
+    asset: Annotated[str, Query(description="Asset class: all, stock or crypto")] = "all",
 ) -> EventHistoryPage:
     size = _limit(limit)
     try:
+        filters = EventHistoryFilters.model_validate({"activity": activity, "asset": asset})
+    except ValidationError:
+        raise HTTPException(
+            422, detail={"code": "invalid_filter", "message": "Invalid history filter."}
+        ) from None
+    try:
         return await event_history.list_event_history(
-            db, portfolio=portfolio, limit=size, cursor=cursor
+            db, portfolio=portfolio, limit=size, cursor=cursor, filters=filters
         )
     except event_history.InvalidCursor:
         raise _cursor_error() from None

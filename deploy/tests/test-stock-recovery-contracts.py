@@ -4,10 +4,13 @@
 import copy
 import hashlib
 import importlib.util
+import io
 import json
 import os
 import subprocess
 import sys
+import tarfile
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -101,6 +104,7 @@ class RevisionContracts(unittest.TestCase):
             (5, '0025', producer.CATALOG_SOURCE_SHA256),
             (6, '0026', producer.CATALOG_FINANCE_SOURCE_SHA256),
             (7, '0027', producer.CATALOG_NYSE_SOURCE_SHA256),
+            (8, '0028', producer.DAILY_VALUE_SOURCE_SHA256),
         ):
             with self.subTest(revision=revision):
                 profile = 'deploy-recovery-v' + str(version + 1)
@@ -134,13 +138,46 @@ class RevisionContracts(unittest.TestCase):
     def test_catalog_nyse_payload_carries_every_pinned_source(self):
         producer = load('backup-snapshot')
         restore = load('verify-restore')
-        payload = producer.catalog_nyse_payload_inventory(ROOT)
+        spec = importlib.util.spec_from_file_location('retained_sources', ROOT / 'deploy/tests/portfolio-sources.py')
+        sources = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sources)
+        with tempfile.TemporaryDirectory() as tmp:
+            with tarfile.open(fileobj=io.BytesIO(sources.source_archive('portfolio0027'))) as archive:
+                archive.extractall(tmp, filter='data')
+            payload = producer.catalog_nyse_payload_inventory(tmp)
         self.assertEqual(payload['revision'], '0027')
         self.assertEqual(payload['version'], 7)
         self.assertEqual(set(payload['sha256']), set(restore.portfolio_payload_files({'portfolio_payload': payload})))
         self.assertEqual({name: payload['sha256'][name] for name in producer.CATALOG_NYSE_SOURCE_SHA256},
                          producer.CATALOG_NYSE_SOURCE_SHA256)
         restore.verify_portfolio_inventory({'portfolio_payload': payload}, payload['sha256'])
+
+    def test_daily_value_inventory_and_canonical_schema_are_exact(self):
+        producer, restore = load('backup-snapshot'), load('verify-restore')
+        payload = producer.daily_value_payload_inventory(ROOT)
+        self.assertEqual((payload['version'], payload['revision']), (8, '0028'))
+        restore.verify_portfolio_inventory({'portfolio_payload': payload}, payload['sha256'])
+        prior = producer.contract_columns('0027')
+        daily = 'portfolio_daily_values'
+        self.assertEqual(producer.contract_columns('0028'), prior | {
+            daily: {'id', 'portfolio_id', 'user_id', 'utc_day', 'captured_at',
+                    'starting_cash', 'total_value', 'valuation_complete'},
+        })
+        self.assertEqual(set(producer.identity_tables('0028')) - set(producer.identity_tables('0027')), {daily})
+        self.assertNotIn(daily, producer.schema_guard_sql('0027'))
+        self.assertIn(daily + '_id_seq', producer.schema_guard_sql('0028'))
+        query = producer.manifest_sql('0028')
+        self.assertIn("SELECT 'portfolio_daily_values',id,json_build_array(id::text,portfolio_id::text", query)
+        self.assertIn("to_char(utc_day,'YYYY-MM-DD')", query)
+        self.assertIn("to_char(captured_at", query)
+        self.assertIn("total_value::text,valuation_complete::text", query)
+        self.assertIn("daily_value_state", query)
+        self.assertIn("catalog_finance_invalid", query)
+        self.assertEqual(restore.retained_closure_sources(8),
+                         restore.retained_closure_sources(7) | {
+                             'sources/portfolio0027.tar':
+                                 'c97958efd402c26a4e81452bda8019c066d977625ff12e5507dcf1d1fa3f9daf',
+                         })
 
     def test_dividend_pregrant_structure_refuses_ambiguous_query(self):
         restore=load('verify-restore')

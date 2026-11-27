@@ -252,6 +252,16 @@ evidence and receive a revocation timestamp.
 | `alpaca_iex_quotes` | Supply reviewed account/server, `iex`, USD, approved exchanges and request bounds for transient display and cache of symbol, bid, ask and source time. |
 | `catalog_execution`, `catalog_mark`, `catalog_halt`, `catalog_actions` | Set the exact current `catalog_id` and `listing_id` as canonical strings, mapped `provider_asset_id`, account/server and feed. Scope execution and marks to `iex`, halts to `nasdaq-rss`, and actions to `alpaca-corporate-actions`. Retain the separate reviewed collection/use, storage and backup for each artifact. |
 
+Reviewed `catalog_mark` grants can limit use of a mark in a durable private
+portfolio aggregate. Set `durable_derived_use` to `false` to exclude the mark
+from that aggregate, or `durable_derived_backup` to `false` if the aggregate
+cannot be included in backups. Put these optional JSON booleans in the exact
+listing packet's `scope` or the bulk enrollment packet's `mark_limits`. Either
+restriction makes the daily observation incomplete while the current statement
+continues using the existing mark permissions and quote retention deadline.
+Omit the fields when the reviewed derivation, storage and backup purposes apply
+to the aggregate. Other catalog artifacts retain their own purpose fields.
+
 `catalog_actions` also requires `all_us_replay_ingress: true`,
 `replay_region: "us"`, and `known_id_recheck: true`. Supply `rest_symbols`
 with the mapped provider symbol and any reviewed same-issue former aliases.

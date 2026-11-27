@@ -218,6 +218,7 @@ test("buy → portfolio → history → whole-position sell preserves actual ser
   await openOwnedPortfolio(page);
   await expect(page.getByRole("region", { name: "Cash", exact: true })).toContainText("$10,000.00");
   await page.getByRole("link", { name: "Markets", exact: true }).click();
+  await page.getByRole("button", { name: "Crypto", exact: true }).click();
   await page.getByRole("list", { name: "Crypto" }).getByRole("button", { name: /BTC/ }).click();
   await page.getByRole("link", { name: "Trade BTC", exact: true }).click();
   await page.getByLabel("Amount").fill("100");
@@ -318,6 +319,7 @@ test("buy → portfolio → history → whole-position sell preserves actual ser
   }
   await openHistory([buy]);
   await page.getByRole("link", { name: "Markets", exact: true }).click();
+  await page.getByRole("button", { name: "Crypto", exact: true }).click();
   await page.getByRole("list", { name: "Crypto" }).getByRole("button", { name: /BTC/ }).click();
   await page.getByRole("link", { name: "Trade BTC", exact: true }).click();
   // Leaving during post-fill invalidations can retain the original as unknown.

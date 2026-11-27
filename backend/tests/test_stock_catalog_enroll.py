@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy import func, select
 
 from app.models.corporate_action import StockActionState
@@ -120,6 +121,24 @@ def _files(
         }
     _private(scope, json.dumps(packet).encode())
     return packet, (scope, nyse, nasdaq)
+
+
+@pytest.mark.parametrize(
+    ("limits", "value"),
+    [
+        ("mark_limits", "false"),
+        ("mark_limits", None),
+        ("mark_limits", 0),
+        ("execution_limits", False),
+        ("halt_limits", False),
+    ],
+)
+def test_bulk_aggregate_terms_require_a_mark_boolean(tmp_path, limits, value):
+    packet, files = _files(tmp_path)
+    packet[limits] = {**packet[limits], "durable_derived_use": value}
+    _private(files[0], json.dumps(packet).encode())
+    with pytest.raises(ValidationError, match="durable_derived_use"):
+        _inputs(*files)
 
 
 def test_private_scope_binds_both_hashes_and_exact_scope_bytes(tmp_path: Path) -> None:

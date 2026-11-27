@@ -3,13 +3,21 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from decimal import Decimal
 from functools import lru_cache
-from typing import Literal
+from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
-from pydantic import Field, SecretStr, ValidationInfo, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import (
+    Field,
+    SecretStr,
+    ValidationError,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from app.db.connection import database_ssl_context, validate_database_url
+from app.schemas.market_history import MarketHistoryScopes
 
 
 class _StockSettings(BaseSettings):
@@ -27,6 +35,22 @@ class _StockSettings(BaseSettings):
     stock_max_response_bytes: int = Field(default=262144, ge=4096, le=1048576)
     stock_data_account: str = Field(default="birja", min_length=1, max_length=128)
     stock_data_server: str = Field(default="birja", min_length=1, max_length=128)
+    market_history_scope_json: Annotated[MarketHistoryScopes | None, NoDecode] = Field(
+        default=None, repr=False
+    )
+
+    @field_validator("market_history_scope_json", mode="before")
+    @classmethod
+    def _decode_market_history_scope(cls, value: object) -> object:
+        if isinstance(value, str):
+            if 0 < len(value) <= 1048576:
+                try:
+                    return MarketHistoryScopes.model_validate_json(value)
+                except ValidationError:
+                    pass
+            # Optional chart configuration must never stop current-price or order services.
+            return None
+        return value
 
     @property
     def catalog_cache_url(self) -> str | None:
@@ -62,7 +86,27 @@ class _StockSettings(BaseSettings):
         return self
 
 
-class Settings(_StockSettings):
+class MarketValuationSettings(_StockSettings):
+    """Shared current valuation inputs for the API and the dedicated scheduler."""
+
+    price_fresh_seconds: int = 120
+    price_stale_seconds: int = 300
+
+    @field_validator("price_fresh_seconds", "price_stale_seconds")
+    @classmethod
+    def _check_price_threshold(cls, value: int, info: ValidationInfo) -> int:
+        if value < 1:
+            raise ValueError(f"{info.field_name} must be >= 1")
+        return value
+
+    @model_validator(mode="after")
+    def _check_price_freshness(self) -> MarketValuationSettings:
+        if self.price_stale_seconds <= self.price_fresh_seconds:
+            raise ValueError("price_stale_seconds must be greater than price_fresh_seconds")
+        return self
+
+
+class Settings(MarketValuationSettings):
     # hide_input_in_errors keeps credentials in the URLs out of ValidationError text
     model_config = SettingsConfigDict(extra="ignore", hide_input_in_errors=True)
 
@@ -99,11 +143,6 @@ class Settings(_StockSettings):
     rl_send_global_limit: int = 100
     rl_send_global_window: int = 3600
 
-    # Price freshness (D-03): the single definition shared by the API response,
-    # the UI (via the response) and Phase 4's stale-trade refusal.
-    price_fresh_seconds: int = 120
-    price_stale_seconds: int = 300
-
     # Price refresh scheduler (PRICE-03/04). "fake" is dev/CI only and refused in prod.
     price_source: Literal["kraken", "fake"] = "kraken"
     price_poll_interval_seconds: int = 60
@@ -131,8 +170,6 @@ class Settings(_StockSettings):
         "rl_verify_ip_window",
         "rl_send_global_limit",
         "rl_send_global_window",
-        "price_fresh_seconds",
-        "price_stale_seconds",
     )
     @classmethod
     def _check_positive(cls, v: int, info: ValidationInfo) -> int:
@@ -215,12 +252,6 @@ class Settings(_StockSettings):
         return self
 
     @model_validator(mode="after")
-    def _check_price_freshness(self) -> Settings:
-        if self.price_stale_seconds <= self.price_fresh_seconds:
-            raise ValueError("price_stale_seconds must be greater than price_fresh_seconds")
-        return self
-
-    @model_validator(mode="after")
     def _check_email(self) -> Settings:
         if self.email_backend == "resend":
             if self.resend_api_key is None:
@@ -254,7 +285,7 @@ def get_settings() -> Settings:
     return Settings()
 
 
-class SchedulerSettings(_StockSettings):
+class SchedulerSettings(MarketValuationSettings):
     """Settings for the price scheduler container only (least privilege).
 
     The scheduler parses a third-party API, so it gets no token, OTP or email secrets:
@@ -266,6 +297,7 @@ class SchedulerSettings(_StockSettings):
 
     database_url: str = Field(repr=False)
     database_ssl_ca_file: str | None = Field(default=None, repr=False)
+    portfolio_daily_capture_enabled: bool = False
 
     price_source: Literal["kraken", "fake"] = "kraken"
     price_poll_interval_seconds: int = 60

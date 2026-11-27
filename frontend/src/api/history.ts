@@ -14,6 +14,15 @@ export type HistoryItem = {
 };
 export type HistoryPage = { items: HistoryItem[]; next_cursor: string | null };
 
+export type EventHistoryFilters = {
+  activity: "all" | "buy" | "sell" | "dividend" | "split";
+  asset: "all" | "stock" | "crypto";
+};
+export const DEFAULT_EVENT_HISTORY_FILTERS: Readonly<EventHistoryFilters> = {
+  activity: "all",
+  asset: "all",
+};
+
 const record = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 const decimal = (v: unknown): v is string => typeof v === "string" && /^-?\d+(\.\d+)?$/.test(v);
@@ -46,6 +55,7 @@ export function isPortfolioHistoryCursor(
   value: unknown,
   kind: "trade" | "mixed",
   expectedPortfolioId?: string,
+  filters: EventHistoryFilters = DEFAULT_EVENT_HISTORY_FILTERS,
 ): value is string {
   if (typeof value !== "string" || value.length > 512 || !/^[A-Za-z0-9_-]+$/.test(value))
     return false;
@@ -60,10 +70,12 @@ export function isPortfolioHistoryCursor(
       (expectedPortfolioId !== undefined && decoded.portfolio_id !== expectedPortfolioId)
     )
       return false;
+    const filtered = kind === "mixed" && (filters.activity !== "all" || filters.asset !== "all");
     const keys =
       kind === "trade"
         ? ["v", "portfolio_id", "created_at", "id"]
         : ["v", "portfolio_id", "recorded_at", "kind_rank", "source_id"];
+    if (filtered) keys.push("activity", "asset");
     if (
       Object.keys(decoded).length !== keys.length ||
       !keys.every((key) => Object.hasOwn(decoded, key))
@@ -73,7 +85,9 @@ export function isPortfolioHistoryCursor(
     if (!timestamp(stamp) || !/\.\d{6}Z$/.test(stamp)) return false;
     return kind === "trade"
       ? decoded.v === 2 && identifier(decoded.id)
-      : decoded.v === 3 &&
+      : decoded.v === (filtered ? 4 : 3) &&
+          (!filtered ||
+            (decoded.activity === filters.activity && decoded.asset === filters.asset)) &&
           [1, 2, 3, 4].includes(decoded.kind_rank as number) &&
           identifier(decoded.source_id);
   } catch {

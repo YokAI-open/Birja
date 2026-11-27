@@ -194,7 +194,7 @@ export function PortfolioHoldings({
   staleSeconds: number;
 }) {
   const [filter, setFilter] = useState("all");
-  const [sort, setSort] = useState("symbol");
+  const [sort, setSort] = useState("value");
   const results = holdings
     .filter((holding) => filter === "all" || holding.asset_class === filter)
     .sort((a, b) => {
@@ -202,18 +202,19 @@ export function PortfolioHoldings({
         sort === "value"
           ? compareAmountDescending(a.current_value, b.current_value)
           : sort === "return"
-            ? compareAmountDescending(a.unrealized_pl, b.unrealized_pl)
+            ? compareAmountDescending(a.unrealized_pl_percent, b.unrealized_pl_percent)
             : 0;
       if (byAmount) return byAmount;
       if (a.symbol !== b.symbol) return a.symbol < b.symbol ? -1 : 1;
+      if (a.coin_id === b.coin_id) return 0;
       return BigInt(a.coin_id) < BigInt(b.coin_id) ? -1 : 1;
     });
   const filterClass =
-    "min-h-11 min-w-0 rounded-control border border-input bg-background px-2 text-sm sm:px-3";
+    "min-h-11 min-w-0 max-w-full rounded-control border border-input bg-background px-3 text-sm";
 
   return (
-    <section className="flex min-w-0 flex-col gap-5" aria-labelledby="holdings-heading">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <section className="flex min-w-0 flex-col gap-3" aria-labelledby="holdings-heading">
+      <div className="portfolio-holdings-heading flex flex-wrap items-center justify-between gap-3">
         <h2 id="holdings-heading" className="text-2xl font-semibold">
           Holdings
         </h2>
@@ -226,8 +227,8 @@ export function PortfolioHoldings({
               onChange={(event) => setFilter(event.currentTarget.value)}
             >
               <option value="all">All assets</option>
-              <option value="crypto">Crypto</option>
               <option value="stock">Stocks</option>
+              <option value="crypto">Crypto</option>
             </select>
             <select
               aria-label="Sort holdings"
@@ -235,9 +236,9 @@ export function PortfolioHoldings({
               value={sort}
               onChange={(event) => setSort(event.currentTarget.value)}
             >
-              <option value="symbol">Symbol A–Z</option>
               <option value="value">Highest value</option>
-              <option value="return">Highest gain</option>
+              <option value="symbol">Ticker A–Z</option>
+              <option value="return">Highest return</option>
             </select>
           </div>
         )}
@@ -254,27 +255,42 @@ export function PortfolioHoldings({
           No holdings match this filter.
         </p>
       ) : (
-        <ul aria-label="Holdings" className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <ul aria-label="Holdings" className="portfolio-holding-grid">
           {results.map((h) => (
             <li
               key={h.coin_id}
-              className="flex min-w-0 flex-col gap-5 rounded-card border border-border bg-card p-5"
+              className="flex min-w-0 flex-col gap-3 rounded-card border border-border bg-card p-4"
             >
-              <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-4 gap-y-2">
+              <div className="flex min-w-0 items-center gap-2">
+                <span
+                  aria-hidden="true"
+                  className="grid size-10 shrink-0 place-items-center rounded-control bg-muted font-semibold"
+                >
+                  {h.asset_class === "crypto" && h.symbol === "BTC" ? "₿" : h.symbol[0]}
+                </span>
                 <div className="min-w-0">
-                  <h3 className="text-xl leading-tight font-semibold tracking-tight wrap-anywhere">
-                    {h.name}
-                  </h3>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {h.symbol === h.name ? "" : `${h.symbol} · `}
+                  <h3 className="font-semibold wrap-anywhere">{h.symbol}</h3>
+                  <p className="text-sm wrap-anywhere text-muted-foreground">
+                    {h.symbol !== h.name && (
+                      <>
+                        <span>{h.name}</span>
+                        {" · "}
+                      </>
+                    )}
                     {h.asset_class === "stock" ? "Stock" : "Crypto"}
                   </p>
                 </div>
-                <p className="text-2xl leading-tight font-medium tracking-tight wrap-anywhere tabular-nums">
+              </div>
+              <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                <p className="text-2xl leading-tight font-semibold tracking-tight wrap-anywhere tabular-nums">
                   <span className="sr-only">Current value: </span>
                   <span>
                     {h.current_value === null ? "Unavailable" : formatUsd(h.current_value)}
                   </span>
+                </p>
+                <p className="text-sm wrap-anywhere tabular-nums">
+                  <span className="sr-only">Gain/loss: </span>
+                  <Return holding={h} />
                 </p>
               </div>
               <HoldingStatus
@@ -284,18 +300,12 @@ export function PortfolioHoldings({
                 staleSeconds={staleSeconds}
               />
               <div className="mt-auto flex flex-wrap items-end justify-between gap-3 border-t border-border pt-3">
-                <div className="min-w-0 space-y-1 text-sm wrap-anywhere tabular-nums">
-                  <p className="text-muted-foreground">
-                    <span className="sr-only">Quantity: </span>
-                    {h.stock_mark && !h.stock_mark.units_safe
-                      ? "Quantity unavailable"
-                      : `${h.asset_class === "stock" ? h.quantity.split(".")[0] : formatQuantity(h.quantity)} ${h.symbol}`}
-                  </p>
-                  <p>
-                    <span className="sr-only">Gain/loss: </span>
-                    <Return holding={h} />
-                  </p>
-                </div>
+                <p className="min-w-0 text-sm wrap-anywhere text-muted-foreground tabular-nums">
+                  <span className="sr-only">Quantity: </span>
+                  {h.stock_mark && !h.stock_mark.units_safe
+                    ? "Quantity unavailable"
+                    : `${h.asset_class === "stock" ? h.quantity.split(".")[0] : formatQuantity(h.quantity)} ${h.symbol}`}
+                </p>
                 <Trade holding={h} target={target} />
               </div>
               <details className="group">

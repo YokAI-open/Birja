@@ -64,7 +64,7 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
 });
-it("opens only a named review; Cancel is first and focused, Escape and Enter never send", () => {
+it("focuses Keep portfolio in the named review and sends nothing on Escape or Enter", () => {
   const view = show();
   const trigger = screen.getByRole("button", { name: "Delete portfolio…" });
   fireEvent.click(trigger);
@@ -84,7 +84,7 @@ it("opens only a named review; Cancel is first and focused, Escape and Enter nev
   );
   expect(screen.getByRole("heading", { name: `Delete “${metadata.name}”?` })).toBeVisible();
   expect(document.querySelector("b")).toBeNull();
-  expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
+  expect(screen.getByRole("button", { name: "Keep portfolio" })).toHaveFocus();
   expect(screen.getByRole("button", { name: "Delete portfolio…" })).toHaveAttribute(
     "aria-expanded",
     "true",
@@ -93,7 +93,7 @@ it("opens only a named review; Cancel is first and focused, Escape and Enter nev
     key: "Enter",
   });
   expect(confirmDeletion).not.toHaveBeenCalled();
-  fireEvent.keyDown(screen.getByRole("button", { name: "Cancel" }), { key: "Escape" });
+  fireEvent.keyDown(screen.getByRole("button", { name: "Keep portfolio" }), { key: "Escape" });
   expect(cancelReview).toHaveBeenCalledOnce();
   expect(confirmDeletion).not.toHaveBeenCalled();
 });
@@ -119,10 +119,10 @@ it("keeps the reviewed name on rename and requires latest same-ID review", () =>
   expect(confirmDeletion).not.toHaveBeenCalled();
 });
 it.each(["persisting", "submitting", "checking", "unknown"])(
-  "shows immutable %s recovery without a misleading Cancel",
+  "shows immutable %s recovery without suggesting the portfolio can be kept",
   (phase) => {
     show({}, { phase, attempt: intent }, { available: false });
-    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Keep portfolio" })).toBeNull();
     expect(screen.getByText(/Leaving does not cancel/)).toBeVisible();
     expect(
       screen.getByText(

@@ -1,14 +1,17 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import { ArrowRight } from "lucide-react";
+import { ArrowUpRight, Plus } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { PortfolioCreateForm } from "@/components/PortfolioCreateForm";
+import { PortfolioValueSparkline } from "@/components/PortfolioValueSparkline";
 import { usePortfolioOverview } from "@/hooks/usePortfolioOverview";
+import { usePortfolioValueHistory } from "@/hooks/usePortfolioValueHistory";
 import { usePortfolioManagement } from "@/hooks/usePortfolioManagement";
 import { formatUsd } from "@/lib/money";
 import { fullLocalTimestamp, outcome, signedPercent, signedUsd } from "@/lib/financialDisplay";
 import type { PortfolioOverview } from "@/api/portfolioOverview";
 import { usePortfolioDeletion } from "@/hooks/usePortfolioDeletion";
+import "./portfolioOverview.css";
 
 function Value({ row }: { row: PortfolioOverview }) {
   return (
@@ -53,16 +56,26 @@ function Outcome({ row }: { row: PortfolioOverview }) {
 }
 export default function PortfoliosPage() {
   const query = usePortfolioOverview();
+  const trend = usePortfolioValueHistory(query.membershipUncertain ? undefined : query.data);
   const management = usePortfolioManagement();
   const deletion = usePortfolioDeletion();
   const [open, setOpen] = useState(false);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const historyRetry = useRef<HTMLButtonElement>(null);
+  const captureHistoryRetry = useCallback((button: HTMLButtonElement | null) => {
+    if (!button && document.activeElement === historyRetry.current) {
+      heading.current?.focus({ preventScroll: true });
+    }
+    historyRetry.current = button;
+  }, []);
   const trigger = useRef<HTMLButtonElement>(null);
   const reviewTrigger = useRef<HTMLButtonElement>(null);
   const restoring = useRef(false);
   useLayoutEffect(() => {
     if (!open && restoring.current) {
       restoring.current = false;
-      (trigger.current ?? reviewTrigger.current)?.focus();
+      const button = trigger.current;
+      (button && !button.disabled ? button : reviewTrigger.current)?.focus();
     }
   }, [open]);
   const navigate = useNavigate();
@@ -98,8 +111,13 @@ export default function PortfoliosPage() {
     setOpen(false);
   };
   return (
-    <div className="app-page flex flex-col gap-7 md:gap-9 text-base leading-6 wrap-anywhere">
-      <h1 className="sr-only">Portfolios</h1>
+    <div className="portfolio-overview flex flex-col gap-7 text-base leading-6 wrap-anywhere md:gap-9">
+      <h1 ref={heading} tabIndex={-1} className="sr-only">
+        Portfolios
+      </h1>
+      <p aria-live="polite" className="sr-only">
+        {trend.data && "Value history updated."}
+      </p>
       {acknowledgement && <p role="status">Portfolio deleted.</p>}
       {deletion.deletion.attempt && (
         <div className="flex min-w-0 flex-col gap-2 rounded-control bg-warn-soft p-4 text-warn-text">
@@ -114,11 +132,6 @@ export default function PortfoliosPage() {
             Review deletion request
           </Link>
         </div>
-      )}
-      {limit && (
-        <p id="portfolio-cap">
-          You have 10 active portfolios. You can&apos;t create another right now.
-        </p>
       )}
       {!open && original && (
         <div role="status" className="rounded-control bg-warn-soft p-4 text-warn-text">
@@ -181,86 +194,119 @@ export default function PortfoliosPage() {
             ) : (
               <h2 className="sr-only">No portfolios yet</h2>
             ))}
-          <ul
-            aria-label="Portfolios"
-            className="grid min-w-0 auto-rows-[minmax(13rem,auto)] grid-cols-1 gap-4 md:grid-cols-2 lg:auto-rows-[minmax(15rem,auto)] lg:gap-6"
-          >
-            {rows.map((row) => (
-              <li key={row.id} className="min-w-0">
-                <Link
-                  to={`/portfolios/${row.id}`}
-                  aria-labelledby={`portfolio-card-${row.id}`}
-                  className="group flex h-full min-w-0 flex-col gap-6 rounded-card border border-border bg-card p-5 hover:border-ring/50 lg:p-7"
-                >
-                  <div>
-                    <div className="flex items-start justify-between gap-3">
-                      <h2
-                        id={`portfolio-card-${row.id}`}
-                        className="min-w-0 text-[26px] leading-tight font-semibold tracking-tight lg:text-[32px]"
-                      >
+          <ul aria-label="Portfolios" className="portfolio-overview-grid">
+            {rows.map((row) => {
+              const points = trend.data?.portfolios.find(
+                (series) => series.portfolio_id === row.id,
+              )?.points;
+              const series =
+                trend.data && points
+                  ? { start_day: trend.data.start_day, end_day: trend.data.end_day, points }
+                  : undefined;
+              const trendId = `portfolio-trend-${row.id}`;
+              return (
+                <li key={row.id} className="min-w-0">
+                  <Link
+                    to={`/portfolios/${row.id}`}
+                    aria-labelledby={`portfolio-card-${row.id}`}
+                    aria-describedby={trendId}
+                    className="portfolio-overview-card portfolio-overview-link group"
+                  >
+                    <div className="flex items-start justify-between gap-2.5">
+                      <h2 id={`portfolio-card-${row.id}`} className="portfolio-overview-name">
                         {row.name}
                       </h2>
-                      <ArrowRight
+                      <ArrowUpRight
                         aria-hidden="true"
-                        className="mt-1 size-5 shrink-0 text-muted-foreground group-focus-visible:text-ring group-hover:text-ring"
+                        className="size-5 shrink-0 text-muted-foreground group-hover:text-foreground group-focus-visible:text-foreground"
                       />
                     </div>
                     {row.description && (
-                      <p className="mt-2 line-clamp-2 text-sm whitespace-pre-line text-muted-foreground">
+                      <p className="mt-1 line-clamp-2 whitespace-pre-line text-muted-foreground">
                         {row.description}
                       </p>
                     )}
-                  </div>
-                  <div className="mt-auto border-t border-border pt-4 tabular-nums">
-                    <div
-                      className={
-                        row.valuation_complete && row.total_value !== null
-                          ? "text-[30px] leading-tight font-medium tracking-tight lg:text-[38px]"
-                          : "font-medium"
-                      }
-                    >
-                      {row.valuation_complete && row.total_value !== null && (
-                        <span className="sr-only">Total value: </span>
-                      )}
-                      <div>
-                        <Value row={row} />
+                    <PortfolioValueSparkline
+                      id={trendId}
+                      series={series}
+                      loading={trend.loading || query.membershipUncertain}
+                      failed={trend.failed}
+                    />
+                    <div className="portfolio-overview-amounts tabular-nums">
+                      <div className="portfolio-overview-value">
+                        <div
+                          className={
+                            row.valuation_complete && row.total_value !== null
+                              ? "portfolio-overview-total"
+                              : "font-medium"
+                          }
+                        >
+                          {row.valuation_complete && row.total_value !== null && (
+                            <span className="sr-only">Total value: </span>
+                          )}
+                          <Value row={row} />
+                        </div>
+                        <Outcome row={row} />
                       </div>
+                      <span className="portfolio-overview-cash">{formatUsd(row.cash)} cash</span>
+                      {row.prices_as_of &&
+                        row.holdings.some(
+                          ({ stock_mark }) =>
+                            stock_mark?.mark_mode === "closed" ||
+                            stock_mark?.mark_mode === "halted",
+                        ) && (
+                          <p className="mt-2 text-sm text-muted-foreground">
+                            Includes dated stock prices
+                            <time className="sr-only" dateTime={row.prices_as_of}>
+                              {fullLocalTimestamp(row.prices_as_of)}
+                            </time>
+                          </p>
+                        )}
                     </div>
-                    <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
-                      <span className="text-muted-foreground">
-                        <span>{formatUsd(row.cash)}</span> cash
-                      </span>
-                      <Outcome row={row} />
-                    </div>
-                    {row.prices_as_of &&
-                      row.holdings.some(
-                        ({ stock_mark }) =>
-                          stock_mark?.mark_mode === "closed" || stock_mark?.mark_mode === "halted",
-                      ) && (
-                        <p className="mt-2 text-sm text-muted-foreground">
-                          Includes dated stock prices
-                          <time className="sr-only" dateTime={row.prices_as_of}>
-                            {fullLocalTimestamp(row.prices_as_of)}
-                          </time>
-                        </p>
-                      )}
-                  </div>
-                </Link>
-              </li>
-            ))}
+                  </Link>
+                </li>
+              );
+            })}
             <li className="min-w-0">
               <button
                 ref={trigger}
                 type="button"
-                className="flex h-full w-full items-center justify-center rounded-card border border-border bg-accent/60 p-6 text-xl font-semibold text-ring enabled:cursor-pointer enabled:hover:border-ring/50 enabled:hover:bg-accent disabled:opacity-50 lg:text-2xl"
-                disabled={open || (!original && (!capKnown || limit))}
+                className="portfolio-overview-card portfolio-overview-new"
+                disabled={open || limit || (!original && !capKnown)}
                 aria-describedby={limit ? "portfolio-cap" : undefined}
                 onClick={() => setOpen(true)}
               >
-                New portfolio
+                <span aria-hidden="true" className="portfolio-overview-plus">
+                  <Plus className="size-5" />
+                </span>
+                <span className="portfolio-overview-name">New portfolio</span>
               </button>
             </li>
           </ul>
+          {limit && (
+            <p id="portfolio-cap">
+              You have 10 active portfolios. You can&apos;t create another right now.
+            </p>
+          )}
+          {(trend.failed || trend.retrying || trend.paused) && (
+            <div className="flex flex-wrap items-center gap-3">
+              {trend.failed && <p role="status">Value history unavailable</p>}
+              {trend.paused && <p role="status">Waiting for a connection to load value history.</p>}
+              {(trend.failed || trend.retrying) && (
+                <Button
+                  ref={captureHistoryRetry}
+                  className="min-h-11"
+                  variant="secondary"
+                  aria-disabled={trend.retrying}
+                  onClick={() => {
+                    if (!trend.retrying) trend.retry();
+                  }}
+                >
+                  Retry value history
+                </Button>
+              )}
+            </div>
+          )}
         </>
       )}
       {open && <PortfolioCreateForm count={rows?.length} onClose={close} onCreated={created} />}

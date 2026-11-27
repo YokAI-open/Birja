@@ -3,10 +3,10 @@ import { ChevronDown, RefreshCw } from "lucide-react";
 import { Link, useOutletContext } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import type { EventHistoryItem } from "@/api/eventHistory";
+import { DEFAULT_EVENT_HISTORY_FILTERS, type EventHistoryFilters } from "@/api/history";
 import {
   HistoryEventCash,
   HistoryEventDetails,
-  HistoryEventTime,
   HistoryEventTitle,
 } from "@/components/HistoryEventDetails";
 import { Button } from "@/components/ui/button";
@@ -14,41 +14,59 @@ import { Card, CardContent } from "@/components/ui/card";
 import { eventHistorySession, useEventHistory } from "@/hooks/useEventHistory";
 import type { PortfolioTarget } from "@/hooks/usePortfolioTarget";
 import { PortfolioSwitcher } from "@/components/PortfolioSwitcher";
+import "./historyWorkspace.css";
+
+const dayFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "long" });
+const timeFormat = new Intl.DateTimeFormat(undefined, { timeStyle: "short" });
 
 function EventCard({
   item,
   target,
   prefix,
+  day,
 }: {
   item: EventHistoryItem;
   target: PortfolioTarget;
   prefix: string;
+  day?: string;
 }) {
+  const time = timeFormat.format(new Date(item.recorded_at));
   return (
-    <li
-      id={`${prefix}${item.id}`}
-      tabIndex={-1}
-      className="min-w-0 scroll-mt-4 rounded-card border border-border bg-card"
-    >
-      <details className="group">
-        <summary className="grid min-h-20 cursor-pointer list-none grid-cols-[minmax(0,1fr)_fit-content(45%)_auto] items-start gap-3 rounded-card px-4 py-4 hover:bg-accent/50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring sm:items-center sm:px-6 [&::-webkit-details-marker]:hidden">
-          <span className="min-w-0 wrap-anywhere">
-            <span className="block text-lg leading-tight">
-              <HistoryEventTitle item={item} />
-              {" · "}
-              <span className="font-semibold">{item.symbol}</span>
+    <li id={`${prefix}${item.id}`} tabIndex={-1} className="min-w-0 scroll-mt-4">
+      {day && <h2 className="history-date-heading">{day}</h2>}
+      <details className="group history-event-row">
+        <summary className="history-event-summary hover:bg-accent/50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring">
+          <span className="history-event-identity">
+            <span className="history-asset-tile" data-asset={item.asset_type} aria-hidden="true">
+              {item.asset_type === "crypto" && item.symbol === "BTC" ? "₿" : item.symbol.charAt(0)}
             </span>
-            <span className="mt-1 block text-sm text-muted-foreground">
-              <HistoryEventTime value={item.recorded_at} />
+            <span className="min-w-0 wrap-anywhere">
+              <span className="block font-semibold [&>span]:font-semibold">
+                <HistoryEventTitle item={item} />
+                {" · "}
+                <span>{item.symbol}</span>
+              </span>
+              <span className="history-event-meta">
+                {item.name !== item.symbol && (
+                  <span className="history-event-name">{item.name} ·</span>
+                )}
+                <time
+                  dateTime={item.recorded_at}
+                  title={item.recorded_at}
+                  aria-label={`${time}, UTC ${item.recorded_at}`}
+                >
+                  {time}
+                </time>
+              </span>
             </span>
           </span>
-          <span className="min-w-0 text-right text-base sm:text-lg">
+          <span className="min-w-0 text-right">
             <span className="sr-only">Cash change: </span>
             <HistoryEventCash item={item} />
           </span>
           <ChevronDown
             aria-hidden="true"
-            className="mt-1 size-4 shrink-0 text-muted-foreground group-open:rotate-180 sm:mt-0"
+            className="size-4 shrink-0 text-muted-foreground group-open:rotate-180"
           />
         </summary>
         <div className="mx-4 border-t border-border py-4 sm:mx-6 sm:py-5">
@@ -88,6 +106,9 @@ export default function HistoryPage() {
 
 function OwnedHistory({ target }: { target: PortfolioTarget }) {
   const client = useQueryClient();
+  const [filters, setFilters] = useState(DEFAULT_EVENT_HISTORY_FILTERS);
+  const activeFilters = useRef(filters);
+  const isFiltered = filters.activity !== "all" || filters.asset !== "all";
   const {
     data,
     dataUpdatedAt,
@@ -97,13 +118,15 @@ function OwnedHistory({ target }: { target: PortfolioTarget }) {
     isFetchingNextPage,
     isFetchNextPageError,
     hasNextPage,
+    discardPages,
     fetchNextPage,
     refetch,
-  } = useEventHistory(target);
+  } = useEventHistory(target, filters);
   const prefix = `history-${target.portfolioId}-${target.epoch.session}-`;
   const items = data?.pages.flatMap((page) => page.items);
   const appendButton = useRef<HTMLButtonElement | null>(null);
   const refreshButton = useRef<HTMLButtonElement | null>(null);
+  const activitySelect = useRef<HTMLSelectElement>(null);
   const retryButton = useRef<HTMLButtonElement | null>(null);
   const captureRetryButton = useCallback((node: HTMLButtonElement | null) => {
     if (!node && retryButton.current === document.activeElement) {
@@ -132,18 +155,40 @@ function OwnedHistory({ target }: { target: PortfolioTarget }) {
       target.isCurrent() &&
       button === intent.button &&
       (document.activeElement === document.body || document.activeElement === button)
-    )
+    ) {
       button.focus({ preventScroll: true });
+      if (isFetchNextPageError) {
+        const { top, bottom } = button.getBoundingClientRect();
+        if (top < 0 || bottom > window.innerHeight) {
+          button.scrollIntoView({ block: "nearest", inline: "nearest" });
+        }
+      }
+    }
     focusEnd.current = null;
-  }, [client, isFetching, hasNextPage, target]);
+  }, [client, isFetching, hasNextPage, isFetchNextPageError, target]);
 
   function refresh() {
     if (target.isCurrent() && !isFetching) void refetch({ cancelRefetch: false });
   }
 
+  function changeFilters(next: EventHistoryFilters) {
+    if (
+      !target.isCurrent() ||
+      (next.activity === activeFilters.current.activity &&
+        next.asset === activeFilters.current.asset)
+    )
+      return;
+    activeFilters.current = next;
+    focusEnd.current = null;
+    setAnnouncement(null);
+    discardPages();
+    setFilters(next);
+  }
+
   async function loadMore() {
     if (!target.isCurrent() || isFetching || !hasNextPage) return;
     const session = eventHistorySession(client);
+    const requestFilters = activeFilters.current;
     const button = appendButton.current;
     // Native disabled controls can blur in Chromium before their final unmount.
     // Capture intent before fetching; never infer it from the disabled element.
@@ -152,7 +197,12 @@ function OwnedHistory({ target }: { target: PortfolioTarget }) {
     const previousCount = items?.length ?? 0;
     const result = await fetchNextPage({ cancelRefetch: false });
     const current = eventHistorySession(client);
-    if (!target.isCurrent() || current.email !== session.email || current.epoch !== session.epoch)
+    if (
+      activeFilters.current !== requestFilters ||
+      !target.isCurrent() ||
+      current.email !== session.email ||
+      current.epoch !== session.epoch
+    )
       return;
     if (!result.isError) {
       const count =
@@ -164,28 +214,63 @@ function OwnedHistory({ target }: { target: PortfolioTarget }) {
     }
   }
   return (
-    <div className="mx-auto my-6 flex w-full min-w-0 max-w-[1280px] flex-col gap-7 text-base md:gap-9">
+    <div className="history-workspace">
       <h1 className="sr-only">History</h1>
-      <div className="flex min-w-0 items-center gap-3">
-        <PortfolioSwitcher
-          portfolioId={target.portfolioId}
-          destination={(id) => `/portfolios/${id}/history`}
-          label="History portfolio"
-          prominent
-          inline
-        />
-        <Button
-          ref={refreshButton}
-          variant="secondary"
-          aria-label={isFetching && !isFetchingNextPage ? "Updating history…" : "Update history"}
-          title="Update history"
-          className="min-h-11 min-w-11 gap-2 px-3 aria-disabled:opacity-40 sm:px-4"
-          aria-disabled={isFetching}
-          onClick={refresh}
-        >
-          <RefreshCw aria-hidden="true" className="size-4" />
-          <span className="hidden sm:inline">Update</span>
-        </Button>
+      <div className="history-toolbar">
+        <div className="history-portfolio-controls">
+          <div className="history-portfolio-picker">
+            <PortfolioSwitcher
+              portfolioId={target.portfolioId}
+              destination={(id) => `/portfolios/${id}/history`}
+              label="History portfolio"
+              inline
+            />
+          </div>
+          <Button
+            ref={refreshButton}
+            variant="secondary"
+            aria-label={isFetching && !isFetchingNextPage ? "Updating history…" : "Update history"}
+            title="Update history"
+            className="size-11 min-h-11 p-0 aria-disabled:opacity-40"
+            aria-disabled={isFetching}
+            onClick={refresh}
+          >
+            <RefreshCw aria-hidden="true" className="size-4" />
+          </Button>
+        </div>
+        <div className="history-filters">
+          <select
+            ref={activitySelect}
+            aria-label="Filter activity"
+            value={filters.activity}
+            onChange={(event) =>
+              changeFilters({
+                ...filters,
+                activity: event.target.value as EventHistoryFilters["activity"],
+              })
+            }
+          >
+            <option value="all">All activity</option>
+            <option value="buy">Buy</option>
+            <option value="sell">Sell</option>
+            <option value="dividend">Dividend</option>
+            <option value="split">Split</option>
+          </select>
+          <select
+            aria-label="Filter assets"
+            value={filters.asset}
+            onChange={(event) =>
+              changeFilters({
+                ...filters,
+                asset: event.target.value as EventHistoryFilters["asset"],
+              })
+            }
+          >
+            <option value="all">All assets</option>
+            <option value="stock">Stocks</option>
+            <option value="crypto">Crypto</option>
+          </select>
+        </div>
       </div>
       {isPending ? (
         <Card role="status" aria-label="Loading history" aria-busy="true">
@@ -225,16 +310,46 @@ function OwnedHistory({ target }: { target: PortfolioTarget }) {
           )}
           {items.length === 0 ? (
             <div className="flex flex-col items-start gap-4 border-t border-border py-8">
-              <h2 className="text-xl font-semibold">No activity yet</h2>
-              <Button asChild>
-                <Link to="/">Browse markets</Link>
-              </Button>
+              <h2 className="text-2xl font-semibold">
+                {isFiltered ? "No matching activity" : "No activity yet"}
+              </h2>
+              {isFiltered ? (
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    activitySelect.current?.focus();
+                    changeFilters(DEFAULT_EVENT_HISTORY_FILTERS);
+                  }}
+                >
+                  Clear filters
+                </Button>
+              ) : (
+                <Button asChild>
+                  <Link to="/">Browse markets</Link>
+                </Button>
+              )}
             </div>
           ) : (
-            <ol aria-label="Account activity" className="grid min-w-0 gap-3">
-              {items.map((item) => (
-                <EventCard key={item.id} item={item} target={target} prefix={prefix} />
-              ))}
+            <ol
+              key={`${filters.activity}-${filters.asset}`}
+              aria-label="Account activity"
+              className="history-event-list min-w-0"
+            >
+              {items.map((item, index) => {
+                const day = dayFormat.format(new Date(item.recorded_at));
+                const previous = items[index - 1];
+                const startsGroup =
+                  !previous || day !== dayFormat.format(new Date(previous.recorded_at));
+                return (
+                  <EventCard
+                    key={item.id}
+                    item={item}
+                    target={target}
+                    prefix={prefix}
+                    day={startsGroup ? day : undefined}
+                  />
+                );
+              })}
             </ol>
           )}
           {items.length > 0 &&
@@ -247,7 +362,7 @@ function OwnedHistory({ target }: { target: PortfolioTarget }) {
                 )}
                 <Button
                   ref={captureAppendButton}
-                  className="min-h-11 motion-reduce:transform-none motion-reduce:transition-none"
+                  className="min-h-11 scroll-my-2 motion-reduce:transform-none motion-reduce:transition-none"
                   disabled={isFetching}
                   onClick={() => void loadMore()}
                 >

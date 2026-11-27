@@ -25,7 +25,7 @@ from app.db.base import Base
 from tests.helpers import unique_email
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
-EXPECTED_HEAD = "0027"
+EXPECTED_HEAD = "0028"
 
 # Fixed application inventory: never REASSIGN OWNED or transfer arbitrary objects.
 MIGRATION_TABLES = frozenset(
@@ -121,7 +121,7 @@ _CATALOG_FINANCE_FUNCTIONS = frozenset(
         "check_stock_catalog_split_movements()",
     }
 )
-_SUCCESSOR_REVISIONS = {"0021", "0022", "0023", "0024", "0025", "0026", "0027"}
+_SUCCESSOR_REVISIONS = {"0021", "0022", "0023", "0024", "0025", "0026", "0027", "0028"}
 
 
 def migration_inventory(revision: str | None) -> tuple[frozenset[str], frozenset[str]]:
@@ -142,11 +142,17 @@ def migration_inventory(revision: str | None) -> tuple[frozenset[str], frozenset
                 "check_stock_terminal_clock()",
             }
         tables = MIGRATION_TABLES | _CLOSURE_TABLES
-        if revision in {"0025", "0026", "0027"}:
+        if revision in {"0025", "0026", "0027", "0028"}:
             tables |= STOCK_CATALOG_TABLES
-        if revision in {"0026", "0027"}:
+        if revision in {"0026", "0027", "0028"}:
             tables |= _CATALOG_FINANCE_TABLES
             functions |= _CATALOG_FINANCE_FUNCTIONS
+        if revision == "0028":
+            tables |= {"portfolio_daily_values"}
+            functions |= {
+                "lock_portfolio_daily_value_root(bigint,bigint)",
+                "check_portfolio_daily_value_root()",
+            }
         return tables, frozenset(functions)
     if revision is not None and revision not in {f"{n:04}" for n in range(1, 21)}:
         raise RuntimeError("unexpected disposable migration revision inventory")
@@ -384,6 +390,7 @@ async def install_runtime_grants_for_revision(conn, revision: str) -> None:
         GRANTS_0023_SQL,
         GRANTS_0025_SQL,
         GRANTS_0026_SQL,
+        GRANTS_0028_SQL,
         PORTFOLIO_PREFLIGHT_SQL,
     )
 
@@ -393,6 +400,7 @@ async def install_runtime_grants_for_revision(conn, revision: str) -> None:
         "0025": GRANTS_0025_SQL,
         "0026": GRANTS_0026_SQL,
         "0027": GRANTS_0026_SQL,
+        "0028": GRANTS_0028_SQL,
     }[revision]
     await conn.execute(text(PORTFOLIO_PREFLIGHT_SQL[revision]))
     # The grant contract includes a dollar-quoted block.
@@ -508,12 +516,12 @@ async def test_catalog_upgrade_preserves_0024_and_guards_retained_evidence(
 
 
 async def test_current_fixture_installs_exact_restricted_authority(engine, migrated) -> None:
-    from app.db.portfolio_bootstrap import ACL_0026_SHA256, ACL_0026_SQL
+    from app.db.portfolio_bootstrap import ACL_0028_SHA256, ACL_SQL
     from app.db.schema_contract import require_schema
 
     async with engine.connect() as conn:
         assert await require_schema(conn) == EXPECTED_HEAD
-        assert (await conn.execute(text(ACL_0026_SQL))).scalar_one() == ACL_0026_SHA256
+        assert (await conn.execute(text(ACL_SQL))).scalar_one() == ACL_0028_SHA256
         roles = (
             await conn.execute(
                 text("""SELECT rolname,rolcanlogin,rolinherit,rolsuper,

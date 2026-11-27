@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { fetchHistory, isHistoryPage } from "./history";
+import { fetchHistory, isHistoryPage, isPortfolioHistoryCursor } from "./history";
 
 export const item = {
   id: "9007199254740993",
@@ -60,4 +60,21 @@ it("rejects malformed responses from the network", async () => {
     Promise.resolve(new Response(JSON.stringify({ items: null, next_cursor: null }))),
   );
   await expect(fetchHistory("1")).rejects.toThrow("Unexpected history response");
+});
+
+it("keeps trade v2 separate from the filtered event cursor shape", () => {
+  const filters = { activity: "buy", asset: "crypto" } as const;
+  const mixed = btoa(
+    JSON.stringify({
+      v: 4,
+      portfolio_id: "1",
+      recorded_at: item.created_at,
+      kind_rank: 4,
+      source_id: item.id,
+      ...filters,
+    }),
+  ).replace(/=+$/, "");
+  expect(isPortfolioHistoryCursor(mixed, "mixed", "1", filters)).toBe(true);
+  expect(isPortfolioHistoryCursor(mixed, "trade", "1")).toBe(false);
+  expect(isHistoryPage({ items: [item], next_cursor: mixed }, "1")).toBe(false);
 });

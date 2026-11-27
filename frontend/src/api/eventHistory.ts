@@ -1,6 +1,10 @@
 import { apiFetch } from "./client";
 import { isPortfolioId } from "./portfolios";
-import { isPortfolioHistoryCursor } from "./history";
+import {
+  DEFAULT_EVENT_HISTORY_FILTERS,
+  isPortfolioHistoryCursor,
+  type EventHistoryFilters,
+} from "./history";
 
 type EventBase<K extends string, A extends "crypto" | "stock"> = {
   kind: K;
@@ -285,34 +289,54 @@ function item(v: unknown): v is EventHistoryItem {
 export function isEventHistoryPage(
   value: unknown,
   portfolioId?: string,
+  filters: EventHistoryFilters = DEFAULT_EVENT_HISTORY_FILTERS,
 ): value is EventHistoryPage {
   return (
     record(value) &&
     exact(value, "items next_cursor") &&
     Array.isArray(value.items) &&
     value.items.length <= 100 &&
-    value.items.every(item) &&
+    value.items.every(
+      (event) =>
+        item(event) &&
+        (filters.asset === "all" || event.asset_type === filters.asset) &&
+        (filters.activity === "all" ||
+          (event.kind === "trade"
+            ? event.side === filters.activity
+            : event.kind === filters.activity ||
+              (filters.activity === "dividend" && event.kind === "dividend_correction"))),
+    ) &&
     new Set(value.items.map((v) => v.id)).size === value.items.length &&
     (value.next_cursor === null ||
-      isPortfolioHistoryCursor(value.next_cursor, "mixed", portfolioId))
+      isPortfolioHistoryCursor(value.next_cursor, "mixed", portfolioId, filters))
   );
 }
 
 export async function fetchEventHistory(
   portfolioId: string,
-  { cursor, limit }: { cursor?: string; limit?: number } = {},
+  {
+    cursor,
+    limit,
+    activity = "all",
+    asset = "all",
+  }: Partial<EventHistoryFilters> & { cursor?: string; limit?: number } = {},
   signal?: AbortSignal,
 ): Promise<EventHistoryPage> {
   signal?.throwIfAborted();
   if (!isPortfolioId(portfolioId)) throw new Error("Invalid portfolio target");
+  const filters = { activity, asset };
   if (
-    (cursor !== undefined && !isPortfolioHistoryCursor(cursor, "mixed", portfolioId)) ||
+    !["all", "buy", "sell", "dividend", "split"].includes(activity) ||
+    !["all", "stock", "crypto"].includes(asset) ||
+    (cursor !== undefined && !isPortfolioHistoryCursor(cursor, "mixed", portfolioId, filters)) ||
     (limit !== undefined && (!Number.isSafeInteger(limit) || limit < 1 || limit > 100))
   )
     throw new Error("Invalid event history request");
   const params = new URLSearchParams();
   if (cursor !== undefined) params.set("cursor", cursor);
   if (limit !== undefined) params.set("limit", String(limit));
+  if (activity !== "all") params.set("activity", activity);
+  if (asset !== "all") params.set("asset", asset);
   const query = params.toString();
   const body = await apiFetch(
     `/api/v2/portfolios/${encodeURIComponent(portfolioId)}/event-history${query ? `?${query}` : ""}`,
@@ -321,7 +345,7 @@ export async function fetchEventHistory(
       cache: "no-store",
     },
   );
-  if (!isEventHistoryPage(body, portfolioId) || body.items.length > (limit ?? 25))
+  if (!isEventHistoryPage(body, portfolioId, filters) || body.items.length > (limit ?? 25))
     throw new Error("Unexpected event history response");
   signal?.throwIfAborted();
   return body;

@@ -13,15 +13,8 @@ import { useNow } from "@/hooks/useNow";
 import type { PortfolioTarget } from "@/hooks/usePortfolioTarget";
 import { catalogDisplay } from "@/hooks/useStockCatalog";
 import { signedUsd } from "@/lib/financialDisplay";
-import { formatUnitPrice, formatUsd } from "@/lib/money";
-
-const orderUsd = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 8,
-});
-const exactPrice = (value: string) => orderUsd.format(value as `${number}`);
+import { formatStockPrice, formatUnitPrice, formatUsd } from "@/lib/money";
+import "./tradeWorkspace.css";
 
 const messages: Record<CatalogOrderRefusal, string> = {
   read_only: "Orders aren't available for this stock yet.",
@@ -61,7 +54,7 @@ function OrderResultCheck({ busy, onCheck }: { busy: boolean; onCheck: () => voi
           ? "Checking order result…"
           : "We couldn't confirm the result. Check this order before placing another."}
       </p>
-      <Button className="min-h-11" disabled={busy} onClick={onCheck}>
+      <Button className="min-h-12" disabled={busy} onClick={onCheck}>
         Check order result
       </Button>
     </>
@@ -84,20 +77,15 @@ function CatalogTicket({ target, catalogId }: { target: PortfolioTarget; catalog
   if (!target.isCurrent()) return null;
   const resultUnconfirmed = order.phase === "submitting" || order.phase === "unknown";
   const receipt = order.fill ? (
-    <StockTradeReceipt
-      fill={order.fill}
-      target={target}
-      onTradeAgain={order.tradeAgain}
-      unitPrice={exactPrice}
-    />
+    <StockTradeReceipt fill={order.fill} target={target} onTradeAgain={order.tradeAgain} />
   ) : null;
 
   if (!context) {
     if (receipt || resultUnconfirmed)
       return (
-        <div className="app-page">
-          <Card className="max-w-xl">
-            <CardContent className="flex flex-col gap-4">
+        <div className="trade-workspace">
+          <Card className="trade-workspace-preview max-w-xl">
+            <CardContent className="trade-workspace-content">
               {receipt ?? (
                 <OrderResultCheck busy={order.phase === "submitting"} onCheck={order.checkResult} />
               )}
@@ -107,18 +95,20 @@ function CatalogTicket({ target, catalogId }: { target: PortfolioTarget; catalog
       );
     if (order.contextLoading)
       return (
-        <div className="app-page">
+        <div className="trade-workspace">
           <p role="status">Loading stock…</p>
         </div>
       );
     const error = order.contextError;
     return (
-      <div className="app-page flex flex-col items-start gap-4">
-        <h1 className="app-heading">
-          {error instanceof ApiError && error.code === "portfolio_unavailable"
-            ? "Portfolio unavailable"
-            : "Stock unavailable"}
-        </h1>
+      <div className="trade-workspace">
+        <header className="trade-workspace-heading">
+          <h1>
+            {error instanceof ApiError && error.code === "portfolio_unavailable"
+              ? "Portfolio unavailable"
+              : "Stock unavailable"}
+          </h1>
+        </header>
         {!(error instanceof ApiError && error.status === 404) && (
           <Button variant="secondary" onClick={() => void order.refreshContext()}>
             Try again
@@ -162,118 +152,134 @@ function CatalogTicket({ target, catalogId }: { target: PortfolioTarget; catalog
           : messages.invalid_quantity;
   const shortcut = order.side === "buy" ? context.buy_max_quantity : context.held_quantity;
   const noShortcut = locked || closed || context.read_only || stockShares(shortcut) === 0n;
-  const showPreview =
-    order.phase === "loading_preview" ||
-    order.quote !== null ||
-    (!closed && order.phase === "draft" && order.error === "unknown");
+  const showPreview = (canDraft && !closed) || receipt || resultUnconfirmed;
+  const previewStatus =
+    order.phase === "loading_preview"
+      ? "Preparing the trade preview."
+      : order.phase === "preview" && order.quote
+        ? order.replacement
+          ? "Price changed. Review the updated preview and confirm again."
+          : "Preview ready. Review before confirming."
+        : "";
 
   return (
-    <div className="app-page flex flex-col gap-7 md:gap-9">
-      <header className="min-w-0">
-        <h1 className="app-heading wrap-anywhere">{listing.company_name}</h1>
-        <p className="mt-2 wrap-anywhere text-muted-foreground">
+    <div className="trade-workspace">
+      <header className="trade-workspace-heading">
+        <h1>{listing.company_name}</h1>
+        <p className="wrap-anywhere">
           {listing.ticker} · {listing.listing_exchange}
           {listing.share_class && ` · Class ${listing.share_class}`}
         </p>
       </header>
-      <div
-        className={
-          canDraft || receipt || resultUnconfirmed
-            ? "grid min-w-0 gap-6 lg:grid-cols-12 lg:gap-8"
-            : "min-w-0 max-w-2xl"
-        }
-      >
-        <Card className="min-w-0 lg:col-span-7 lg:self-start">
-          <CardContent className="flex min-w-0 flex-col gap-4">
-            {display.quote && (closed || !canDraft) && (
-              <div>
-                <p
-                  className="text-3xl font-semibold wrap-anywhere tabular-nums"
-                  aria-describedby={id + "price-source"}
-                >
-                  {formatUnitPrice(display.quote.mid)}
-                </p>
-                <p
-                  id={id + "price-source"}
-                  className={closed ? "sr-only" : "text-sm text-muted-foreground"}
-                >
-                  {closed ? "Last verified IEX midpoint" : "IEX price"} ·{" "}
-                  <StockDate value={display.quote.event_at} />
-                </p>
-              </div>
-            )}
-            {closed ? (
-              <p role="status">
-                Market closed. <MarketOpening nextOpen={session.next_open_at} now={now} />
-              </p>
-            ) : (
-              restriction && (
-                <p id={id + "restriction"} role="status">
-                  {restriction}
-                </p>
-              )
-            )}
-            <p className="text-sm text-muted-foreground">
-              Cash available {formatUsd(context.cash)}
-            </p>
-            {!closed && canDraft && visible && (
-              <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-                {(["bid", "ask"] as const).map((side) => (
-                  <div
-                    key={side}
-                    className={`min-w-0 rounded-control border p-4 ${side === (order.side === "buy" ? "ask" : "bid") ? "border-ring bg-accent text-accent-foreground" : "border-border"}`}
+      <div className="trade-workspace-grid">
+        <Card role="region" aria-label="Trade ticket" className="trade-workspace-ticket">
+          <CardContent className="trade-workspace-content">
+            <div className="trade-workspace-market">
+              {display.quote && (closed || !canDraft) && (
+                <div>
+                  <p className="trade-workspace-price" aria-describedby={id + "price-source"}>
+                    {formatUnitPrice(display.quote.mid)}
+                  </p>
+                  <p
+                    id={id + "price-source"}
+                    className={closed ? "sr-only" : "text-sm text-muted-foreground"}
                   >
-                    <p>IEX {side}</p>
-                    <p className="text-2xl font-medium wrap-anywhere tabular-nums">
-                      {exactPrice(visible[side])}
-                    </p>
-                  </div>
-                ))}
+                    {closed ? "Last verified IEX midpoint" : "IEX price"} ·{" "}
+                    <StockDate value={display.quote.event_at} />
+                  </p>
+                </div>
+              )}
+              {!closed && canDraft && visible && (
+                <div className="grid min-w-0 grid-cols-2 gap-3">
+                  {(["bid", "ask"] as const).map((side) => {
+                    const selected = side === (order.side === "buy" ? "ask" : "bid");
+                    return (
+                      <div
+                        key={side}
+                        className={`min-w-0 rounded-control border p-3 ${selected ? "border-input bg-muted" : "border-border"}`}
+                      >
+                        <p className="text-sm text-muted-foreground">IEX {side}</p>
+                        <p className="trade-workspace-price">{formatStockPrice(visible[side])}</p>
+                        {selected && (
+                          <p className="text-sm text-muted-foreground">
+                            {order.side === "buy" ? "Buy price" : "Sell price"}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {closed ? (
+                <p role="status">
+                  Market closed. <MarketOpening nextOpen={session.next_open_at} now={now} />
+                </p>
+              ) : (
+                restriction && (
+                  <p role="status" className="text-muted-foreground">
+                    {restriction}
+                  </p>
+                )
+              )}
+            </div>
+            {!canDraft && (
+              <div className="trade-workspace-balances">
+                <p>Cash available {formatUsd(context.cash)}</p>
+                <p>Shares owned {shares(context.held_quantity)}</p>
               </div>
             )}
             {canDraft && (
               <form
-                className="flex min-w-0 flex-col gap-4 border-t border-border pt-5"
+                className="flex min-w-0 flex-col gap-4"
                 onSubmit={(event) => {
                   event.preventDefault();
                   if (order.canPreview) void order.preview();
                 }}
               >
-                <fieldset disabled={locked} className="flex gap-3">
+                <fieldset disabled={locked} className="trade-workspace-sides">
                   <legend className="sr-only">Order side</legend>
                   {(["buy", "sell"] as const).map((side) => (
-                    <label
-                      key={side}
-                      className={`flex min-h-11 min-w-0 flex-1 cursor-pointer items-center justify-center gap-2 rounded-pill border border-border px-4 ${order.side === side ? "bg-primary text-primary-foreground" : "bg-secondary"}`}
-                    >
+                    <label key={side}>
                       <input
                         type="radio"
                         name={id + "side"}
                         value={side}
                         checked={order.side === side}
                         onChange={() => order.setSide(side)}
-                        className="accent-current focus-visible:ring-2 focus-visible:ring-ring"
                       />
                       {side === "buy" ? "Buy" : "Sell"}
                     </label>
                   ))}
                 </fieldset>
+                <div className="trade-workspace-balances">
+                  <p>Cash available {formatUsd(context.cash)}</p>
+                  <p>Shares owned {shares(context.held_quantity)}</p>
+                </div>
                 <div className="flex flex-col gap-2">
                   <label htmlFor={id + "quantity"} className="font-medium">
                     Whole-share quantity
                   </label>
-                  <Input
-                    type="text"
-                    id={id + "quantity"}
-                    ref={input}
-                    inputMode="numeric"
-                    autoComplete="off"
-                    value={order.quantity}
-                    disabled={locked}
-                    onChange={(event) => order.setQuantity(event.target.value)}
-                    aria-invalid={quantityError !== null}
-                    aria-describedby={quantityError ? id + "error" : undefined}
-                  />
+                  <div className="relative">
+                    <Input
+                      className="min-h-13 pr-18 text-right tabular-nums"
+                      type="text"
+                      id={id + "quantity"}
+                      ref={input}
+                      inputMode="numeric"
+                      autoComplete="off"
+                      value={order.quantity}
+                      disabled={locked}
+                      onChange={(event) => order.setQuantity(event.target.value)}
+                      aria-invalid={quantityError !== null}
+                      aria-describedby={quantityError ? id + "error" : undefined}
+                    />
+                    <span
+                      aria-hidden="true"
+                      className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-muted-foreground"
+                    >
+                      Shares
+                    </span>
+                  </div>
                   {quantityError && (
                     <p
                       id={id + "error"}
@@ -283,13 +289,8 @@ function CatalogTicket({ target, catalogId }: { target: PortfolioTarget; catalog
                       {quantityError}
                     </p>
                   )}
-                  {order.side === "sell" && (
-                    <p className="text-sm text-muted-foreground">
-                      Shares owned {shares(context.held_quantity)}
-                    </p>
-                  )}
                 </div>
-                {!closed && (
+                {!closed && !locked && (
                   <div className="flex flex-wrap gap-3">
                     <Button
                       type="button"
@@ -314,9 +315,12 @@ function CatalogTicket({ target, catalogId }: { target: PortfolioTarget; catalog
             )}
           </CardContent>
         </Card>
-        {(showPreview || receipt || resultUnconfirmed) && (
-          <Card className="min-w-0 bg-muted lg:col-span-5 lg:self-start">
-            <CardContent className="flex min-w-0 flex-col gap-4">
+        {showPreview && (
+          <Card className="trade-workspace-preview">
+            <CardContent className="trade-workspace-content">
+              <p role="status" aria-atomic="true" className="sr-only">
+                {previewStatus}
+              </p>
               {receipt ??
                 (resultUnconfirmed ? (
                   <OrderResultCheck
@@ -327,21 +331,20 @@ function CatalogTicket({ target, catalogId }: { target: PortfolioTarget; catalog
                   <>
                     <h2 className="text-xl font-semibold">Trade preview</h2>
                     {order.phase === "loading_preview" ? (
-                      <p role="status">Preparing preview…</p>
+                      <p>Preparing preview…</p>
                     ) : (
                       order.replacement && (
                         <section
                           aria-label="Price changes"
-                          role="status"
                           className="rounded-control bg-warn-soft p-4 text-warn-text"
                         >
                           <p>Price updated. Review the changes before confirming again.</p>
                           <dl className="mt-3 flex flex-col gap-3">
                             <StockFigure label="Previous execution price">
-                              {exactPrice(order.replacement.previous_exec_price)}
+                              {formatStockPrice(order.replacement.previous_exec_price)}
                             </StockFigure>
                             <StockFigure label="New execution price">
-                              {exactPrice(order.replacement.quote.exec_price)}
+                              {formatStockPrice(order.replacement.quote.exec_price)}
                             </StockFigure>
                             <StockFigure label="Previous cash change">
                               {signedUsd(order.replacement.previous_cash_delta)}
@@ -363,7 +366,7 @@ function CatalogTicket({ target, catalogId }: { target: PortfolioTarget; catalog
                           {!order.replacement && (
                             <>
                               <StockFigure label="Execution price">
-                                {exactPrice(order.quote.exec_price)}
+                                {formatStockPrice(order.quote.exec_price)}
                               </StockFigure>
                               <StockFigure label="Total cash change">
                                 {signedUsd(order.quote.cash_delta)}
@@ -376,18 +379,20 @@ function CatalogTicket({ target, catalogId }: { target: PortfolioTarget; catalog
                           </StockFigure>
                         </dl>
                         <Button
-                          className="min-h-11"
+                          className="min-h-12"
                           disabled={closed || !order.canConfirm}
                           onClick={() => void order.confirm()}
                         >
                           {order.side === "buy" ? "Confirm buy" : "Confirm sell"}
                         </Button>
                       </>
-                    ) : (
-                      order.error === "unknown" && (
-                        <p role="alert">Couldn’t prepare this preview.</p>
-                      )
-                    )}
+                    ) : order.error === "unknown" ? (
+                      <p role="alert">Couldn’t prepare this preview. Try again.</p>
+                    ) : order.phase !== "loading_preview" && !restriction ? (
+                      <p className="text-muted-foreground">
+                        Enter a quantity to preview this trade.
+                      </p>
+                    ) : null}
                   </>
                 ))}
             </CardContent>

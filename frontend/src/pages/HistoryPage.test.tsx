@@ -101,8 +101,9 @@ it("opens the original catalog issue in the owned portfolio from expanded Histor
   historyFetch(() => ok([item, stock]));
   const { user } = renderWithClient(<HistoryPage />);
   const label = await screen.findByText(stock.symbol);
+  const summary = label.closest("summary")!;
+  expect(within(summary).getByText(`${stock.name} ·`)).toBeVisible();
   await user.click(label);
-  expect(screen.getByText(stock.name, { exact: false })).toBeVisible();
   expect(
     screen.getByRole("link", { name: `View stock ticket for ${stock.symbol}` }),
   ).toHaveAttribute("href", "/portfolios/1/trade/catalog/9007199254740993");
@@ -225,6 +226,8 @@ it("keeps entry details collapsed until opened without a false end message", asy
     expect(cards).toHaveTextContent(text);
   }
   const summary = first!.querySelector("summary")!;
+  expect(within(summary).getByText("₿")).toHaveAttribute("aria-hidden", "true");
+  expect(within(summary).getByText("Bitcoin ·")).toBeVisible();
   expect(first!.querySelector("details")).not.toHaveAttribute("open");
   expect(within(first!).getByText("Quantity")).not.toBeVisible();
   await user.click(summary);
@@ -389,30 +392,51 @@ it("preserves append focus intent when a native disabled control blurs before fi
   expect(await screen.findByText("All events loaded.")).toHaveFocus();
 });
 
-it("restores the native-blurred retry control only after the failed append is rendered", async () => {
-  let finish: (value: Response) => void = () => {};
-  historyFetch(
-    vi
-      .fn()
-      .mockImplementationOnce(() => ok([item], cursor()))
-      .mockImplementationOnce(
-        () =>
-          new Promise<Response>((done) => {
-            finish = done;
-          }),
-      ),
-  );
-  const { user } = renderWithClient(<HistoryPage />);
-  const append = await screen.findByRole("button", { name: "Load more" });
-  await user.click(append);
-  document.body.tabIndex = -1;
-  document.body.focus();
-  document.body.removeAttribute("tabindex");
-  finish(new Response("unavailable", { status: 503 }));
-  const retry = await screen.findByRole("button", { name: "Try loading more" });
-  expect(retry).not.toBeDisabled();
-  await vi.waitFor(() => expect(retry).toHaveFocus());
-});
+it.each(["native blur", "retained focus", "moved focus"] as const)(
+  "keeps failed append focus usable after %s",
+  async (focus) => {
+    let finish: (value: Response) => void = () => {};
+    historyFetch(
+      vi
+        .fn()
+        .mockImplementationOnce(() => ok([item], cursor()))
+        .mockImplementationOnce(
+          () =>
+            new Promise<Response>((done) => {
+              finish = done;
+            }),
+        ),
+    );
+    const { user } = renderWithClient(<HistoryPage />);
+    const append = await screen.findByRole("button", { name: "Load more" });
+    const scrollIntoView = vi.fn();
+    append.scrollIntoView = scrollIntoView;
+    vi.spyOn(append, "getBoundingClientRect").mockReturnValue(
+      new DOMRect(0, window.innerHeight - 36.5, 144, 44),
+    );
+    const activity = screen.getByRole("combobox", { name: "Filter activity" });
+    await user.click(append);
+    if (focus === "native blur") {
+      document.body.tabIndex = -1;
+      document.body.focus();
+      document.body.removeAttribute("tabindex");
+    } else if (focus === "moved focus") {
+      activity.focus();
+    }
+    finish(new Response("unavailable", { status: 503 }));
+    const retry = await screen.findByRole("button", { name: "Try loading more" });
+    expect(retry).not.toBeDisabled();
+    await vi.waitFor(() => {
+      if (focus === "moved focus") {
+        expect(activity).toHaveFocus();
+        expect(scrollIntoView).not.toHaveBeenCalled();
+      } else {
+        expect(retry).toHaveFocus();
+        expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest", inline: "nearest" });
+      }
+    });
+  },
+);
 
 it("keeps focus on another control when append finishes and refresh announces the current count", async () => {
   let finish: (value: Response) => void = () => {};
@@ -490,6 +514,101 @@ const held: EventDividendCorrection = {
   original: dividend,
 };
 
+it("starts a fresh filtered history while an append is pending", async () => {
+  let finishAppend!: (response: Response) => void;
+  const append = new Promise<Response>((resolve) => {
+    finishAppend = resolve;
+  });
+  const base = "/api/v2/portfolios/1/event-history";
+  const correction = { ...held, recorded_at: "2026-11-12T15:00:00.000002Z" };
+  const filteredCursor = btoa(
+    JSON.stringify({
+      v: 4,
+      portfolio_id: "1",
+      recorded_at: correction.recorded_at,
+      kind_rank: 1,
+      source_id: "2",
+      activity: "dividend",
+      asset: "all",
+    }),
+  )
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
+  const filteredAppend = `${base}?cursor=${filteredCursor}&activity=dividend`;
+  const fetch = vi.fn((input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url === filteredAppend) return ok([dividend]);
+    if (url.startsWith(`${base}?cursor=`)) return append;
+    if (url === `${base}?activity=dividend`)
+      return Promise.resolve(
+        new Response(JSON.stringify({ items: [correction], next_cursor: filteredCursor })),
+      );
+    return ok([item], "more");
+  });
+  historyFetch(fetch);
+  const { user } = renderWithClient(<HistoryPage />);
+  await user.click(await screen.findByRole("button", { name: "Load more" }));
+  const activity = screen.getByRole("combobox", { name: "Filter activity" });
+  activity.focus();
+  await user.selectOptions(activity, "dividend");
+  const rows = await screen.findByRole("list", { name: "Account activity" });
+  expect(rows).not.toHaveTextContent("BTC");
+  expect(activity).toHaveFocus();
+  expect(fetch.mock.calls.map(([url]) => url)).toEqual([
+    base,
+    `${base}?cursor=${cursor()}`,
+    `${base}?activity=dividend`,
+  ]);
+
+  await viewOriginal(user, rows);
+  const original = screen.getByRole("heading", { name: /^Original dividend/ });
+  expect(original).toHaveFocus();
+  await act(async () => {
+    finishAppend(
+      new Response(JSON.stringify({ items: [{ ...item, id: "trade:2" }], next_cursor: null })),
+    );
+  });
+  expect(original).toHaveFocus();
+  expect(screen.getByRole("status")).not.toHaveTextContent("more events loaded");
+
+  await user.click(screen.getByRole("button", { name: "Load more" }));
+  expect(await screen.findByText("All events loaded.")).toHaveFocus();
+  expect(fetch.mock.calls.at(-1)?.[0]).toBe(filteredAppend);
+  expect(within(rows).getAllByRole("listitem")).toHaveLength(2);
+
+  await user.selectOptions(activity, "all");
+  expect(await screen.findByText("BTC")).toBeVisible();
+  expect(fetch.mock.calls.at(-1)?.[0]).toBe(base);
+  expect(within(screen.getByRole("list")).getAllByRole("listitem")).toHaveLength(1);
+  expect(screen.queryByRole("heading", { name: /^Original dividend/ })).not.toBeInTheDocument();
+});
+
+it("clears both filters from the no-match state and restores focus to activity", async () => {
+  const base = "/api/v2/portfolios/1/event-history";
+  const fetch = vi.fn<typeof globalThis.fetch>(() => ok([]));
+  historyFetch(fetch);
+  const { user } = renderWithClient(<HistoryPage />);
+  expect(await screen.findByText("No activity yet")).toBeVisible();
+  const activity = screen.getByRole("combobox", { name: "Filter activity" });
+  const asset = screen.getByRole("combobox", { name: "Filter assets" });
+  await user.selectOptions(activity, "sell");
+  expect(await screen.findByText("No matching activity")).toBeVisible();
+  await user.selectOptions(asset, "stock");
+  expect(await screen.findByText("No matching activity")).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "Clear filters" }));
+  expect(await screen.findByText("No activity yet")).toBeVisible();
+  expect(activity).toHaveValue("all");
+  expect(asset).toHaveValue("all");
+  expect(activity).toHaveFocus();
+  expect(fetch.mock.calls.map(([url]) => url)).toEqual([
+    base,
+    `${base}?activity=sell`,
+    `${base}?activity=sell&asset=stock`,
+    base,
+  ]);
+});
+
 it("renders all mixed kinds in server order and opens a loaded original dividend", async () => {
   const crypto = { ...item, recorded_at: dividend.recorded_at, filled_at: dividend.recorded_at };
   const split = {
@@ -511,6 +630,7 @@ it("renders all mixed kinds in server order and opens a loaded original dividend
   historyFetch(() => ok([crypto, dividend, split, held]));
   const { user } = renderWithClient(<HistoryPage />);
   const table = await screen.findByRole("list");
+  expect(within(table).getAllByRole("heading", { level: 2 })).toHaveLength(1);
   const rows = within(table).getAllByRole("listitem");
   expect(rows.map((row) => row.id)).toEqual([
     expect.stringMatching(new RegExp(`^history-1-\\d+-${crypto.id}$`)),

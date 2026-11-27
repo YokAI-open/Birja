@@ -617,7 +617,7 @@ DEFAULT_ACL_0025_SQL = DEFAULT_ACL_0023_SQL
 DEFAULT_ACL_0025_SHA256 = DEFAULT_ACL_0023_SHA256
 CATALOGUE_0025_SHA256 = "64ae5dbb83bfa0fa764d667a91f09abcf023b39f3e3b032354ce1088c45135a3"
 ACL_0025_SHA256 = "a055778473726ac8321879c4c3a93d2810217a388bf70794b7ca773ada1aaf8f"
-CURRENT_PORTFOLIO_REVISION = "0027"
+CURRENT_PORTFOLIO_REVISION = "0028"
 PREFLIGHT_0025_SQL = (
     PREFLIGHT_0024_SQL.replace("version_num='0024'", "version_num='0025'")
     .replace(CATALOGUE_0024_SHA256, CATALOGUE_0025_SHA256)
@@ -653,12 +653,28 @@ CATALOGUE_0027_SHA256 = "93cff92c149e5d9bbbcce68e141a4e4cd496a05c586ee7310f57afc
 PREFLIGHT_0027_SQL = PREFLIGHT_0026_SQL.replace("version_num='0026'", "version_num='0027'").replace(
     CATALOGUE_0026_SHA256, CATALOGUE_0027_SHA256
 )
+CATALOGUE_0028_SHA256 = "0484dd48782c9f215d1dea18fd767ae22f1b3ac558559c39837c9eef783fea25"
+ACL_0028_SHA256 = "2faedb917aa58062f5af23449fecb6d699f3580e14d0b69e1ae1c964d2a1eb0b"
+PREFLIGHT_0028_SQL = (
+    PREFLIGHT_0027_SQL.replace("version_num='0027'", "version_num='0028'")
+    .replace(CATALOGUE_0027_SHA256, CATALOGUE_0028_SHA256)
+    .replace(f"'{ACL_0026_SHA256}',", f"'{ACL_0026_SHA256}','{ACL_0028_SHA256}',")
+    .replace(
+        f"'{ACL_0026_SHA256}') AND",
+        f"'{ACL_0026_SHA256}','{ACL_0028_SHA256}') AND",
+    )
+    .replace(
+        "'lock_stock_portfolio_roots(bigint)'))",
+        "'lock_stock_portfolio_roots(bigint)','lock_portfolio_daily_value_root(bigint,bigint)'))",
+    )
+)
 PORTFOLIO_PREFLIGHT_SQL = {
     "0023": PREFLIGHT_0023_SQL,
     "0024": PREFLIGHT_0024_SQL,
     "0025": PREFLIGHT_0025_SQL,
     "0026": PREFLIGHT_0026_SQL,
     "0027": PREFLIGHT_0027_SQL,
+    "0028": PREFLIGHT_0028_SQL,
 }
 CATALOGUE_TABLES = frozenset(
     {
@@ -730,3 +746,14 @@ GRANT EXECUTE ON FUNCTION public.assert_catalog_stock_execution_current(bigint,b
  TO birja_app;
 """
 GRANTS_0026_SQL = GRANTS_0025_SQL + CATALOGUE_FINANCE_GRANTS_SQL
+
+PORTFOLIO_DAILY_VALUE_GRANTS_SQL = r"""
+GRANT SELECT ON public.portfolio_daily_values TO birja_app;
+GRANT SELECT (portfolio_id,utc_day), INSERT (
+ portfolio_id,user_id,utc_day,captured_at,starting_cash,total_value,valuation_complete
+) ON public.portfolio_daily_values TO birja_scheduler;
+GRANT USAGE ON SEQUENCE public.portfolio_daily_values_id_seq TO birja_scheduler;
+GRANT EXECUTE ON FUNCTION public.lock_portfolio_daily_value_root(bigint,bigint)
+ TO birja_scheduler;
+"""
+GRANTS_0028_SQL = GRANTS_0026_SQL + PORTFOLIO_DAILY_VALUE_GRANTS_SQL

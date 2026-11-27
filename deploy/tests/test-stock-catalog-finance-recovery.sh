@@ -8,19 +8,28 @@ PYTHON="${BIRJA_RECEIPT_PYTHON:-$ROOT/backend/.venv/bin/python}"
 contracts="$ROOT/deploy/tests/test-portfolio-recovery-contracts.py"
 restic_path=/tmp/birja-test-tools/restic-0.19.1/restic
 lane=paired
+revision=0027
+predecessor_revision=0023
+predecessor_binding=predecessor0023
 if (( $# )); then
-  [[ $# == 6 && $1 == --lane && $3 == --archive && $5 == --sha256 ]]
+  [[ ( $# == 6 || $# == 8 ) && $1 == --lane && $3 == --archive && $5 == --sha256 ]]
   lane=$2 archive=$4 archive_sha=$6
+  if (( $# == 8 )); then
+    [[ $7 == --revision && $8 == 0028 ]]
+    revision=0028
+    predecessor_revision=0027
+    predecessor_binding=portfolio0027
+  fi
   [[ $lane =~ ^(retained0025|cold|roles|upgraded|fresh|rollback)$ ]]
   [[ $archive == /tmp/birja-backup-test-*/recovery.tar.gz && $archive == "$(realpath -- "$archive")" ]]
   [[ $archive_sha =~ ^[a-f0-9]{64}$ ]]
   archive_dir=${archive%/*}
   current_image=$("$PYTHON" -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' \
-    "$archive_dir/current0027-image-binding.json")
+    "$archive_dir/current$revision-image-binding.json")
   [[ $current_image =~ ^sha256:[a-f0-9]{64}$ ]]
   if [[ $lane =~ ^(cold|upgraded|rollback)$ ]]; then
     predecessor_image=$("$PYTHON" -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' \
-      "$archive_dir/predecessor0023-image-binding.json")
+      "$archive_dir/$predecessor_binding-image-binding.json")
     [[ $predecessor_image =~ ^sha256:[a-f0-9]{64}$ ]]
   fi
 fi
@@ -58,7 +67,7 @@ if [[ $lane == paired || $lane == retained0025 ]]; then
 fi
 if [[ $lane != paired ]]; then
   chmod 700 "$stage"
-  "$PYTHON" "$contracts" --install-catalog-archive "$stage/host" "$archive" "$archive_sha" 0027
+  "$PYTHON" "$contracts" --install-catalog-archive "$stage/host" "$archive" "$archive_sha" "$revision"
   installed="$stage/host/var/lib/birja/recovery/releases/$archive_sha"
   restic_path="$installed/tools/restic"
   network=$(docker network create --internal "${stage##*/}")
@@ -243,10 +252,19 @@ runtime() {
 
 old_runtime() {
   local mode=$1
-  "$PYTHON" "$contracts" --catalog-runtime-program "$mode" "$predecessor" |
-    runtime "$predecessor_image" birja_test \
-      -e DATABASE_URL=postgresql+asyncpg://birja_migrator:fixture-migrator-only@postgres:5432/birja_source_test \
-      -e FIXTURE_APP_PASSWORD=test-app -e FIXTURE_SCHEDULER_PASSWORD=test-scheduler
+  if [[ $predecessor_revision == 0027 ]]; then
+    "$PYTHON" "$contracts" --catalog-runtime-program roles /run/birja/catalog-receipts.json 0027 |
+      runtime "$predecessor_image" birja_test
+  else
+    "$PYTHON" "$contracts" --catalog-runtime-program "$mode" "$predecessor" |
+      runtime "$predecessor_image" birja_test \
+        -e DATABASE_URL=postgresql+asyncpg://birja_migrator:fixture-migrator-only@postgres:5432/birja_source_test \
+        -e FIXTURE_APP_PASSWORD=test-app -e FIXTURE_SCHEDULER_PASSWORD=test-scheduler
+  fi
+}
+
+daily_values() {
+  "$PYTHON" "$contracts" --daily-value-program "$1" | runtime "$current_image" "$2"
 }
 
 use_primary_name() {
@@ -262,15 +280,19 @@ downgrade_refuses() {
     "$PYTHON" -m alembic downgrade 0025) >"$stage/downgrade.log" 2>&1; then
     return 1
   fi
-  grep -q 'ck_stock_catalog_listings_source_known.*is violated' "$stage/downgrade.log"
-  test "$(sql -d "$database" -c 'SELECT version_num FROM alembic_version')" = 0027
+  if [[ $revision == 0028 ]]; then
+    grep -q 'Daily value downgrade refused; portfolio observations are retained' "$stage/downgrade.log"
+  else
+    grep -q 'ck_stock_catalog_listings_source_known.*is violated' "$stage/downgrade.log"
+  fi
+  test "$(sql -d "$database" -c 'SELECT version_num FROM alembic_version')" = "$revision"
   test "$(sql -d "$database" -c "SELECT count(*) FROM stock_catalog_listings
         WHERE source='openfigi_nyse' AND listing_exchange='NYSE'")" = 1
 }
 
 current_authority() {
   local database=$1
-  "$PYTHON" "$contracts" --catalog-runtime-program roles /run/birja/catalog-receipts.json |
+  "$PYTHON" "$contracts" --catalog-runtime-program roles /run/birja/catalog-receipts.json "$revision" |
     runtime "$current_image" "$database"
   observe "$installed" "$database" authority
   "$PYTHON" "$contracts" --catalog-authority "$stage/authority.json"
@@ -279,19 +301,32 @@ current_authority() {
 if [[ $lane =~ ^(cold|upgraded|rollback)$ ]]; then
   predecessor="$stage/predecessor"
   mkdir "$predecessor"
-  "$PYTHON" "$contracts" --materialize-predecessor "$predecessor"
+  if [[ $revision == 0028 ]]; then
+    "$PYTHON" "$contracts" --materialize-0027 "$predecessor" "$archive" "$archive_sha"
+  else
+    "$PYTHON" "$contracts" --materialize-predecessor "$predecessor"
+  fi
   original_volume=$(docker volume create "${stage##*/}-original")
   volumes+=("$original_volume")
   start_postgres "${stage##*/}-predecessor" "$original_volume"
   roles
   # The independently pinned predecessor opens the existing restricted roles.
-  use_primary_name birja_test birja_source_test
-  old_runtime predecessor-seed > "$stage/predecessor-before.log"
-  grep -q '^portfolio_verified_tls=true$' "$stage/predecessor-before.log"
-  use_primary_name birja_source_test birja_test
+  if [[ $revision == 0028 ]]; then
+    migrate "$predecessor" "$predecessor_revision"
+    bootstrap "$predecessor"
+    (cd "$predecessor" && PYTHONPATH="$PWD/backend" "$PYTHON" "$contracts" \
+      --catalog-economics seed "$stage/current-receipts.json")
+    seed_nyse_provenance
+    old_runtime roles | grep -Fx 'catalog_runtime_verified_tls=true'
+  else
+    use_primary_name birja_test birja_source_test
+    old_runtime predecessor-seed > "$stage/predecessor-before.log"
+    grep -q '^portfolio_verified_tls=true$' "$stage/predecessor-before.log"
+    use_primary_name birja_source_test birja_test
+  fi
   observe "$predecessor" birja_test predecessor
   docker volume inspect "$original_volume" > "$stage/original-fingerprint"
-  encrypted_round_trip "$predecessor" 0023
+  encrypted_round_trip "$predecessor" "$predecessor_revision"
   docker stop "$postgres" >/dev/null
   original=$postgres
   postgres=''
@@ -300,12 +335,15 @@ if [[ $lane =~ ^(cold|upgraded|rollback)$ ]]; then
   volumes+=("$candidate_volume")
   start_postgres "${stage##*/}-candidate" "$candidate_volume"
   roles
-  restore_database "$installed" 0023 birja_test
-  migrate "$ROOT" 0027
+  restore_database "$installed" "$predecessor_revision" birja_test
+  migrate "$ROOT" "$revision"
   bootstrap "$ROOT"
   observe "$installed" birja_test successor
   "$PYTHON" "$contracts" --compare-predecessor "$stage/predecessor.json" "$stage/successor.json"
-  printf '%s\n' 'populated_0023_to_0027=true predecessor_books_and_sequences_exact=true'
+  printf '%s\n' "populated_${predecessor_revision}_to_${revision}=true predecessor_books_and_sequences_exact=true"
+  if [[ $revision == 0028 ]]; then
+    printf '%s\n' 'daily_value_upgrade_empty=true'
+  fi
   if [[ $lane == upgraded ]]; then
     current_authority birja_test
     exit
@@ -322,11 +360,15 @@ if [[ $lane =~ ^(cold|upgraded|rollback)$ ]]; then
     docker volume inspect "$original_volume" | cmp "$stage/original-fingerprint"
     observe "$predecessor" birja_test predecessor-reopened
     cmp "$stage/predecessor.json" "$stage/predecessor-reopened.json"
-    use_primary_name birja_test birja_source_test
-    old_runtime predecessor-read > "$stage/predecessor-replay.log"
-    diff <(grep '^portfolio_projection=' "$stage/predecessor-before.log") \
-      <(grep '^portfolio_projection=' "$stage/predecessor-replay.log")
-    use_primary_name birja_source_test birja_test
+    if [[ $revision == 0028 ]]; then
+      old_runtime roles | grep -Fx 'catalog_runtime_verified_tls=true'
+    else
+      use_primary_name birja_test birja_source_test
+      old_runtime predecessor-read > "$stage/predecessor-replay.log"
+      diff <(grep '^portfolio_projection=' "$stage/predecessor-before.log") \
+        <(grep '^portfolio_projection=' "$stage/predecessor-replay.log")
+      use_primary_name birja_source_test birja_test
+    fi
     docker stop "$original" >/dev/null
     docker start "$candidate" >/dev/null
     postgres=$candidate
@@ -336,51 +378,66 @@ if [[ $lane =~ ^(cold|upgraded|rollback)$ ]]; then
     printf '%s\n' 'prewrite_predecessor_restarted=true original_volume_and_ledger_exact=true'
   fi
 
-  PYTHONPATH="$ROOT/backend" "$PYTHON" "$contracts" --catalog-economics seed "$stage/current-receipts.json"
-  seed_nyse_provenance
+  if [[ $revision == 0028 ]]; then
+    daily_values capture birja_test
+  else
+    PYTHONPATH="$ROOT/backend" "$PYTHON" "$contracts" --catalog-economics seed "$stage/current-receipts.json"
+    seed_nyse_provenance
+  fi
   chmod 444 "$stage/current-receipts.json"
   start_cache
   test "$(docker exec "$redis" redis-cli SET fixture:stock:quote:FQA "$canary" EX 600)" = OK
   # Move to a fresh PostgreSQL server for cold replay, or restart this exact
   # candidate volume after application writes to prove the containment path.
-  encrypted_round_trip "$installed" 0027
+  encrypted_round_trip "$installed" "$revision"
   if [[ $lane == cold ]]; then
     docker rm -f "$postgres" >/dev/null
     postgres=''
     start_postgres "${stage##*/}-restored"
     roles
-    restore_database "$installed" 0027
+    restore_database "$installed" "$revision"
     replay_db=birja_restore_test
   else
     docker restart "$postgres" >/dev/null
     wait_postgres
     docker volume inspect "$candidate_volume" | cmp "$stage/candidate-fingerprint"
     observe "$installed" birja_test candidate-restarted
-    "$PYTHON" "$contracts" --catalog-exact "$stage/restored-0027/manifest.json" "$stage/candidate-restarted.json"
+    "$PYTHON" "$contracts" --catalog-exact "$stage/restored-$revision/manifest.json" "$stage/candidate-restarted.json"
     replay_db=birja_test
   fi
   docker rm -f "$redis" >/dev/null
   redis=''
   start_cache
   test "$(docker exec "$redis" redis-cli DBSIZE)" = 0
-  docker exec "$postgres" pg_dump -U birja_test -d "$replay_db" --data-only > "$stage/0027.sql"
-  "$PYTHON" "$contracts" --catalog-cache-absent "$stage" 0027 "$canary"
-  "$PYTHON" "$contracts" --catalog-runtime-program replay /run/birja/catalog-receipts.json |
+  docker exec "$postgres" pg_dump -U birja_test -d "$replay_db" --data-only > "$stage/$revision.sql"
+  "$PYTHON" "$contracts" --catalog-cache-absent "$stage" "$revision" "$canary"
+  "$PYTHON" "$contracts" --catalog-runtime-program replay /run/birja/catalog-receipts.json "$revision" |
     runtime "$current_image" "$replay_db" \
       -v "$stage/current-receipts.json:/run/birja/catalog-receipts.json:ro"
+  if [[ $revision == 0028 ]]; then
+    daily_values read "$replay_db"
+  fi
   downgrade_refuses "$replay_db"
   "${restic[@]}" check --read-data >/dev/null
   if [[ $lane == rollback ]]; then
-    use_primary_name birja_test birja_source_test
-    if old_runtime predecessor-read > "$stage/incompatible.log" 2>&1; then
-      exit 1
+    if [[ $revision == 0028 ]]; then
+      if old_runtime roles > "$stage/incompatible.log" 2>&1; then
+        exit 1
+      fi
+      grep -q 'incompatible_schema' "$stage/incompatible.log"
+      printf '%s\n' 'daily_value_predecessor_refused=true'
+    else
+      use_primary_name birja_test birja_source_test
+      if old_runtime predecessor-read > "$stage/incompatible.log" 2>&1; then
+        exit 1
+      fi
+      grep -q '0023 only before import' "$stage/incompatible.log"
+      use_primary_name birja_source_test birja_test
     fi
-    grep -q '0023 only before import' "$stage/incompatible.log"
-    use_primary_name birja_source_test birja_test
-    printf '%s\n' 'postwrite_0027_restarted=true candidate_volume_and_receipts_exact=true predecessor_on_0027_refused=true'
+    printf '%s\n' "postwrite_${revision}_restarted=true candidate_volume_and_receipts_exact=true predecessor_on_${revision}_refused=true"
   else
     current_authority "$replay_db"
-    printf '%s\n' 'cold_encrypted_0027_exact=true fresh_restore_server=true'
+    printf '%s\n' "cold_encrypted_${revision}_exact=true fresh_restore_server=true"
   fi
   exit
 fi
@@ -391,7 +448,7 @@ start_cache
 test "$(docker exec "$redis" redis-cli SET fixture:stock:quote:FQA "$canary" EX 600)" = OK
 
 if [[ $lane == fresh || $lane == roles ]]; then
-  migrate "$ROOT" 0027
+  migrate "$ROOT" "$revision"
   bootstrap "$ROOT"
   current_authority birja_test
   exit

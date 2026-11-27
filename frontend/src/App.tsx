@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { DoorClosed, DoorOpen } from "lucide-react";
 import {
   Link,
@@ -27,6 +27,7 @@ import PortfoliosPage from "@/pages/PortfoliosPage";
 import { PortfolioSwitcher } from "@/components/PortfolioSwitcher";
 import HistoryPage from "@/pages/HistoryPage";
 import { PortfolioTargetBoundary } from "@/components/PortfolioTargetBoundary";
+import { PortfolioToolbarSlot } from "@/components/PortfolioToolbarSlot";
 import { usePortfolioTarget } from "@/hooks/usePortfolioTarget";
 import { isPortfolioId } from "@/api/portfolios";
 import { isCatalogId } from "@/api/stockCatalog";
@@ -42,10 +43,10 @@ export function PortfolioRoute() {
   const target = usePortfolioTarget(portfolioId);
   const client = useQueryClient();
   const owner = useMe().data?.email;
-  const root = useRef<HTMLDivElement>(null);
   const primaryHeading = useRef<HTMLHeadingElement>(null);
   const managementFocus = useRef<Element | null>(null);
   const editTrigger = useRef<HTMLButtonElement>(null);
+  const [updateSlot, setUpdateSlot] = useState<HTMLDivElement | null>(null);
   const [removeSlot, setRemoveSlot] = useState<HTMLDivElement | null>(null);
   const [editingId, setEditingId] = useState<string>();
   const detailMatch = useMatch({ path: "/portfolios/:portfolioId", end: true });
@@ -54,23 +55,25 @@ export function PortfolioRoute() {
   const management = usePortfolioManagement(detail ? portfolioId : undefined);
   const editOpen = editingId !== undefined && editingId === portfolioId;
   useEffect(() => {
+    if (!updateSlot) return;
+    // React focus events follow the portal's logical tree. Use the slot's DOM event.
+    const recordUpdateFocus = (event: FocusEvent) => {
+      if (event.target instanceof HTMLElement) managementFocus.current = event.target;
+    };
+    updateSlot.addEventListener("focusin", recordUpdateFocus);
+    return () => updateSlot.removeEventListener("focusin", recordUpdateFocus);
+  }, [updateSlot]);
+  useEffect(() => {
     if (target.status === "loading" || target.status === "ready") return;
     if (
       managementFocus.current &&
       !managementFocus.current.isConnected &&
       document.activeElement === document.body
     )
-      root.current?.querySelector<HTMLHeadingElement>("h1")?.focus();
+      primaryHeading.current?.focus();
   }, [target.status]);
   return (
-    <div
-      className={cn(
-        detail ? "mx-auto mt-6 w-full max-w-[1280px]" : "contents",
-        ready &&
-          "grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 sm:grid-cols-[minmax(0,30rem)_auto_1fr] sm:gap-x-3",
-      )}
-      ref={root}
-    >
+    <div className={detail ? "portfolio-workspace" : "contents"}>
       {detail && (
         <h1
           ref={primaryHeading}
@@ -88,28 +91,42 @@ export function PortfolioRoute() {
         </h1>
       )}
       {detail && (
-        <div className="flex min-w-0 items-center gap-2">
-          <PortfolioSwitcher portfolioId={portfolioId} prominent inline />
+        <div
+          className="portfolio-managed-toolbar"
+          role="group"
+          aria-label="Portfolio controls"
+          onFocusCapture={(event) => {
+            managementFocus.current = event.target;
+          }}
+        >
+          <div className="portfolio-managed-picker">
+            <PortfolioSwitcher portfolioId={portfolioId} inline />
+          </div>
           {ready && (
-            <Button
-              ref={editTrigger}
-              type="button"
-              variant="secondary"
-              aria-label="Edit portfolio"
-              className="min-h-11 px-3"
-              disabled={editOpen || management.metadataPending || management.metadataBlocked}
-              onClick={() => setEditingId(portfolioId)}
-            >
-              Edit
-            </Button>
+            <div className="portfolio-managed-actions">
+              <Button
+                ref={editTrigger}
+                type="button"
+                variant="secondary"
+                aria-label="Edit portfolio"
+                className="min-h-11 rounded-pill px-4"
+                disabled={editOpen || management.metadataPending || management.metadataBlocked}
+                onClick={() => setEditingId(portfolioId)}
+              >
+                Edit
+              </Button>
+              <div ref={setUpdateSlot} className="min-w-0" />
+              <div ref={setRemoveSlot} className="min-w-0" />
+            </div>
           )}
-          {ready && <div ref={setRemoveSlot} className="shrink-0" />}
         </div>
       )}
-      <PortfolioTargetBoundary primaryHeading={detail ? primaryHeading : undefined} />
+      <PortfolioToolbarSlot.Provider value={detail ? updateSlot : undefined}>
+        <PortfolioTargetBoundary primaryHeading={detail ? primaryHeading : undefined} />
+      </PortfolioToolbarSlot.Provider>
       {detail && owner && (
         <div
-          className="col-span-full min-w-0"
+          className="min-w-0"
           onFocusCapture={(event) => {
             managementFocus.current = event.target;
           }}
@@ -148,10 +165,11 @@ function SessionButton({
       type="button"
       variant="ghost"
       size="icon"
-      className="ml-auto size-11 border-transparent bg-transparent text-muted-foreground aria-disabled:opacity-40"
+      className="ml-auto size-11 shrink-0 border-transparent bg-transparent text-muted-foreground aria-disabled:opacity-40"
       aria-label={signedIn ? label : "Go to sign-in form"}
       title={label}
       aria-disabled={pending}
+      aria-busy={pending || undefined}
       onClick={onClick}
     >
       <Icon aria-hidden="true" />
@@ -222,9 +240,24 @@ function CatalogTradeEntry() {
   );
 }
 
-function SignedIn() {
+function SignedIn({ onSignedOut }: { onSignedOut: () => void }) {
   const { pathname } = useLocation();
   const logout = useLogout();
+  const logoutInFlight = useRef(false);
+
+  async function signOut() {
+    if (logoutInFlight.current || logout.isPending) return;
+    logoutInFlight.current = true;
+    try {
+      await logout.mutateAsync();
+      onSignedOut();
+    } catch {
+      // The mutation drives the existing retryable sign-out alert.
+    } finally {
+      logoutInFlight.current = false;
+    }
+  }
+
   // This memory belongs to this mounted signed-in identity only. Explicit
   // routes take priority, including their refusal; never fall back from one.
   const [openedId, setOpenedId] = useState<string>();
@@ -233,11 +266,16 @@ function SignedIn() {
   const portfolioDetail = useMatch({ path: "/portfolios/:portfolioId", end: true });
   const portfolioHistory = useMatch({ path: "/portfolios/:portfolioId/history", end: true });
   const catalogId = useMatch("/portfolios/:portfolioId/trade/catalog/:catalogId")?.params.catalogId;
+  const curatedTrade = useMatch("/portfolios/:portfolioId/trade/stocks/:symbol");
+  const cryptoTrade = useMatch("/portfolios/:portfolioId/trade/:symbol");
+  const tradeRoute = Boolean(catalogId || curatedTrade || cryptoTrade);
   const portfolioNavigation = useMatch("/portfolios/*");
   const portfoliosActive = Boolean(portfolioNavigation && !portfolioHistory);
   const navigation = usePortfolioTarget(explicitId ?? openedId);
   const target = navigation.status === "ready" ? navigation.target : null;
   if (explicitId && target && openedId !== explicitId) setOpenedId(explicitId);
+  const portfolioBlock =
+    openedId && !target ? (navigation.status === "loading" ? "pending" : "unavailable") : undefined;
   const historyId = portfolioHistory ? explicitId : target?.portfolioId;
   const historyPath = historyId ? `/portfolios/${historyId}/history` : "/history";
   const content = useRef<HTMLDivElement>(null);
@@ -285,13 +323,7 @@ function SignedIn() {
               History
             </NavLink>
           </nav>
-          <SessionButton
-            signedIn
-            pending={logout.isPending}
-            onClick={() => {
-              if (!logout.isPending) logout.mutate();
-            }}
-          />
+          <SessionButton signedIn pending={logout.isPending} onClick={() => void signOut()} />
         </>
       }
     >
@@ -302,9 +334,10 @@ function SignedIn() {
       )}
       <div ref={content}>
         {explicitId && !portfolioDetail && (!portfolioHistory || !target) && (
-          <div className="mx-auto mt-6 max-w-[1280px]">
+          <div className={tradeRoute ? "trade-chooser-shell" : "mx-auto mt-6 max-w-[1280px]"}>
             <PortfolioSwitcher
               portfolioId={explicitId}
+              inline={tradeRoute}
               label={portfolioHistory ? "History portfolio" : undefined}
               destination={
                 portfolioHistory
@@ -317,7 +350,16 @@ function SignedIn() {
           </div>
         )}
         <Routes>
-          <Route index element={<MarketsPage portfolioId={target?.portfolioId} />} />
+          <Route
+            index
+            element={
+              <MarketsPage
+                portfolioId={openedId}
+                onSelectPortfolio={setOpenedId}
+                portfolioBlock={portfolioBlock}
+              />
+            }
+          />
           <Route path="portfolios/deletion" element={<PortfolioDeletionPage />} />
           <Route path="portfolios/:portfolioId" element={<PortfolioRoute />}>
             <Route index element={<PortfolioPage />} />
@@ -358,14 +400,24 @@ function SignedIn() {
 function App() {
   const { data, isPending, isError, refetch } = useMe();
   const signInInput = useRef<HTMLInputElement>(null);
-  if (data && !isPending && !isError) return <SignedIn key={data.email} />;
+  const pendingSignInFocus = useRef(false);
+  const bindSignInInput = useCallback((input: HTMLInputElement | null) => {
+    signInInput.current = input;
+    if (input && pendingSignInFocus.current) {
+      pendingSignInFocus.current = false;
+      input.focus();
+    }
+  }, []);
+  const focusSignIn = () => {
+    if (signInInput.current) signInInput.current.focus();
+    else pendingSignInFocus.current = true;
+  };
+  if (data && !isPending && !isError) {
+    return <SignedIn key={data.email} onSignedOut={focusSignIn} />;
+  }
 
   return (
-    <AppShell
-      navigation={
-        !isPending && !isError && <SessionButton onClick={() => signInInput.current?.focus()} />
-      }
-    >
+    <AppShell navigation={!isPending && !isError && <SessionButton onClick={focusSignIn} />}>
       {isPending ? (
         <Card
           className="mx-auto my-8 max-w-xl"
@@ -391,7 +443,7 @@ function App() {
           </CardContent>
         </Card>
       ) : (
-        <SignInPage inputRef={signInInput} />
+        <SignInPage inputRef={bindSignInInput} />
       )}
     </AppShell>
   );
