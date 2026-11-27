@@ -15,11 +15,11 @@ export type HistoryPoint = {
 };
 
 export type HistorySeries = {
-  source: "kraken" | "alpaca_iex";
+  source: "kraken" | "alpaca_iex" | "coin_metrics";
   currency: "USD";
   time_basis: "utc" | "regular_session";
   adjustment: "raw" | "split";
-  interval_minutes: 5 | 30 | 60 | 240;
+  interval_minutes: 5 | 30 | 60 | 240 | 1440;
   start_at: string;
   end_at: string;
   expected_through_at: string | null;
@@ -40,6 +40,7 @@ export type HistoryResponse = {
 );
 
 const cryptoIntervals = { "1D": 5, "1W": 60, "1M": 240 } as const;
+const coinMetricsIntervals = { "1D": 5, "1W": 60, "1M": 1440 } as const;
 const record = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 const keys = (value: Record<string, unknown>, ...fields: string[]) =>
@@ -92,7 +93,12 @@ function isSeries(
   coverage: HistorySeries["coverage"],
 ): value is HistorySeries {
   const crypto = instrument.kind === "crypto";
-  const interval = crypto ? cryptoIntervals[range] : range === "1D" ? 5 : 30;
+  const coinMetrics = record(value) && value.source === "coin_metrics";
+  const interval = crypto
+    ? (coinMetrics ? coinMetricsIntervals : cryptoIntervals)[range]
+    : range === "1D"
+      ? 5
+      : 30;
   if (
     !record(value) ||
     !keys(
@@ -112,7 +118,9 @@ function isSeries(
       "day_change_pct",
       "period_change_pct",
     ) ||
-    value.source !== (crypto ? "kraken" : "alpaca_iex") ||
+    (crypto
+      ? value.source !== "kraken" && value.source !== "coin_metrics"
+      : value.source !== "alpaca_iex") ||
     value.currency !== "USD" ||
     value.time_basis !== (crypto ? "utc" : "regular_session") ||
     value.adjustment !== (crypto ? "raw" : "split") ||
