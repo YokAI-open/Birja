@@ -6,6 +6,7 @@ import httpx
 import pytest
 from sqlalchemy import select
 
+from app.api.v2 import market_history
 from app.models.user import User
 from tests.helpers import csrf_headers, selected_portfolio_path, sign_in, unique_email
 from tests.stock_trade_fixtures import ownership, status_case, stock_trade_case
@@ -96,6 +97,17 @@ async def test_owner_stock_prices_and_orders_pause_when_the_list_widens(
         assert denied.json()["detail"]["code"] == "permission_unavailable"
     assert (await auth_client.get(catalog_trade + "/trade-context")).status_code == 409
 
+    async def unexpected_history(*args):
+        pytest.fail("The personal stock chart was resolved for a widened audience")
+
+    monkeypatch.setattr(market_history, "_resolve", unexpected_history)
+    chart = await auth_client.post(
+        "/api/v2/market-history/query",
+        json={"instrument": {"kind": "featured", "symbol": "AAPL"}, "range": "1W"},
+        headers=headers,
+    )
+    assert chart.status_code == 200 and chart.json()["state"] == "unavailable"
+
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=running_app), base_url="https://test"
     ) as guest_client:
@@ -110,3 +122,16 @@ async def test_owner_stock_prices_and_orders_pause_when_the_list_widens(
 
     await asyncio.to_thread(email_file.write_text, owner, encoding="utf-8")
     assert Decimal(apple_quotes(await auth_client.get(stocks))["bid"]) == 100
+    sale = await auth_client.post(
+        trade,
+        json={
+            **order,
+            "side": "sell",
+            "expected_exec_price": "100",
+            "idempotency_key": str(uuid4()),
+        },
+        headers=headers,
+    )
+    assert sale.status_code == 201
+    assert Decimal(sale.json()["cash_after"]) - Decimal(owner_book["cash"]) == 100
+    assert (await auth_client.get(portfolio)).json()["holdings"] == []
