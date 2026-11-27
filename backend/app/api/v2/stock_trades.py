@@ -24,7 +24,6 @@ router = APIRouter(
     prefix="/portfolios/{portfolio_id}",
     tags=["portfolio stock trades"],
     route_class=PrivateRoute,
-    dependencies=[Depends(require_personal_stock_access)],
 )
 
 
@@ -44,7 +43,7 @@ async def _refresh_quote(
 @router.post(
     "/stock-trades/quote",
     response_model=QuoteOut,
-    dependencies=[Depends(verify_csrf)],
+    dependencies=[Depends(verify_csrf), Depends(require_personal_stock_access)],
     summary="Preview stock in an owned portfolio",
     description="Read-only whole-share IEX ask/bid preview in the selected active portfolio.",
 )
@@ -77,7 +76,7 @@ async def post_quote(
     "/stock-trades",
     response_model=FillOut,
     status_code=201,
-    dependencies=[Depends(verify_csrf)],
+    dependencies=[Depends(verify_csrf), Depends(require_personal_stock_access)],
     summary="Confirm stock in an owned portfolio",
     description=(
         "Simulated whole-share execution with zero stock fees. Returns 201 for a new fill or "
@@ -115,6 +114,7 @@ async def post_trade(
 @router.get(
     "/stock-trades/{symbol}/context",
     response_model=ContextOut,
+    dependencies=[Depends(require_personal_stock_access)],
     summary="Read a portfolio's stock draft context",
     description=(
         "Selected portfolio cash and holdings with current session and IEX venue evidence. "
