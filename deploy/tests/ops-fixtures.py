@@ -2492,8 +2492,16 @@ def tls(fresh_bootstrap=False):
                 )
                 for key in service["environment"]
             )
-            assert len(service["volumes"]) == 1 and service["volumes"][0]["read_only"]
-            assert service["volumes"][0]["target"] == "/run/birja/db-ca.crt"
+            expected_mounts = {"/run/birja/db-ca.crt": "/etc/birja/db-tls/ca.crt"}
+            if name in {"backend", "scheduler"}:
+                expected_mounts["/run/birja/access"] = "/dev/null"
+            mounts = service["volumes"]
+            assert len(mounts) == len(expected_mounts)
+            assert {mount["target"]: mount["source"] for mount in mounts} == expected_mounts
+            assert all(mount["type"] == "bind" and mount["read_only"] for mount in mounts)
+            for mount in mounts:
+                if mount["target"] == "/run/birja/access":
+                    assert mount["bind"]["create_host_path"] is False
             if name != "backend":
                 assert not set(service["environment"]) & {
                     "JWT_SECRET",
