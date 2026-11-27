@@ -10,6 +10,7 @@ from app.api.v1.stock_trades import PrivateRoute
 from app.core.config import Settings
 from app.core.deps import CatalogQuoteRedisDep, CsrfDep, CurrentUserDep, DbDep, SettingsDep
 from app.schemas.market_history import MarketHistoryQuery, MarketHistoryResponse
+from app.services.access_list import personal_stock_access
 from app.services.market_history_authority import (
     HistoryAuthority,
     HistoryInstrumentNotFound,
@@ -47,6 +48,8 @@ async def post_market_history(
     redis: CatalogQuoteRedisDep,
     settings: SettingsDep,
 ) -> MarketHistoryResponse:
+    if body.instrument.kind != "crypto" and not await personal_stock_access(settings, user.id):
+        return history_response(body, "unavailable")
     authority = await _resolve(db, settings, body)
     if redis is None or authority is None:
         return history_response(body, "unavailable")

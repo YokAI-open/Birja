@@ -134,7 +134,11 @@ def _action_projection(
 
 
 async def list_stocks(
-    db: AsyncSession, settings: Settings, *, now: Callable[[], datetime] | None = None
+    db: AsyncSession,
+    settings: Settings,
+    *,
+    now: Callable[[], datetime] | None = None,
+    allow_personal_prices: bool = True,
 ) -> StocksResponse:
     """Three bounded reads; only the final committed evidence snapshot authorizes.
 
@@ -188,9 +192,11 @@ async def list_stocks(
         if final.isolation == "read committed" and len(final.admissions or []) <= 5:
             authority = _admissions(final.admissions or [])
             sessions = _sessions(final.sessions or [])
-            if len(final.actions or []) <= 20:
+            if not allow_personal_prices:
+                authority = {key: row for key, row in authority.items() if key == "calendar"}
+            if allow_personal_prices and len(final.actions or []) <= 20:
                 actions = {row["coin_id"]: row for row in final.actions or []}
-            if len(final.instruments or []) <= 20:
+            if allow_personal_prices and len(final.instruments or []) <= 20:
                 current_rows = {row["coin_id"]: row for row in final.instruments or []}
     except SQLAlchemyError, ValueError, TypeError, KeyError:
         # Safe SEC metadata survives; never return/log driver/provider evidence.
@@ -199,7 +205,9 @@ async def list_stocks(
     checked_at = now()
     try:
         loaded = (
-            executions_from_snapshot(final, settings, now=checked_at) if final is not None else {}
+            executions_from_snapshot(final, settings, now=checked_at)
+            if allow_personal_prices and final is not None
+            else {}
         )
     except ValueError, TypeError, KeyError:
         loaded = {}

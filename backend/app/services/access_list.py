@@ -3,8 +3,12 @@
 import asyncio
 import os
 import stat
+from typing import TYPE_CHECKING
 
 from app.schemas.auth import RequestCodeIn
+
+if TYPE_CHECKING:
+    from app.core.config import MarketValuationSettings
 
 _MAX_FILE_BYTES = 16 * 1024
 
@@ -32,3 +36,19 @@ async def email_allowed(path: str, email: str | None) -> bool:
     if not path:
         return True
     return email in await asyncio.to_thread(read_allowed_emails, path)
+
+
+async def personal_stock_collection_allowed(settings: MarketValuationSettings) -> bool:
+    """Pause personal-feed work when the file no longer names one account."""
+    if not settings.stock_data_owner_id:
+        return True
+    allowed = await asyncio.to_thread(read_allowed_emails, settings.auth_allowed_emails_file)
+    return allowed == {settings.stock_data_owner_email}
+
+
+async def personal_stock_access(settings: MarketValuationSettings, user_id: int) -> bool:
+    """Personal-feed prices and fills are limited to the pinned account."""
+    return not settings.stock_data_owner_id or (
+        user_id == settings.stock_data_owner_id
+        and await personal_stock_collection_allowed(settings)
+    )

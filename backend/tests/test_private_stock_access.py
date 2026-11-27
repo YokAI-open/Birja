@@ -26,7 +26,11 @@ async def test_owner_stock_prices_and_orders_pause_when_the_list_widens(
         running_app.state,
         "settings",
         settings.model_copy(
-            update={"auth_allowed_emails_file": str(email_file), "stock_data_owner_id": owner_id}
+            update={
+                "auth_allowed_emails_file": str(email_file),
+                "stock_data_owner_id": owner_id,
+                "stock_data_owner_email": owner,
+            }
         ),
     )
 
@@ -73,6 +77,24 @@ async def test_owner_stock_prices_and_orders_pause_when_the_list_widens(
     )
     assert catalog.status_code == 409
     assert catalog.json()["detail"]["code"] == "permission_unavailable"
+    catalog_trade = portfolio + "/stock-catalog/1"
+    for endpoint, body in (
+        ("/preview", {"listing_version": "1", "side": "buy", "quantity": "1"}),
+        (
+            "/confirm",
+            {
+                "listing_version": "1",
+                "side": "buy",
+                "quantity": "1",
+                "expected_exec_price": "102",
+                "idempotency_key": str(uuid4()),
+            },
+        ),
+    ):
+        denied = await auth_client.post(catalog_trade + endpoint, json=body, headers=headers)
+        assert denied.status_code == 409
+        assert denied.json()["detail"]["code"] == "permission_unavailable"
+    assert (await auth_client.get(catalog_trade + "/trade-context")).status_code == 409
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=running_app), base_url="https://test"

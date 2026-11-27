@@ -17,7 +17,7 @@ from app.core.security import (
 )
 from app.models.auth import AuthSession
 from app.models.user import User
-from app.services.access_list import email_allowed
+from app.services.access_list import email_allowed, personal_stock_access
 from app.services.email import EmailSender
 from app.services.otp import OtpStore
 from app.services.portfolios import OwnedActivePortfolio, resolve_owned_active_portfolio
@@ -123,6 +123,11 @@ CsrfDep = Annotated[None, Depends(verify_csrf)]
 OtpStoreDep = Annotated[OtpStore, Depends(get_otp_store)]
 EmailSenderDep = Annotated[EmailSender, Depends(get_email_sender)]
 CurrentUserDep = Annotated[User, Depends(get_current_user)]
+
+
+async def require_personal_stock_access(user: CurrentUserDep, settings: SettingsDep) -> None:
+    if not await personal_stock_access(settings, user.id):
+        raise HTTPException(409, detail={"code": "permission_unavailable"})
 
 
 async def get_owned_active_portfolio(

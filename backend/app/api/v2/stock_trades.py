@@ -6,7 +6,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.stock_trades import PrivateRoute, Symbol, _refusal
 from app.core.config import Settings
-from app.core.deps import DbDep, OwnedActivePortfolioDep, RedisDep, SettingsDep, verify_csrf
+from app.core.deps import (
+    DbDep,
+    OwnedActivePortfolioDep,
+    RedisDep,
+    SettingsDep,
+    require_personal_stock_access,
+    verify_csrf,
+)
 from app.schemas.stock_trades import ContextOut, FillOut, QuoteIn, QuoteOut, TradeIn
 from app.services import stock_trading
 from app.services.portfolios import fence_owned_active_portfolios
@@ -17,6 +24,7 @@ router = APIRouter(
     prefix="/portfolios/{portfolio_id}",
     tags=["portfolio stock trades"],
     route_class=PrivateRoute,
+    dependencies=[Depends(require_personal_stock_access)],
 )
 
 
