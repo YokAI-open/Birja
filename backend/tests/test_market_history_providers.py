@@ -1,5 +1,5 @@
 from collections.abc import AsyncIterator
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 import httpx
@@ -12,10 +12,12 @@ from app.services.market_history import (
     normalize_history,
 )
 from app.services.market_history_providers import (
+    COIN_METRICS_HISTORY_URL,
     IEX_BARS_URL,
     KRAKEN_OHLC_URL,
     MAX_HISTORY_RESPONSE_BYTES,
     HistoryProviderError,
+    fetch_coin_metrics_history,
     fetch_iex_history,
     fetch_kraken_history,
 )
@@ -45,6 +47,114 @@ def _window() -> HistoryWindow:
 
 def _row(start: datetime, price: str) -> list[object]:
     return [int(start.timestamp()), "1", "1", "1", price, "1", "1", 2]
+
+
+@pytest.mark.parametrize(
+    ("range", "frequency", "metric", "interval"),
+    [
+        ("1D", "1m", "ReferenceRateUSD", 5),
+        ("1W", "1h", "ReferenceRateUSD", 60),
+        ("1M", "1d", "PriceUSD", 1440),
+    ],
+)
+async def test_coin_metrics_uses_observation_times_and_daily_closing_dates(
+    range, frequency, metric, interval
+) -> None:
+    window = crypto_history_window(range, _NOW, "coin_metrics")
+    published_at = window.end_at
+    provider_time = published_at - window.step if range == "1M" else published_at
+    attempts = 0
+
+    async def reserve() -> None:
+        nonlocal attempts
+        attempts += 1
+
+    def upstream(request: httpx.Request) -> httpx.Response:
+        assert attempts == 1
+        assert str(request.url).split("?")[0] == COIN_METRICS_HISTORY_URL
+        assert dict(request.url.params) == {
+            "assets": "btc",
+            "metrics": metric,
+            "frequency": frequency,
+            "start_time": (
+                window.request_start_at + (timedelta() if range == "1M" else window.step)
+            ).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "end_time": provider_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "page_size": "1500",
+        }
+        stamps = [provider_time]
+        if range == "1D":
+            stamps.insert(0, provider_time - timedelta(minutes=1))
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "asset": "btc",
+                        "time": stamp.strftime("%Y-%m-%dT%H:%M:%S.000000000Z"),
+                        metric: "65000.12345678901255",
+                    }
+                    for stamp in stamps
+                ],
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(upstream)) as client:
+        batch = await fetch_coin_metrics_history(client, "btc", window, before_attempt=reserve)
+    series = normalize_history(window, batch)
+    assert series.source == "coin_metrics"
+    assert series.interval_minutes == interval
+    assert series.as_of == published_at
+    assert len(series.points) == 1
+    assert series.points[0].close == Decimal("65000.123456789013")
+    assert series.points[0].starts_at == published_at - timedelta(minutes=interval)
+
+
+@pytest.mark.parametrize(
+    ("asset", "price", "sort_times"),
+    [("eth", "65000", True), ("btc", "0", True), ("btc", "65000", False)],
+)
+async def test_coin_metrics_rejects_wrong_asset_bad_price_or_unordered_data(
+    asset, price, sort_times
+) -> None:
+    window = crypto_history_window("1D", _NOW, "coin_metrics")
+    stamps = [window.end_at - window.step, window.end_at]
+    if not sort_times:
+        stamps.reverse()
+    rows = [
+        {"asset": asset, "time": stamp.isoformat(), "ReferenceRateUSD": price} for stamp in stamps
+    ]
+    transport = httpx.MockTransport(lambda _: httpx.Response(200, json={"data": rows}))
+    async with httpx.AsyncClient(transport=transport) as client:
+        with pytest.raises(HistoryProviderError):
+            await fetch_coin_metrics_history(client, "btc", window)
+
+
+async def test_coin_metrics_does_not_follow_pagination_and_marks_partial() -> None:
+    window = crypto_history_window("1W", _NOW, "coin_metrics")
+    attempts = 0
+
+    def upstream(_: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "asset": "btc",
+                        "time": window.end_at.isoformat(),
+                        "ReferenceRateUSD": "60000",
+                    }
+                ],
+                "next_page_url": "https://community-api.coinmetrics.io/next",
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(upstream)) as client:
+        batch = await fetch_coin_metrics_history(client, "btc", window)
+    assert attempts == 1
+    assert normalize_history(window, batch).coverage == "partial"
 
 
 @pytest.mark.asyncio

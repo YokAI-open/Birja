@@ -309,7 +309,7 @@ async def amain(stop: asyncio.Event | None = None) -> None:
             run_history_cycle,
         )
 
-        history_scopes = settings.market_history_scope_json
+        history_scopes = settings.legacy_market_history_scopes
         ticker_budget = (
             KrakenHistoryBudget(settings.price_poll_interval_seconds)
             if history_scopes is not None
@@ -469,7 +469,7 @@ async def amain(stop: asyncio.Event | None = None) -> None:
                     return CycleResult("source_error")
 
             loops.append((dividend_cycle, settings.stock_actions_poll_interval_seconds))
-        if history_scopes is not None and catalog_redis is not None:
+        if settings.market_history_enabled and catalog_redis is not None:
 
             async def history_cycle() -> CycleResult:
                 return await run_history_cycle(
