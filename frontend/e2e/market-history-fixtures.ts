@@ -2,6 +2,8 @@ import { writeFile } from "node:fs/promises";
 import { expect, type Page, type TestInfo } from "@playwright/test";
 
 export const historyPath = "/api/v2/market-history/query";
+export const stockChartOrigin = "https://www.tradingview-widget.com";
+const stockChartRange = { "1D": "1D", "1W": "5D", "1M": "1M" } as const;
 export type HistoryQuery = {
   instrument:
     | { kind: "featured" | "crypto"; symbol: string }
@@ -18,7 +20,7 @@ type HistoryPoint = {
 const day = 86_400_000;
 const epoch = Date.UTC(2026, 10, 25);
 const days = { "1D": 1, "1W": 7, "1M": 30 };
-const coinInterval = { "1D": 5, "1W": 60, "1M": 240 } as const;
+const coinInterval = { "1D": 5, "1W": 60, "1M": 1440 } as const;
 const iso = (value: number) => new Date(value).toISOString();
 
 export function historyReply(
@@ -66,7 +68,7 @@ export function historyReply(
     ...query,
     state: delayed ? "partial" : "ready",
     series: {
-      source: crypto ? "kraken" : "alpaca_iex",
+      source: crypto ? "coin_metrics" : "alpaca_iex",
       currency: "USD",
       time_basis: crypto ? "utc" : "regular_session",
       adjustment: crypto ? "raw" : "split",
@@ -103,6 +105,35 @@ export async function expectChartRange(page: Page, query: HistoryQuery) {
     `$${Number(points.at(-1)!.close).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
   );
   await disclosure.press("Enter");
+}
+
+export async function mockStockChart(page: Page) {
+  await page.route(`${stockChartOrigin}/embed-widget/symbol-overview/**`, (route) =>
+    route.fulfill({
+      contentType: "text/html",
+      body: '<!doctype html><html lang="en"><meta charset="utf-8"><body>Stock chart fixture</body></html>',
+    }),
+  );
+}
+
+export async function expectStockChartRange(
+  page: Page,
+  symbol: string,
+  range: HistoryQuery["range"],
+) {
+  const chart = page.getByRole("region", { name: "Price history" });
+  await expect(chart.getByRole("button", { name: range, exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  const frame = chart.locator("iframe");
+  await expect(frame).toBeVisible();
+  await expect(frame).toHaveAttribute("sandbox", "allow-scripts allow-same-origin");
+  const source = new URL((await frame.getAttribute("src"))!);
+  expect(source.origin).toBe(stockChartOrigin);
+  expect(JSON.parse(decodeURIComponent(source.hash.slice(1))).symbols).toEqual([
+    [`${symbol}|${stockChartRange[range]}`],
+  ]);
 }
 
 export async function captureMarkets(page: Page, info: TestInfo, name: string) {

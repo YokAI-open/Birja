@@ -4,10 +4,9 @@ import { expect, test, type Page } from "@playwright/test";
 import { portfolioId, signInNewUser } from "./helpers.js";
 import {
   captureMarkets,
-  expectChartRange,
+  expectStockChartRange,
   historyPath,
-  historyReply,
-  type HistoryQuery,
+  mockStockChart,
 } from "./market-history-fixtures.js";
 import { stockFixture } from "./stock-trade-fixtures.js";
 import { verifyOwnedReceipt, type TradeReceipt } from "./phase25-review-capture.js";
@@ -136,37 +135,30 @@ test("Phase 23 catalog ranges bind exact identity and preview uses the current c
   test.setTimeout(90_000);
   catalogFixture("catalog-finance");
   await page.setViewportSize({ width: 390, height: 1000 });
-  const queries: HistoryQuery[] = [];
-  await page.route(`**${historyPath}`, (route) => {
-    const query = route.request().postDataJSON() as HistoryQuery;
-    if (query.instrument.kind === "catalog") queries.push(query);
-    return route.fulfill({
-      json: historyReply(query, query.instrument.kind === "catalog" ? "ready" : "unavailable"),
-    });
+  const queries: string[] = [];
+  await page.route(`**${historyPath}`, async (route) => {
+    queries.push(route.request().url());
+    await route.abort();
   });
+  await mockStockChart(page);
   await openStocks(page);
   const owned = await portfolioId(page);
   await page.getByRole("combobox", { name: "Trading portfolio" }).selectOption(owned);
   const item = await selectPromotedStock(page);
-  const instrument = {
-    kind: "catalog",
-    catalog_id: item.catalog_id,
-    listing_version: item.listing_version,
-  } as const;
-  const chart = page.getByRole("region", { name: "Price history" });
   const action = page.getByRole("link", { name: "Trade FQZT", exact: true });
+  const chart = page.getByRole("region", { name: "Price history" });
   const quote = page.locator(".market-main-price");
   for (const range of ["1W", "1D", "1M"] as const) {
     if (range !== "1W")
       await chart.getByRole("button", { name: range, exact: true }).press("Enter");
-    await expectChartRange(page, { instrument, range });
+    await expectStockChartRange(page, "NASDAQ:FQZT", range);
     await expect(quote).toHaveText("$102.00");
     await expect(action).toHaveAttribute(
       "href",
       `/portfolios/${owned}/trade/catalog/${item.catalog_id}`,
     );
   }
-  expect(queries).toEqual(["1W", "1D", "1M"].map((range) => ({ instrument, range })));
+  expect(queries).toEqual([]);
   await noOverflow(page);
   await action.click();
   await page.getByLabel("Whole-share quantity").fill("1");
@@ -239,7 +231,7 @@ test("Phase 23 catalog ranges bind exact identity and preview uses the current c
   await stock(page, /ORCL/).press("Enter");
   await expect(page.getByRole("heading", { name: "Oracle", exact: true })).toBeFocused();
   await expect(quote).toHaveText("$208.00");
-  await expect(chart.getByText("IEX · Regular sessions · Split-adjusted")).toBeVisible();
+  await expectStockChartRange(page, "NYSE:ORCL", "1W");
   await expect(page.getByRole("link", { name: "Trade ORCL", exact: true })).toBeVisible();
   await noOverflow(page);
   await captureMarkets(page, testInfo, "catalog-mobile");

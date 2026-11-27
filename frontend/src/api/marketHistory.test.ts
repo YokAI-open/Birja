@@ -47,6 +47,38 @@ const response: HistoryResponse = {
 };
 
 describe("market history response", () => {
+  it("accepts attributed Coin Metrics daily crypto closes without accepting another interval", () => {
+    const coin = { kind: "crypto", symbol: "BTC" } as const;
+    const start = "2026-11-23T00:00:00Z";
+    const end = "2026-11-24T00:00:00Z";
+    const month = {
+      ...response,
+      instrument: coin,
+      range: "1M",
+      series: {
+        ...response.series,
+        source: "coin_metrics",
+        time_basis: "utc",
+        adjustment: "raw",
+        interval_minutes: 1440,
+        start_at: start,
+        end_at: end,
+        expected_through_at: end,
+        as_of: end,
+        points: [{ starts_at: start, ends_at: end, close: "12.001", gap_before: null }],
+      },
+    };
+    expect(decodeMarketHistory(month, coin, "1M")).toEqual(month);
+    expect(() =>
+      decodeMarketHistory(
+        { ...month, series: { ...month.series, interval_minutes: 240 } },
+        coin,
+        "1M",
+      ),
+    ).toThrow();
+    expect(() => decodeMarketHistory({ ...month, instrument }, instrument, "1M")).toThrow();
+  });
+
   it("preserves exact catalog identifiers and decimal closes", () => {
     expect(decodeMarketHistory(response, instrument, "1W")).toEqual(response);
   });

@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 
 from app.schemas.market_history import (
     HistoryCoverage,
+    HistoryInterval,
     HistoryRange,
     HistorySource,
     HistoryTimeliness,
@@ -22,6 +23,7 @@ _NEW_YORK = ZoneInfo("America/New_York")
 _GRACE = timedelta(seconds=60)
 _DAY = timedelta(days=1)
 _CRYPTO_MINUTES: dict[HistoryRange, Literal[5, 60, 240]] = {"1D": 5, "1W": 60, "1M": 240}
+_REFERENCE_MINUTES: dict[HistoryRange, Literal[5, 60, 1440]] = {"1D": 5, "1W": 60, "1M": 1440}
 _DAYS: dict[HistoryRange, int] = {"1D": 1, "1W": 7, "1M": 30}
 
 
@@ -47,7 +49,7 @@ class _Slot:
 class HistoryWindow:
     range: HistoryRange
     source: HistorySource
-    interval_minutes: Literal[5, 30, 60, 240]
+    interval_minutes: HistoryInterval
     start_at: datetime
     end_at: datetime
     request_start_at: datetime
@@ -81,16 +83,18 @@ def _grid(start: datetime, end: datetime, step: timedelta) -> Iterator[datetime]
         yield start + index * step
 
 
-def crypto_history_window(range: HistoryRange, now: datetime) -> HistoryWindow:
+def crypto_history_window(
+    range: HistoryRange, now: datetime, source: Literal["kraken", "coin_metrics"] = "kraken"
+) -> HistoryWindow:
     now = _utc(now)
-    interval = _CRYPTO_MINUTES[range]
+    interval = _REFERENCE_MINUTES[range] if source == "coin_metrics" else _CRYPTO_MINUTES[range]
     step = timedelta(minutes=interval)
     end = _UTC_EPOCH + ((now - _UTC_EPOCH) // step) * step
     start = end - timedelta(days=_DAYS[range])
     expected_end = _UTC_EPOCH + ((now - _GRACE - _UTC_EPOCH) // step) * step
     return HistoryWindow(
         range=range,
-        source="kraken",
+        source=source,
         interval_minutes=interval,
         start_at=start,
         end_at=end,
@@ -264,7 +268,7 @@ def _changes(
     final = points[-1]
     daily_start: datetime | None
     period_start: datetime | None
-    if window.source == "kraken":
+    if window.source != "alpaca_iex":
         daily_start = final.starts_at - _DAY
         period_start = window.start_at - window.step
     else:
@@ -288,7 +292,7 @@ def _changes(
         and period_base is not None
         and period_start is not None
         and period_start < final.starts_at
-        and (window.source != "kraken" or final.ends_at == window.end_at)
+        and (window.source == "alpaca_iex" or final.ends_at == window.end_at)
         else None
     )
     return day, period

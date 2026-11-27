@@ -12,7 +12,7 @@
 ## Phases
 
 - [x] **Phase 22: Adopt the market workspace** (completed 2026-11-26)
-- [ ] **Phase 23: Show historical market prices**
+- [x] **Phase 23: Show historical market prices**
 - [x] **Phase 24: Compare portfolio performance** (completed 2026-11-26)
 - [x] **Phase 25: Finish the trading flows and verify the integrated app** (completed 2026-11-26)
 
@@ -46,7 +46,7 @@
 
 **Success Criteria** (what must be TRUE):
 
-1. A user can switch among `1D`, `1W` and `1M` price series for a coin, a featured stock and an out-of-list stock. The chart and text alternative report the same points, period and source.
+1. A user can switch among `1D`, `1W` and `1M` for a coin, a featured stock and a supported catalog stock. Stock history is in the attributed TradingView widget. The crypto chart and its text alternative report the same points, period and source.
 2. Closed sessions and missing points stay distinguishable from observed prices. Partial history or provider failure leaves current prices, search and eligible order entry usable.
 3. Historical requests use qualified coverage and a measured, bounded free-tier fetch/cache policy. Market orders still use the existing current-quote path.
 4. The running app matches the approved Markets reference on ticker tiles, spacing, chart controls and action placement across four matched desktop and mobile captures. Real-data and attribution differences are recorded.
@@ -58,8 +58,12 @@
 - [x] 23-03 — Render charts and match the approved Markets layout.
 - [x] 23-04 — Verify independent trading behavior and compare actual-app and ZIP captures.
 
-All nine live sample windows and the shared scheduler budget passed.
-CHART-04 remains open for historical data use in production.
+- [x] 23-05 — Replace production crypto history with Coin Metrics Community.
+- [x] 23-06 — Integrate TradingView for featured and catalog stock charts.
+- [x] 23-07 — Verify the replacement sources and prepare v0.9.1.
+
+The replacement feeds passed live verification for representative crypto,
+featured and catalog instruments. [Release record](https://github.com/YokAI-open/Birja/releases/tag/v0.9.1)
 
 [Research](phases/23-show-historical-market-prices/23-RESEARCH.md) · [UI contract](phases/23-show-historical-market-prices/23-UI-SPEC.md) · [Verification](phases/23-show-historical-market-prices/23-VERIFICATION.md)
 
@@ -149,7 +153,7 @@ CHART-04 remains open for historical data use in production.
 | Phase | Plans complete | Status |
 |---|---|---|
 | 22. Adopt the market workspace | 3/3 | Complete 2026-11-26 |
-| 23. Show historical market prices | 4/4 | Live coverage and rate bounds verified. Production source-use scope pending. |
+| 23. Show historical market prices | 7/7 | Replacement sources verified 2026-11-27 |
 | 24. Compare portfolio performance | 8/8 | Complete 2026-11-26 |
 | 25. Finish the trading flows and verify the integrated app | 7/7 | Complete 2026-11-26 |
 

@@ -10,6 +10,8 @@ export default defineConfig({
   use: {
     baseURL: process.env.E2E_BASE_URL ?? "http://localhost:5173",
     trace: "retain-on-failure",
+    // Browser suites use local widget fixtures and do not contact TradingView.
+    launchOptions: { args: ["--host-resolver-rules=MAP www.tradingview-widget.com ~NOTFOUND"] },
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
 });

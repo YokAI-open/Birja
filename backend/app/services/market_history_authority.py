@@ -13,6 +13,7 @@ from app.models.stock import StockDataAdmission, StockInstrument
 from app.models.stock_catalog import StockCatalogGeneration
 from app.schemas.market_history import (
     CatalogHistoryInstrument,
+    CoinMetricsHistoryScope,
     CryptoHistoryInstrument,
     FeaturedHistoryInstrument,
     IexHistoryScope,
@@ -27,6 +28,27 @@ from app.services.stock_sessions import build_sessions
 
 _EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 _MINUTE = timedelta(minutes=1)
+_COIN_METRICS_SCOPE = CoinMetricsHistoryScope()
+_COIN_METRICS_SYMBOLS = frozenset(
+    {
+        "ADA",
+        "ATOM",
+        "AVAX",
+        "BCH",
+        "BNB",
+        "BTC",
+        "DOGE",
+        "DOT",
+        "ETH",
+        "LINK",
+        "LTC",
+        "SOL",
+        "TRX",
+        "XLM",
+        "XRP",
+    }
+)
+type _HistoryScope = KrakenHistoryScope | IexHistoryScope | CoinMetricsHistoryScope
 
 
 class HistoryInstrumentNotFound(Exception):
@@ -39,7 +61,7 @@ class HistoryListingChanged(Exception):
 
 @dataclass(frozen=True, slots=True)
 class HistoryAuthority:
-    scope: KrakenHistoryScope | IexHistoryScope
+    scope: _HistoryScope
     provider_symbol: str
     window: HistoryWindow
     valid_until: datetime
@@ -47,7 +69,7 @@ class HistoryAuthority:
 
 
 def _authority(
-    scope: KrakenHistoryScope | IexHistoryScope,
+    scope: _HistoryScope,
     symbol: str,
     window: HistoryWindow,
     valid_until: datetime,
@@ -93,7 +115,18 @@ async def _crypto(
     ).one_or_none()
     if coin is None:
         raise HistoryInstrumentNotFound
-    scopes = settings.market_history_scope_json
+    if settings.market_history_coin_metrics_enabled:
+        if instrument.symbol not in _COIN_METRICS_SYMBOLS:
+            return None
+        window = crypto_history_window(query.range, now, "coin_metrics")
+        return _authority(
+            _COIN_METRICS_SCOPE,
+            instrument.symbol.lower(),
+            window,
+            window.end_at + window.step,
+            (coin.id, instrument.symbol),
+        )
+    scopes = settings.legacy_market_history_scopes
     scope = scopes.kraken if scopes is not None else None
     if scope is None or not scope.applies(now, settings.stock_data_server):
         return None
@@ -164,7 +197,7 @@ async def _equity(
             return None
         identity = (row.id, instrument.symbol, row.provider_verified_at)
 
-    scopes = settings.market_history_scope_json
+    scopes = settings.legacy_market_history_scopes
     scope = scopes.alpaca_iex if scopes is not None else None
     if (
         scope is None
@@ -248,4 +281,6 @@ async def resolve_history(
 ) -> HistoryAuthority | None:
     if isinstance(query.instrument, CryptoHistoryInstrument):
         return await _crypto(db, settings, query, now)
+    if settings.env == "prod":
+        return None
     return await _equity(db, settings, query, now)
