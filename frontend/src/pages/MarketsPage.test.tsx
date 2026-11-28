@@ -94,7 +94,7 @@ describe("MarketsPage", () => {
     expect(trade).toHaveAttribute("href", "/portfolios/1/trade/BTC");
     await user.type(search, "ethERE");
     const assets = screen.getByRole("list", { name: "Crypto" });
-    expect(within(assets).getAllByRole("button")).toHaveLength(1);
+    expect(within(assets).getAllByRole("button")[0]).toHaveAccessibleName(/Ethereum ETH/);
     await user.click(within(assets).getByRole("button", { name: /Ethereum ETH/ }));
     expect(screen.getByRole("link", { name: "Trade ETH" })).toHaveAttribute(
       "href",
@@ -106,6 +106,38 @@ describe("MarketsPage", () => {
     expect(within(assets).getByRole("button", { name: /Dogecoin DOGE/ })).toBeVisible();
     await user.type(search, "missing");
     expect(screen.getByText("No assets match your search.")).toBeVisible();
+  });
+
+  it("discovers supported Kraken listings outside the priced list by name and ticker", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => ok(payload())),
+    );
+    renderCryptoMarkets("1");
+    const search = screen.getByRole("searchbox", { name: "Search by name or symbol" });
+    const assets = await screen.findByRole("list", { name: "Crypto" });
+    expect(within(assets).queryByRole("button", { name: /Bittensor/ })).toBeNull();
+
+    for (const term of [" BiTtEnSoR ", "tao"]) {
+      fireEvent.change(search, { target: { value: term } });
+      const row = within(assets).getAllByRole("button")[0];
+      expect(row).toHaveAccessibleName(/Bittensor TAO/);
+      fireEvent.click(row);
+      expect(screen.getByRole("heading", { name: "Bittensor" })).toBeVisible();
+      expect(screen.getByText("Trading is unavailable for this coin in Birja.")).toBeVisible();
+      expect(screen.queryByRole("link", { name: /(?:Trade|Check price) TAO/ })).toBeNull();
+    }
+
+    fireEvent.change(search, { target: { value: "a" } });
+    expect(within(assets).getAllByRole("button")).toHaveLength(20);
+    expect(screen.getByText("More than 20 coins match. Refine your search.")).toBeVisible();
+
+    fireEvent.change(search, { target: { value: "" } });
+    expect(within(assets).getAllByRole("button")).toHaveLength(15);
+    expect(screen.getByRole("link", { name: "Trade BTC" })).toHaveAttribute(
+      "href",
+      "/portfolios/1/trade/BTC",
+    );
   });
 
   it("keeps asset intent in the unscoped trade route", async () => {
