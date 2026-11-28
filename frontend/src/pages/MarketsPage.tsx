@@ -21,6 +21,7 @@ import {
 import { useStocks } from "@/hooks/useStocks";
 import { formatAge, freshnessStatus, statusLabel } from "@/lib/age";
 import { fullLocalTimestamp } from "@/lib/financialDisplay";
+import krakenReference from "@/lib/krakenAssets.json";
 import { formatUnitPrice } from "@/lib/money";
 import "./markets.css";
 
@@ -51,6 +52,25 @@ const stockRestrictions: Record<StockItem["execution_reason"], string> = {
 };
 
 const coinStamps: Record<string, string> = { BTC: "₿", ETH: "Ξ", DOGE: "Ð" };
+const cryptoNames: Readonly<Record<string, string>> = krakenReference.assets;
+const cryptoCatalog = Object.entries(cryptoNames).map(([symbol, name]) => ({
+  key: symbol,
+  symbol,
+  name,
+}));
+const CRYPTO_SEARCH_LIMIT = 20;
+
+function cryptoSearchRank({ symbol, name }: MarketRow, term: string) {
+  const ticker = symbol.toLowerCase();
+  const label = name.toLowerCase();
+  const exchangeName = cryptoNames[symbol]?.toLowerCase();
+  if (ticker === term) return 0;
+  if (label === term || exchangeName === term) return 1;
+  if (ticker.startsWith(term)) return 2;
+  if (label.startsWith(term) || exchangeName?.startsWith(term)) return 3;
+  if (ticker.includes(term) || label.includes(term) || exchangeName?.includes(term)) return 4;
+  return Infinity;
+}
 
 function AssetStamp({ symbol, crypto }: { symbol: string; crypto: boolean }) {
   return (
@@ -121,6 +141,20 @@ export default function MarketsPage({
       }))
     : coins.map((item) => ({ ...item, key: item.symbol }));
   const term = input.toLowerCase();
+  const cryptoTerm = term === "xbt" ? "btc" : term;
+  const pricedSymbols = new Set(coins.map(({ symbol }) => symbol));
+  const cryptoMatches =
+    !stockMarket && term
+      ? [...assets, ...cryptoCatalog.filter(({ symbol }) => !pricedSymbols.has(symbol))]
+          .map((item) => ({ item, rank: cryptoSearchRank(item, cryptoTerm) }))
+          .filter(({ rank }) => Number.isFinite(rank))
+          .sort(
+            (a, b) =>
+              a.rank - b.rank ||
+              Number(pricedSymbols.has(b.item.symbol)) - Number(pricedSymbols.has(a.item.symbol)) ||
+              a.item.symbol.localeCompare(b.item.symbol),
+          )
+      : null;
   const results: MarketRow[] = catalogData
     ? catalogData.items.map((item) => ({
         key: item.catalog_id,
@@ -130,10 +164,11 @@ export default function MarketsPage({
       }))
     : waitingForCatalog
       ? []
-      : assets.filter(
+      : (cryptoMatches?.slice(0, CRYPTO_SEARCH_LIMIT).map(({ item }) => item) ??
+        assets.filter(
           ({ symbol, name }) =>
             symbol.toLowerCase().includes(term) || name.toLowerCase().includes(term),
-        );
+        ));
   const asset = catalogData
     ? results.find(({ key }) => key === catalogIntent?.catalog_id)
     : catalogIntent
@@ -171,6 +206,7 @@ export default function MarketsPage({
   const retryPrice =
     (!listingChanged && !missingListing && selectedQuote.isError) || catalogMark?.retryable;
   const coin = stockMarket ? undefined : coins.find(({ symbol }) => symbol === asset?.symbol);
+  const discoveryOnly = !stockMarket && !coin;
   const stock =
     stockMarket && !catalogListing
       ? stockItems.find(({ symbol }) => symbol === asset?.symbol)
@@ -216,12 +252,13 @@ export default function MarketsPage({
         : "Check price";
   const prefix = portfolioId ? `/portfolios/${encodeURIComponent(portfolioId)}` : "";
   const rawPrice = catalogMark?.quote?.mid ?? asset?.price;
-  const price = rawPrice ? formatUnitPrice(rawPrice) : stockMarket ? null : "Price unavailable";
+  const price = rawPrice ? formatUnitPrice(rawPrice) : null;
   const closingMarkTime = marketClosed
     ? (catalogMark?.quote?.event_at ?? stockQuote?.event_at)
     : undefined;
-  const historyInstrument: HistoryInstrument | null =
-    asset && !stockMarket ? { kind: "crypto", symbol: asset.symbol } : null;
+  const historyInstrument: HistoryInstrument | null = coin
+    ? { kind: "crypto", symbol: coin.symbol }
+    : null;
   const stockChartExchange = catalogListing
     ? !listingChanged && !missingListing && catalogListing.state === "active"
       ? catalogListing.listing_exchange
@@ -290,7 +327,7 @@ export default function MarketsPage({
               ref={searchField}
               type="search"
               value={search}
-              maxLength={stockMarket ? 80 : undefined}
+              maxLength={80}
               placeholder="Name or ticker"
               onCompositionStart={() => setComposing(true)}
               onCompositionEnd={(event) => {
@@ -333,6 +370,11 @@ export default function MarketsPage({
               {catalogData.has_more
                 ? "More than 20 stocks match. Refine your search."
                 : `${results.length} ${results.length === 1 ? "stock matches" : "stocks match"} your search.`}
+            </p>
+          )}
+          {cryptoMatches && cryptoMatches.length > CRYPTO_SEARCH_LIMIT && (
+            <p role="status" className="mb-3 text-sm text-[var(--market-muted)]">
+              More than {CRYPTO_SEARCH_LIMIT} coins match. Refine your search.
             </p>
           )}
           {!catalogData &&
@@ -628,17 +670,23 @@ export default function MarketsPage({
               />
             )}
             <div className="market-action-row">
-              {portfolioBlock === "pending" && (
+              {discoveryOnly && (
+                <p className="text-muted-foreground">
+                  Trading is unavailable for this coin in Birja.
+                </p>
+              )}
+              {!discoveryOnly && portfolioBlock === "pending" && (
                 <p className="text-muted-foreground" role="status">
                   Checking your trading portfolio…
                 </p>
               )}
-              {portfolioBlock === "unavailable" && (
+              {!discoveryOnly && portfolioBlock === "unavailable" && (
                 <Link className="inline-flex min-h-11 items-center underline" to="/portfolios">
                   Choose an available portfolio
                 </Link>
               )}
-              {!portfolioBlock &&
+              {!discoveryOnly &&
+                !portfolioBlock &&
                 !listingChanged &&
                 !missingListing &&
                 (!catalogListing || !selectedQuote.isFetching) && (
