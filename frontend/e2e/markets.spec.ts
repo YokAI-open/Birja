@@ -43,13 +43,22 @@ test("a signed-in user sees live prices for the curated coins", async ({ page, b
 
   const search = page.getByRole("searchbox", { name: "Search by name or symbol" });
   await search.fill("ethereum");
-  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toHaveAccessibleName(/Ethereum ETH/);
   await rows.first().click();
   await expect(page.getByRole("heading", { name: "Ethereum" })).toBeVisible();
   await expect(page.getByText(/^Updated \d+s ago$/)).toBeVisible();
   await expect(page.getByRole("link", { name: "Trade ETH" })).toHaveAttribute("href", "/trade/ETH");
   const back = page.getByRole("button", { name: "Back to results" });
   if (await back.isVisible()) await back.click();
+
+  const classic = assets.getByRole("button", { name: /Ethereum Classic ETC/ });
+  await classic.click();
+  await expect(page.getByRole("heading", { name: "Ethereum Classic" })).toBeVisible();
+  await expect(page.getByText("Trading is unavailable for this coin in Birja.")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Trade ETC" })).toHaveCount(0);
+  if (await back.isVisible()) await back.click();
+  await search.clear();
+  await expect(rows).toHaveCount(15);
 
   await page.getByRole("button", { name: "US stocks", exact: true }).click();
   const stocks = page.getByRole("list", { name: "US stocks", exact: true });
