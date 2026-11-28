@@ -17,6 +17,7 @@ from app.models.stock import StockInstrument, StockQuote
 from app.models.stock_execution import StockFillFacts
 from app.models.trade import Holding
 from app.models.user import Account
+from app.services.access_list import personal_stock_access
 from app.services.portfolio_math import (
     PortfolioValue,
     PositionInput,
@@ -250,6 +251,7 @@ async def _load_portfolio_snapshots(
         raise HTTPException(status_code=404, detail={"code": "portfolio_unavailable"})
     if not rows:
         return ()
+    allow_stock_mark = await personal_stock_access(settings, owner_id)
     # Check membership again in the same statement as current market authority.
     # READ COMMITTED gives this a fresh view after the financial await. Include
     # every owner root for overview so a newly created/closed root cannot silently
@@ -276,8 +278,12 @@ async def _load_portfolio_snapshots(
     valued_at = clock()  # One advancing time after BOTH awaits.
     if set(current_raw.active_ids or []) != set(grouped):
         raise HTTPException(404, detail={"code": "portfolio_unavailable"})
-    original = executions_from_snapshot(rows[0], settings, now=valued_at)
-    current = executions_from_snapshot(current_raw, settings, now=valued_at)
+    original = (
+        executions_from_snapshot(rows[0], settings, now=valued_at) if allow_stock_mark else {}
+    )
+    current = (
+        executions_from_snapshot(current_raw, settings, now=valued_at) if allow_stock_mark else {}
+    )
     catalog = {}
     if original_catalog:
         current_catalog = {row["coin_id"]: row for row in current_raw.catalog_positions or []}
@@ -291,6 +297,7 @@ async def _load_portfolio_snapshots(
                 current_sessions=current_sessions,
                 settings=settings,
                 now=valued_at,
+                allow_mark=allow_stock_mark,
             )
             for coin_id, row in original_catalog.items()
         }

@@ -27,6 +27,7 @@ from app.core.config import SchedulerSettings, get_scheduler_settings
 from app.core.logging import configure_logging
 from app.db.connection import database_connect_args
 from app.services import kraken
+from app.services.access_list import personal_stock_collection_allowed
 from app.services.fake_prices import make_fake_source
 from app.services.kraken import KrakenError, TickerSource
 from app.services.price_rules import Candidate, evaluate_price, mid_from_ticker
@@ -373,6 +374,8 @@ async def amain(stop: asyncio.Event | None = None) -> None:
 
             async def stock_cycle(*, on_demand: bool = False) -> CycleResult:
                 assert stock_http is not None  # noqa: S101 - created before loop
+                if not await personal_stock_collection_allowed(settings):
+                    return CycleResult("ok")
                 try:
                     return await run_stock_cycle(
                         sessionmaker=sessionmaker,
@@ -394,6 +397,8 @@ async def amain(stop: asyncio.Event | None = None) -> None:
 
             async def catalog_quote_cycle() -> CycleResult:
                 assert stock_http is not None  # noqa: S101 - created before loop
+                if not await personal_stock_collection_allowed(settings):
+                    return CycleResult("ok")
                 return await run_catalog_quote_cycle(
                     sessionmaker=sessionmaker,
                     redis=catalog_redis,
@@ -444,6 +449,8 @@ async def amain(stop: asyncio.Event | None = None) -> None:
 
             async def action_cycle() -> CycleResult:
                 assert action_http is not None  # noqa: S101 - created before loop
+                if not await personal_stock_collection_allowed(settings):
+                    return CycleResult("ok")
                 try:
                     return await run_stock_action_cycle(
                         sessionmaker=sessionmaker,
@@ -461,6 +468,8 @@ async def amain(stop: asyncio.Event | None = None) -> None:
 
             async def dividend_cycle() -> CycleResult:
                 try:
+                    if not await personal_stock_collection_allowed(settings):
+                        return CycleResult("ok")
                     return await run_dividend_cycle(
                         sessionmaker=sessionmaker, settings=settings, cursor=dividend_cursor
                     )

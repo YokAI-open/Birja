@@ -21,7 +21,7 @@ from app.core.security import (
 )
 from app.schemas.auth import CodeSentOut, RequestCodeIn, VerifyCodeIn
 from app.services import auth as auth_service
-from app.services.auth import InvalidSession
+from app.services.auth import InvalidSession, RegistrationClosed
 from app.services.ratelimit import RateLimited
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -36,6 +36,17 @@ def _rate_limited(exc: RateLimited) -> HTTPException:
         status_code=429,
         detail={"code": "rate_limited", "message": "Too many requests. Try again later."},
         headers={"Retry-After": str(exc.retry_after)},
+    )
+
+
+def _registration_closed() -> HTTPException:
+    return HTTPException(
+        status_code=403,
+        detail={
+            "code": "registration_closed",
+            "message": "Birja isn’t accepting registrations at the moment.",
+        },
+        headers={"Cache-Control": "no-store"},
     )
 
 
@@ -58,8 +69,7 @@ async def get_csrf(request: Request) -> Response:
     status_code=202,
     response_model=CodeSentOut,
     summary="Email a sign-in code",
-    description="Sends a one-time code to the email. The response is identical "
-    "for every email, whether or not it has an account.",
+    description="Sends a one-time code to an eligible email whether or not it has an account.",
     dependencies=[Depends(verify_csrf)],
     responses=_RATE_LIMITED_DOC,
 )
@@ -76,6 +86,8 @@ async def request_code(
         code = await auth_service.request_code(redis, otp, settings, body.email, ip)
     except RateLimited as exc:
         raise _rate_limited(exc) from None
+    except RegistrationClosed:
+        raise _registration_closed() from None
     background_tasks.add_task(sender.send_code, body.email, code)
     return CodeSentOut(status="code_sent")
 

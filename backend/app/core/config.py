@@ -17,6 +17,7 @@ from pydantic import (
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from app.db.connection import database_ssl_context, validate_database_url
+from app.schemas.auth import RequestCodeIn
 from app.schemas.market_history import MarketHistoryScopes
 
 
@@ -27,6 +28,9 @@ class _StockSettings(BaseSettings):
     redis_url: str = Field(repr=False)
     catalog_quote_redis_url: str | None = Field(default=None, repr=False)
     stock_data_enabled: bool = False
+    stock_data_owner_id: int = Field(default=0, ge=0, le=9223372036854775807)
+    stock_data_owner_email: str = Field(default="", repr=False)
+    auth_allowed_emails_file: str = Field(default="", repr=False)
     stock_feed: Literal["iex"] = "iex"
     stock_poll_interval_seconds: int = Field(default=60, ge=60, le=120)
     stock_request_timeout_seconds: int = Field(default=5, ge=1, le=10)
@@ -39,6 +43,11 @@ class _StockSettings(BaseSettings):
         default=None, repr=False
     )
     market_history_coin_metrics_enabled: bool = False
+
+    @field_validator("stock_data_owner_email")
+    @classmethod
+    def _normalize_stock_owner_email(cls, value: str) -> str:
+        return RequestCodeIn(email=value).email if value else ""
 
     @field_validator("market_history_coin_metrics_enabled", mode="before")
     @classmethod
@@ -111,6 +120,16 @@ class _StockSettings(BaseSettings):
             raise ValueError("stock request/retry budget exceeds stock cycle budget")
         if not self.stock_data_account.strip() or not self.stock_data_server.strip():
             raise ValueError("stock account/server scope must be nonblank")
+        return self
+
+    @model_validator(mode="after")
+    def _check_personal_stock_config(self) -> _StockSettings:
+        if (self.stock_data_owner_id or self.stock_data_owner_email) and not (
+            self.stock_data_owner_id
+            and self.stock_data_owner_email
+            and self.auth_allowed_emails_file
+        ):
+            raise ValueError("personal stock data requires the owner account and email list")
         return self
 
 

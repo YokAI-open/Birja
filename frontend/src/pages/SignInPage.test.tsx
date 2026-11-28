@@ -96,6 +96,7 @@ describe("SignInPage email step", () => {
     [429, "rate_limited", { "Retry-After": "1" }, "Too many attempts. Try again in 1 second."],
     [429, "rate_limited", {}, "Too many attempts. Try again in a moment."],
     [403, "csrf_failed", {}, "Your session token is out of date. Reload the page and try again."],
+    [403, "registration_closed", {}, "Birja isn’t accepting registrations at the moment."],
     [503, "service_unavailable", {}, "Sign-in is temporarily unavailable. Try again in a moment."],
     [500, "boom", {}, "Something went wrong. Try again."],
   ])("shows the right message for %i %s", async (status, code, headers, message) => {
@@ -130,14 +131,15 @@ describe("SignInPage code step", () => {
     expect(screen.getByRole("button", { name: "Sign in" })).toBeDisabled();
   });
 
-  it("shows invalid_code under the field", async () => {
-    const { user } = await toCodeStep({ verify: () => errorResponse(400, "invalid_code") });
+  it.each([
+    [400, "invalid_code", "That code is wrong or has expired. Check it or send a new code."],
+    [403, "registration_closed", "Birja isn’t accepting registrations at the moment."],
+  ])("shows the %s %s message under the code field", async (status, code, message) => {
+    const { user } = await toCodeStep({ verify: () => errorResponse(status, code) });
     await user.type(screen.getByLabelText("6-digit code"), "123456");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent(
-      "That code is wrong or has expired. Check it or send a new code.",
-    );
+    expect(alert).toHaveTextContent(message);
     const input = screen.getByLabelText("6-digit code");
     expect(input).toHaveAttribute("aria-invalid", "true");
     expect(input).toHaveAttribute("aria-describedby", alert.id);
