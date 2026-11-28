@@ -22,7 +22,8 @@ from pathlib import Path
 
 sys.dont_write_bytecode = True
 HERE = Path(__file__).resolve().parent
-COMPOSE_SHA = "634eabc7c1c3e4235a2d506e7ac1b8417b5cffcca0203df6f4f578f0420ddc91"
+COMPOSE_SHA = "d570e22ff4d1bb5e72b07a228ff3c468f97a4d2404c51997147b7683b52f4101"
+LEGACY_COMPOSE_SHA = "634eabc7c1c3e4235a2d506e7ac1b8417b5cffcca0203df6f4f578f0420ddc91"
 BOOT = "birja_ops_bootstrap"
 CLONE = "birja_restore_test"
 RESTIC_SHA = "20d4142678d0d95ec11a4759def1b73fd9190abc9ca19e4b62d067c0b387e639"
@@ -586,7 +587,7 @@ def bundle_verify(archive, sha, required_profile=None):
         verify_contract_inventory(inventory, expected)
         verify_portfolio_inventory(inventory, expected)
         require(expected["tools/restic"] == RESTIC_SHA)
-        require(expected["docker-compose.ops-test.yml"] == COMPOSE_SHA)
+        require(expected["docker-compose.ops-test.yml"] in (COMPOSE_SHA, LEGACY_COMPOSE_SHA))
         require(all(expected["provenance/" + n] == h for n, h in PROVENANCE.items()))
         proof = json.load(t.extractfile("provenance/verified.json"))
         require(
@@ -1026,7 +1027,7 @@ def check_running(dc):
     require(
         not mounts
         and inspected["HostConfig"]["Tmpfs"]
-        == {"/var/lib/postgresql": "size=268435456,uid=70,gid=70,mode=0750"}
+        == {"/var/lib/postgresql": "size=1073741824,uid=70,gid=70,mode=0750"}
     )
     networks = inspected["NetworkSettings"]["Networks"]
     require(len(networks) == 1)
