@@ -570,7 +570,7 @@ class Identity(unittest.TestCase):
                                 "Platform": "linux",
                                 "HostConfig": {
                                     "Privileged": False,
-                                    "Tmpfs": {"/var/lib/postgresql": "size=268435456,uid=70,gid=70,mode=0750"},
+                                    "Tmpfs": {"/var/lib/postgresql": "size=1073741824,uid=70,gid=70,mode=0750"},
                                 },
                                 "Mounts": [],
                                 "NetworkSettings": {"Networks": {"isolated": {}}},

@@ -486,6 +486,7 @@ def value_catalog_holding(
     current_sessions: CatalogSessions,
     settings: MarketValuationSettings,
     now: datetime,
+    allow_mark: bool = True,
 ) -> CatalogHoldingValuation:
     """Value the original owned quote with current scope and unchanged unit evidence."""
     catalog_id = str(original["catalog_id"])
@@ -506,7 +507,8 @@ def value_catalog_holding(
         return CatalogHoldingValuation(catalog_id, *label, value)
 
     if (
-        current is None
+        not allow_mark
+        or current is None
         or current["catalog_id"] != original["catalog_id"]
         or current["listing_id"] != original["listing_id"]
     ):

@@ -106,6 +106,53 @@ async def test_independent_stock_loops(monkeypatch, quotes, actions_enabled, rai
     assert sorted(seen) == sorted(expected)
 
 
+async def test_personal_stock_loops_pause_when_another_address_is_listed(monkeypatch, tmp_path):
+    owner = "test-owner@example.com"
+    email_file = tmp_path / "allowed-emails.txt"
+    await asyncio.to_thread(email_file.write_text, f"{owner}\nguest@example.com\n")
+    settings = SchedulerSettings(
+        stock_data_enabled=True,
+        stock_actions_enabled=True,
+        stock_actions_coverage_start=datetime(2026, 11, 1, tzinfo=UTC),
+        alpaca_api_key="synthetic-key",
+        alpaca_secret_key="synthetic-secret",
+        stock_data_owner_id=1,
+        stock_data_owner_email=owner,
+        auth_allowed_emails_file=str(email_file),
+    )
+    observed: dict[str, CycleResult] = {}
+
+    async def run_loop(*, cycle, **kwargs):
+        if cycle.__name__ != "halt_cycle":
+            observed[cycle.__name__] = await cycle()
+
+    async def crypto(**kwargs):
+        return CycleResult("ok", accepted=1)
+
+    async def unexpected(**kwargs):
+        pytest.fail("The personal source was used for a widened audience")
+
+    from app.tasks import dividends, stock_actions, stock_catalog_quotes, stock_scheduler
+
+    monkeypatch.setattr(scheduler, "get_scheduler_settings", lambda: settings)
+    monkeypatch.setattr(scheduler, "run", run_loop)
+    monkeypatch.setattr(scheduler, "run_cycle", crypto)
+    monkeypatch.setattr(stock_scheduler, "run_stock_cycle", unexpected)
+    monkeypatch.setattr(stock_catalog_quotes, "run_catalog_quote_cycle", unexpected)
+    monkeypatch.setattr(stock_actions, "run_stock_action_cycle", unexpected)
+    monkeypatch.setattr(dividends, "run_dividend_cycle", unexpected)
+    await scheduler.amain()
+
+    assert observed == {
+        "cycle": CycleResult("ok", accepted=1),
+        "stock_cycle": CycleResult("ok"),
+        "stock_demand_cycle": CycleResult("ok"),
+        "catalog_quote_cycle": CycleResult("ok"),
+        "action_cycle": CycleResult("ok"),
+        "dividend_cycle": CycleResult("ok"),
+    }
+
+
 def _body() -> dict[str, Any]:
     body: dict[str, Any] = json.loads(FIXTURE.read_text())
     return body

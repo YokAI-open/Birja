@@ -1218,7 +1218,7 @@ async def test_durable_segments_resume_until_future_horizon_complete(monitor, re
     factory, settings, _ = monitor
     settings.stock_actions_segment_days = 31
     with respx.mock(assert_all_called=False) as router:
-        rest, _ = routes(router)
+        rest, replay = routes(router)
         async with httpx.AsyncClient(trust_env=False) as http:
             starts = []
             for _index in range(2):
@@ -1230,6 +1230,20 @@ async def test_durable_segments_resume_until_future_horizon_complete(monitor, re
             await redis_client.delete(stock_actions.WINDOW_KEY)
             assert (await cycle(monitor, redis_client, http)).status == "ok"
             assert len(set(starts)) == 2
+            published = await states(factory)
+            rest_count = rest.call_count
+            replay.respond(503, content=b"", headers={"content-type": "text/event-stream"})
+            await redis_client.delete(stock_actions.WINDOW_KEY)
+            assert (await cycle(monitor, redis_client, http)).status == "source_error"
+            during_failure = await states(factory)
+            assert rest.call_count == rest_count
+            assert all(r.health == "current" for r in during_failure)
+            assert [r.valid_until for r in during_failure] == [r.valid_until for r in published]
+            assert [r.epoch for r in during_failure] == [r.epoch for r in published]
+            replay.respond(200, content=b"", headers={"content-type": "text/event-stream"})
+            await redis_client.delete(stock_actions.WINDOW_KEY)
+            assert (await cycle(monitor, redis_client, http)).status == "ok"
+            assert rest.call_count == rest_count
     assert all(r.health == "current" for r in await states(factory))
 
 
@@ -1575,7 +1589,9 @@ async def test_post_await_authority_or_lease_loss(monitor, redis_client, problem
         assert await redis_client.get(stock_actions.LOCK_KEY) == "new-owner"
 
 
-@pytest.mark.parametrize("race", ["epoch", "delete", "covered", "permission", "expired"])
+@pytest.mark.parametrize(
+    "race", ["epoch", "delete", "covered", "permission", "expired", "stale_window"]
+)
 async def test_global_publication_race_rolls_back_all_twenty(
     monitor, redis_client, monkeypatch, race
 ):
@@ -1608,7 +1624,7 @@ async def test_global_publication_race_rolls_back_all_twenty(
                         .where(StockDataAdmission.product == "actions")
                         .values(collection_allowed=False)
                     )
-                elif race != "expired":
+                elif race not in ("expired", "stale_window"):
                     await other.execute(
                         update(StockActionState)
                         .where(StockActionState.coin_id == cid)
@@ -1624,11 +1640,12 @@ async def test_global_publication_race_rolls_back_all_twenty(
 
     async def checked_clock(db):
         value = await clock(db)
-        return (
-            value + timedelta(days=1)
-            if race == "expired" and raced and "stock_gate" not in db.info
-            else value
-        )
+        if raced and "stock_gate" not in db.info:
+            if race == "expired":
+                return value + timedelta(days=1)
+            if race == "stale_window":
+                return value + timedelta(minutes=3)
+        return value
 
     monkeypatch.setattr(AsyncSession, "execute", execute)
     monkeypatch.setattr(stock_actions, "_clock", checked_clock)
@@ -1637,9 +1654,13 @@ async def test_global_publication_race_rolls_back_all_twenty(
         async with httpx.AsyncClient(trust_env=False) as http:
             assert (await cycle(monitor, redis_client, http)).status == "source_error"
     assert raced
-    assert all(
-        r.health == "reconciling" and r.valid_until is None for r in await states(monitor[0])
-    )
+    rows = await states(monitor[0])
+    assert all(r.health == "reconciling" and r.valid_until is None for r in rows)
+    if race == "stale_window":
+        assert all(
+            r.covered_until is not None and r.staged_continuation["target_until"] is None
+            for r in rows
+        )
 
 
 @pytest.mark.parametrize("overflow", ["known", "entitlements"])

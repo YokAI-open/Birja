@@ -62,6 +62,9 @@ from app.tasks.stock_scheduler import _RELEASE_LUA, _admissions, reserve_account
 
 LOCK_KEY = "sim:stock:actions:lock"
 WINDOW_KEY = "sim:stock:actions:window"
+REPLAY_RESIZE_REASONS = frozenset(
+    {"response_limit", "byte_budget", "mutation_budget", "cycle_budget", "replay_timeout"}
+)
 logger = logging.getLogger(__name__)
 
 
@@ -174,8 +177,8 @@ async def _refresh(
         if not await lease():
             raise ActionError("lease")
 
-    # Starting work invalidates the preceding lease. Partial committed segments
-    # remain resumable, but no cycle can revive its previous healthy deadline.
+    # A matching healthy lease can run to its original deadline while evidence
+    # is refreshed. Partial or failed reads never extend it.
     checkpoints: dict[int, tuple[int, dict[str, Any], datetime | None]] = {}
     for mapping in mappings:
         await guard()
@@ -204,9 +207,19 @@ async def _refresh(
                 or stage.get("policy_key") != policy_key
             ):
                 stage = {}
-            state.health = "reconciling"
-            state.valid_until = None
-            state.epoch += 1
+            checked = await _clock(db)
+            keep_lease = (
+                bool(stage)
+                and state.health == "current"
+                and state.covered_until is not None
+                and state.valid_until is not None
+                and checked < state.valid_until
+                and (state.next_blocking_at is None or checked < state.next_blocking_at)
+            )
+            if not keep_lease:
+                state.health = "reconciling"
+                state.valid_until = None
+                state.epoch += 1
             state.admission_generation = original["actions"].generation
             checkpoints[mapping.coin_id] = (state.epoch, stage, state.covered_until)
     stages = [stage for _, stage, _ in checkpoints.values()]
@@ -225,8 +238,6 @@ async def _refresh(
         for _, stage, _ in checkpoints.values()
     ]
     start = min(starts)
-    if start > horizon:
-        start = horizon + timedelta(days=1) if pending_targets else until.date()
     end = min(
         horizon, start + timedelta(days=getattr(settings, "stock_actions_segment_days", 31) - 1)
     )
@@ -310,10 +321,10 @@ async def _refresh(
     finally:
         http.event_hooks["request"].remove(before_request)
     replay_frontier = replay_end if replay.complete else since
-    next_replay_end = until
+    next_replay_end = min(until, replay_end + (replay_end - since))
     density_limit = False
     if not replay.complete:
-        if replay.reason in ("response_limit", "byte_budget", "mutation_budget", "cycle_budget"):
+        if replay.reason in REPLAY_RESIZE_REASONS:
             next_replay_end = since + (replay_end - since) / 2
             density_limit = next_replay_end <= since
         else:
@@ -367,9 +378,6 @@ async def _refresh(
                 "replay_end": next_replay_end.isoformat(),
                 "reason": "replay_density_limit" if density_limit else replay.reason,
             }
-            if complete:
-                state.coverage_start = baseline
-                state.covered_until = until
             state.cursor = next(
                 (o.cursor for b in reversed(batches) for o in reversed(b.observations) if o.cursor),
                 replay.continuation or state.cursor,
@@ -404,11 +412,16 @@ async def _refresh(
             len(rows) != 20
             or latest != original
             or not _allowed(latest, settings, checked)
-            or any(r.epoch != checkpoints[r.coin_id][0] or r.covered_until != until for r in rows)
+            or any(
+                r.epoch != checkpoints[r.coin_id][0]
+                or r.staged_continuation != checkpoints[r.coin_id][1]
+                or r.covered_until != checkpoints[r.coin_id][2]
+                for r in rows
+            )
         ):
             raise ActionError("publication_changed")
         deadline = min(
-            checked
+            until
             + timedelta(seconds=getattr(settings, "stock_actions_health_max_age_seconds", 120)),
             *(
                 cast(datetime, a.valid_until)
@@ -417,16 +430,24 @@ async def _refresh(
             ),
             datetime.fromisoformat(original["calendar"].calendar["review_valid_until"]),
         )
+        current = checked < deadline
         for state in rows:
-            state.health = "current"
-            state.checked_at = checked
-            state.valid_until = deadline
+            state.coverage_start = baseline
+            state.covered_until = until
+            state.health = "current" if current else "reconciling"
+            state.checked_at = checked if current else None
+            state.valid_until = deadline if current else None
             state.staged_continuation = {
                 **cast(dict[str, Any], state.staged_continuation),
                 "target_until": None,
                 "replay_end": None,
             }
         await db.flush()
+        if not current:
+            # Persist the completed historical frontier so the next cycle can
+            # catch up without granting an order lease for stale evidence.
+            await guard()
+            return CycleResult("source_error")
         for mapping in mappings:
             state = next(row for row in rows if row.coin_id == mapping.coin_id)
             await _guard(
@@ -948,13 +969,9 @@ async def _refresh_catalog(
 
     frontier, next_replay_end = window.replay_at, window.replay_end
     if replay is not None and replay.complete:
-        frontier, next_replay_end = window.replay_end, window.target
-    elif replay is not None and replay.reason in (
-        "response_limit",
-        "byte_budget",
-        "mutation_budget",
-        "cycle_budget",
-    ):
+        frontier = window.replay_end
+        next_replay_end = min(window.target, frontier + (frontier - window.replay_at))
+    elif replay is not None and replay.reason in REPLAY_RESIZE_REASONS:
         next_replay_end = window.replay_at + (window.replay_end - window.replay_at) / 2
     replay_complete = frontier == window.target
     missing = {
@@ -978,6 +995,7 @@ async def _refresh_catalog(
         "byte_budget",
         "mutation_budget",
         "cycle_budget",
+        "replay_timeout",
         "missing_or_uncertain",
     }
     if any(not batch.complete and batch.reason not in expected_partial for batch in batches):

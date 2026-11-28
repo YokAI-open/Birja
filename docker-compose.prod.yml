@@ -116,17 +116,26 @@ services:
       CATALOG_QUOTE_REDIS_URL: redis://:${REDIS_PASSWORD}@catalog-quote-redis:6379/0
       OTP_HMAC_SECRET: ${OTP_HMAC_SECRET:?set in /etc/birja/prod.env}
       JWT_SECRET: ${JWT_SECRET:?set in /etc/birja/prod.env}
+      AUTH_ALLOWED_EMAILS_FILE: ${AUTH_ALLOWED_EMAILS_FILE:-}
       RESEND_API_KEY: ${RESEND_API_KEY:?set in /etc/birja/prod.env}
       EMAIL_FROM: ${EMAIL_FROM:?set in /etc/birja/prod.env}
       PRICE_FRESH_SECONDS: ${PRICE_FRESH_SECONDS:-120}
       PRICE_STALE_SECONDS: ${PRICE_STALE_SECONDS:-300}
       STOCK_DATA_ENABLED: ${STOCK_DATA_ENABLED:-false}
+      STOCK_DATA_OWNER_ID: ${STOCK_DATA_OWNER_ID:-0}
+      STOCK_DATA_OWNER_EMAIL: ${STOCK_DATA_OWNER_EMAIL:-}
       STOCK_FEED: ${STOCK_FEED:-iex}
       STOCK_DATA_ACCOUNT: ${STOCK_DATA_ACCOUNT:-birja}
       MARKET_HISTORY_COIN_METRICS_ENABLED: ${MARKET_HISTORY_COIN_METRICS_ENABLED:-true}
       STOCK_DATA_SERVER: ${STOCK_DATA_SERVER:-birja}
     volumes:
       - /etc/birja/db-tls/ca.crt:/run/birja/db-ca.crt:ro
+      - type: bind
+        source: ${BIRJA_ACCESS_DIR:-/dev/null}
+        target: /run/birja/access
+        read_only: true
+        bind:
+          create_host_path: false
     depends_on:
       postgres:
         condition: service_healthy
@@ -184,6 +193,9 @@ services:
       PRICE_STALE_SECONDS: ${PRICE_STALE_SECONDS:-300}
       PORTFOLIO_DAILY_CAPTURE_ENABLED: ${PORTFOLIO_DAILY_CAPTURE_ENABLED:-true}
       STOCK_DATA_ENABLED: ${STOCK_DATA_ENABLED:-false}
+      STOCK_DATA_OWNER_ID: ${STOCK_DATA_OWNER_ID:-0}
+      STOCK_DATA_OWNER_EMAIL: ${STOCK_DATA_OWNER_EMAIL:-}
+      AUTH_ALLOWED_EMAILS_FILE: ${AUTH_ALLOWED_EMAILS_FILE:-}
       STOCK_FEED: ${STOCK_FEED:-iex}
       STOCK_DATA_ACCOUNT: ${STOCK_DATA_ACCOUNT:-birja}
       MARKET_HISTORY_COIN_METRICS_ENABLED: ${MARKET_HISTORY_COIN_METRICS_ENABLED:-true}
@@ -207,6 +219,12 @@ services:
       STOCK_ACCOUNT_REQUESTS_PER_MINUTE: ${STOCK_ACCOUNT_REQUESTS_PER_MINUTE:-20}
     volumes:
       - /etc/birja/db-tls/ca.crt:/run/birja/db-ca.crt:ro
+      - type: bind
+        source: ${BIRJA_ACCESS_DIR:-/dev/null}
+        target: /run/birja/access
+        read_only: true
+        bind:
+          create_host_path: false
     depends_on:
       postgres:
         condition: service_healthy

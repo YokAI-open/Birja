@@ -851,6 +851,8 @@ def _mutation_frame(
     until_id: str | None,
 ) -> tuple[list[ActionObservation], str | None, bool]:
     entries = _decode(data)
+    if isinstance(entries, dict) and entries:
+        entries = [entries]
     if not isinstance(entries, list) or not entries:
         raise ActionError("invalid_frame")
     rows: list[ActionObservation] = []

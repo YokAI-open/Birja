@@ -78,3 +78,10 @@ tests and the production frontend build passed.
 
 - Phase 7 owner acceptance is closed. The actual stock activation outcome is
   now owned by v1.4. [Deferred work](DEFERRED.md)
+
+
+## Quick Tasks Completed
+
+| ID | Task | Date | Status | Details |
+| --- | --- | --- | --- | --- |
+| 261127-pvp | Private sign-in and personal stock data | 2026-11-27 | Local tests passed. Production pending. | [Quick task](quick/261127-pvp-restrict-birja-access-with-an-editable-e/261127-pvp-SUMMARY.md) |
